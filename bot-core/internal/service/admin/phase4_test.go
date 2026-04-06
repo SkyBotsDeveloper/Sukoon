@@ -138,3 +138,28 @@ func TestPinAndUnpinCommands(t *testing.T) {
 		t.Fatalf("expected unpinall for chat %d, got %+v", chat.ID, h.Client.UnpinAllChats)
 	}
 }
+
+func TestModsRepliesToTriggerMessage(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100714, Type: "supergroup", Title: "Silent Staff"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 22,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/mods",
+		},
+	}); err != nil {
+		t.Fatalf("mods failed: %v", err)
+	}
+
+	if len(h.Client.Messages) == 0 {
+		t.Fatalf("expected mods response message")
+	}
+	last := h.Client.Messages[len(h.Client.Messages)-1]
+	if last.Options.ReplyToMessageID != 22 {
+		t.Fatalf("expected /mods response to reply to message 22, got %+v", last.Options)
+	}
+}

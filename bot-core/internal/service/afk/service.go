@@ -27,7 +27,7 @@ func (s *Service) HandleCommand(ctx context.Context, rt *runtime.Context) (bool,
 	if err := rt.Store.SetAFK(ctx, domainAFKState(rt, reason)); err != nil {
 		return true, err
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "AFK set.", telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "AFK set.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return true, err
 }
 

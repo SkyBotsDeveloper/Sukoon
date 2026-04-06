@@ -32,7 +32,7 @@ func (s *Service) HandleCommand(ctx context.Context, rt *runtime.Context) (bool,
 		if rt.RuntimeBundle.AntiAbuse.Enabled {
 			status = "on"
 		}
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Antiabuse is "+status+".", telegram.SendMessageOptions{})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Antiabuse is "+status+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return true, err
 	}
 	enabled, err := parseToggle(rt.Command.Args[0])
@@ -52,7 +52,7 @@ func (s *Service) HandleCommand(ctx context.Context, rt *runtime.Context) (bool,
 	if err := rt.Store.SetAntiAbuseSettings(ctx, settings); err != nil {
 		return true, err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Antiabuse updated.", telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Antiabuse updated.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return true, err
 }
 

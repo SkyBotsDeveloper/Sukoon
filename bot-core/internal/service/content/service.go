@@ -128,7 +128,7 @@ func (s *Service) save(ctx context.Context, rt *runtime.Context) error {
 	}); err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Saved note %s.", name), telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Saved note %s.", name), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -147,7 +147,7 @@ func (s *Service) get(ctx context.Context, rt *runtime.Context) error {
 	if err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), note.Text, telegram.SendMessageOptions{ParseMode: note.ParseMode, ReplyMarkup: replyMarkup})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), note.Text, rt.ReplyOptions(telegram.SendMessageOptions{ParseMode: note.ParseMode, ReplyMarkup: replyMarkup}))
 	return err
 }
 
@@ -161,7 +161,7 @@ func (s *Service) clear(ctx context.Context, rt *runtime.Context) error {
 	if err := rt.Store.DeleteNote(ctx, rt.Bot.ID, rt.ChatID(), strings.ToLower(rt.Command.Args[0])); err != nil {
 		return err
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Note removed.", telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Note removed.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -189,7 +189,7 @@ func (s *Service) filter(ctx context.Context, rt *runtime.Context) error {
 	}); err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Filter %s saved.", trigger), telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Filter %s saved.", trigger), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -206,7 +206,7 @@ func (s *Service) stop(ctx context.Context, rt *runtime.Context) error {
 			return err
 		}
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Removed %d filter(s).", len(items)), telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Removed %d filter(s).", len(items)), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -219,7 +219,7 @@ func (s *Service) welcome(ctx context.Context, rt *runtime.Context) error {
 		if rt.RuntimeBundle.Settings.WelcomeEnabled {
 			status = "on"
 		}
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Welcome is "+status+".", telegram.SendMessageOptions{})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Welcome is "+status+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 	enabled, err := admin.ParseToggle(rt.Command.Args[0])
@@ -233,7 +233,7 @@ func (s *Service) welcome(ctx context.Context, rt *runtime.Context) error {
 	if err := rt.Store.SetWelcome(ctx, rt.Bot.ID, rt.ChatID(), enabled, text); err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Welcome updated.", telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Welcome updated.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -246,7 +246,7 @@ func (s *Service) goodbye(ctx context.Context, rt *runtime.Context) error {
 		if rt.RuntimeBundle.Settings.GoodbyeEnabled {
 			status = "on"
 		}
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Goodbye is "+status+".", telegram.SendMessageOptions{})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Goodbye is "+status+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 	enabled, err := admin.ParseToggle(rt.Command.Args[0])
@@ -260,7 +260,7 @@ func (s *Service) goodbye(ctx context.Context, rt *runtime.Context) error {
 	if err := rt.Store.SetGoodbye(ctx, rt.Bot.ID, rt.ChatID(), enabled, text); err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Goodbye updated.", telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Goodbye updated.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -274,7 +274,7 @@ func (s *Service) setRules(ctx context.Context, rt *runtime.Context) error {
 	if err := rt.Store.SetRules(ctx, rt.Bot.ID, rt.ChatID(), rt.Command.RawArgs); err != nil {
 		return err
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Rules updated.", telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Rules updated.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -282,6 +282,6 @@ func (s *Service) rules(ctx context.Context, rt *runtime.Context) error {
 	if strings.TrimSpace(rt.RuntimeBundle.Settings.RulesText) == "" {
 		return fmt.Errorf("rules are not set")
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), rt.RuntimeBundle.Settings.RulesText, telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), rt.RuntimeBundle.Settings.RulesText, rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }

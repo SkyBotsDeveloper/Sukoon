@@ -123,7 +123,7 @@ func (s *Service) approve(ctx context.Context, rt *runtime.Context, approved boo
 	if !approved {
 		text = "Removed approval for " + target.Name + "."
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), text, telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -133,14 +133,14 @@ func (s *Service) listApproved(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	if len(approvedUsers) == 0 {
-		_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "No approved users.", telegram.SendMessageOptions{})
+		_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "No approved users.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 	parts := make([]string, 0, len(approvedUsers))
 	for _, userID := range approvedUsers {
 		parts = append(parts, strconv.FormatInt(userID, 10))
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Approved users: "+strings.Join(parts, ", "), telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Approved users: "+strings.Join(parts, ", "), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -159,20 +159,20 @@ func (s *Service) disable(ctx context.Context, rt *runtime.Context, disabled boo
 	if !disabled {
 		action = "Enabled"
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("%s /%s.", action, command), telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("%s /%s.", action, command), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
 func (s *Service) listDisabled(ctx context.Context, rt *runtime.Context) error {
 	if len(rt.RuntimeBundle.DisabledCommands) == 0 {
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No disabled commands.", telegram.SendMessageOptions{})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No disabled commands.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 	commands := make([]string, 0, len(rt.RuntimeBundle.DisabledCommands))
 	for command := range rt.RuntimeBundle.DisabledCommands {
 		commands = append(commands, "/"+command)
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Disabled: "+strings.Join(commands, ", "), telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Disabled: "+strings.Join(commands, ", "), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -182,10 +182,10 @@ func (s *Service) logChannel(ctx context.Context, rt *runtime.Context) error {
 	}
 	if len(rt.Command.Args) == 0 {
 		if rt.RuntimeBundle.Settings.LogChannelID == nil {
-			_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No log channel configured.", telegram.SendMessageOptions{})
+			_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No log channel configured.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 			return err
 		}
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Current log channel: %d", *rt.RuntimeBundle.Settings.LogChannelID), telegram.SendMessageOptions{})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Current log channel: %d", *rt.RuntimeBundle.Settings.LogChannelID), rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 
@@ -194,7 +194,7 @@ func (s *Service) logChannel(ctx context.Context, rt *runtime.Context) error {
 		if err := rt.Store.SetLogChannel(ctx, rt.Bot.ID, rt.ChatID(), nil); err != nil {
 			return err
 		}
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Log channel disabled.", telegram.SendMessageOptions{})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Log channel disabled.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 
@@ -205,7 +205,7 @@ func (s *Service) logChannel(ctx context.Context, rt *runtime.Context) error {
 	if err := rt.Store.SetLogChannel(ctx, rt.Bot.ID, rt.ChatID(), &channelID); err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Log channel set to %d.", channelID), telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Log channel set to %d.", channelID), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -218,7 +218,7 @@ func (s *Service) reports(ctx context.Context, rt *runtime.Context) error {
 		if rt.RuntimeBundle.Settings.ReportsEnabled {
 			status = "on"
 		}
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Reports are currently "+status+".", telegram.SendMessageOptions{})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Reports are currently "+status+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 	enabled, err := ParseToggle(rt.Command.Args[0])
@@ -228,7 +228,7 @@ func (s *Service) reports(ctx context.Context, rt *runtime.Context) error {
 	if err := rt.Store.SetReportsEnabled(ctx, rt.Bot.ID, rt.ChatID(), enabled); err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Reports %s.", toggleWord(enabled)), telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Reports %s.", toggleWord(enabled)), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -248,7 +248,7 @@ func (s *Service) report(ctx context.Context, rt *runtime.Context) error {
 	if err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Report sent.", telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Report sent.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -261,7 +261,7 @@ func (s *Service) cleanCommands(ctx context.Context, rt *runtime.Context) error 
 		if rt.RuntimeBundle.Settings.CleanCommands {
 			status = "on"
 		}
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Clean commands is "+status+".", telegram.SendMessageOptions{})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Clean commands is "+status+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 	enabled, err := ParseToggle(rt.Command.Args[0])
@@ -271,7 +271,7 @@ func (s *Service) cleanCommands(ctx context.Context, rt *runtime.Context) error 
 	if err := rt.Store.SetCleanCommands(ctx, rt.Bot.ID, rt.ChatID(), enabled); err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Clean commands %s.", toggleWord(enabled)), telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Clean commands %s.", toggleWord(enabled)), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -280,7 +280,7 @@ func (s *Service) cleanService(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	if len(rt.Command.Args) == 0 {
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Clean service: join=%t leave=%t pin=%t title=%t photo=%t other=%t videochat=%t", rt.RuntimeBundle.Settings.CleanServiceJoin, rt.RuntimeBundle.Settings.CleanServiceLeave, rt.RuntimeBundle.Settings.CleanServicePin, rt.RuntimeBundle.Settings.CleanServiceTitle, rt.RuntimeBundle.Settings.CleanServicePhoto, rt.RuntimeBundle.Settings.CleanServiceOther, rt.RuntimeBundle.Settings.CleanServiceVideoChat), telegram.SendMessageOptions{})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Clean service: join=%t leave=%t pin=%t title=%t photo=%t other=%t videochat=%t", rt.RuntimeBundle.Settings.CleanServiceJoin, rt.RuntimeBundle.Settings.CleanServiceLeave, rt.RuntimeBundle.Settings.CleanServicePin, rt.RuntimeBundle.Settings.CleanServiceTitle, rt.RuntimeBundle.Settings.CleanServicePhoto, rt.RuntimeBundle.Settings.CleanServiceOther, rt.RuntimeBundle.Settings.CleanServiceVideoChat), rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 	if len(rt.Command.Args) == 1 {
@@ -288,7 +288,7 @@ func (s *Service) cleanService(ctx context.Context, rt *runtime.Context) error {
 			if err := rt.Store.SetCleanService(ctx, rt.Bot.ID, rt.ChatID(), "all", enabled); err != nil {
 				return err
 			}
-			_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Clean service all set to %s.", toggleWord(enabled)), telegram.SendMessageOptions{})
+			_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Clean service all set to %s.", toggleWord(enabled)), rt.ReplyOptions(telegram.SendMessageOptions{}))
 			return err
 		}
 	}
@@ -308,7 +308,7 @@ func (s *Service) cleanService(ctx context.Context, rt *runtime.Context) error {
 			return err
 		}
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Clean service %s set to %s.", strings.Join(targets, ", "), toggleWord(enabled)), telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Clean service %s set to %s.", strings.Join(targets, ", "), toggleWord(enabled)), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -324,12 +324,12 @@ func (s *Service) noCleanService(ctx context.Context, rt *runtime.Context) error
 			return err
 		}
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Requested cleanservice types were disabled.", telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Requested cleanservice types were disabled.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
 func (s *Service) cleanServiceTypes(ctx context.Context, rt *runtime.Context) error {
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Cleanservice types: all, join, leave, pin, title, photo, other, videochat", telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Cleanservice types: all, join, leave, pin, title, photo, other, videochat", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -402,7 +402,7 @@ func (s *Service) pin(ctx context.Context, rt *runtime.Context) error {
 	if err := rt.Client.PinChatMessage(ctx, rt.ChatID(), rt.Message.ReplyToMessage.MessageID, disableNotification); err != nil {
 		return err
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Message pinned.", telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Message pinned.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -417,7 +417,7 @@ func (s *Service) unpin(ctx context.Context, rt *runtime.Context) error {
 	if err := rt.Client.UnpinChatMessage(ctx, rt.ChatID(), messageID); err != nil {
 		return err
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Message unpinned.", telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Message unpinned.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -428,7 +428,7 @@ func (s *Service) unpinAll(ctx context.Context, rt *runtime.Context) error {
 	if err := rt.Client.UnpinAllChatMessages(ctx, rt.ChatID()); err != nil {
 		return err
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "All pinned messages were removed.", telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "All pinned messages were removed.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -455,7 +455,7 @@ func (s *Service) setSilentRole(ctx context.Context, rt *runtime.Context, enable
 	if !enabled {
 		text = "Removed " + label + " from " + target.Name + "."
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), text, telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -469,7 +469,7 @@ func (s *Service) listMods(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	if len(mods) == 0 && len(muters) == 0 {
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No silent mods are configured.", telegram.SendMessageOptions{})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No silent mods are configured.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 	parts := make([]string, 0, len(mods)+len(muters))
@@ -479,7 +479,7 @@ func (s *Service) listMods(ctx context.Context, rt *runtime.Context) error {
 	for _, user := range muters {
 		parts = append(parts, serviceutil.DisplayNameFromProfile(user)+" [muter]")
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Silent staff: "+strings.Join(parts, ", "), telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Silent staff: "+strings.Join(parts, ", "), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -508,7 +508,7 @@ func (s *Service) jobStatus(ctx context.Context, rt *runtime.Context, kind strin
 	if len(lines) == 0 {
 		lines = append(lines, "No recent jobs.")
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), strings.Join(lines, "\n"), telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), strings.Join(lines, "\n"), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -520,7 +520,7 @@ func (s *Service) sendJobStatus(ctx context.Context, rt *runtime.Context, job do
 	if strings.TrimSpace(job.Error) != "" {
 		text += "\nerror: " + job.Error
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 

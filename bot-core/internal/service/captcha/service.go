@@ -42,7 +42,7 @@ func (s *Service) HandleCommand(ctx context.Context, rt *runtime.Context) (bool,
 		if rt.RuntimeBundle.Captcha.Enabled {
 			status = "on"
 		}
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Captcha is "+status+".", telegram.SendMessageOptions{})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Captcha is "+status+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return true, err
 	}
 
@@ -69,7 +69,7 @@ func (s *Service) HandleCommand(ctx context.Context, rt *runtime.Context) (bool,
 	if err := rt.Store.SetCaptchaSettings(ctx, settings); err != nil {
 		return true, err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Captcha updated.", telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Captcha updated.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return true, err
 }
 

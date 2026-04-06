@@ -45,6 +45,13 @@
 - `/setrules`, `/rules`
 - `/afk`
 
+### Utility And Help
+
+- `/start`
+- `/help`
+- `/setlang`, `/language`
+- `/privacy`, `/mydata`, `/forgetme`
+
 ### Owner, Federation, And Clones
 
 - `/broadcast`

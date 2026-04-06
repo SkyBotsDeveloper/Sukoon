@@ -86,3 +86,47 @@ func TestPrivacyExportAndDelete(t *testing.T) {
 		t.Fatalf("expected AFK state to be removed, got %+v", state)
 	}
 }
+
+func TestStartAndHelpCommandsRespond(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 10,
+			From:      &telegram.User{ID: 50, FirstName: "User"},
+			Chat:      telegram.Chat{ID: 50, Type: "private"},
+			Text:      "/start",
+		},
+	}); err != nil {
+		t.Fatalf("start failed: %v", err)
+	}
+
+	startMessage := h.Client.Messages[len(h.Client.Messages)-1]
+	if !strings.Contains(startMessage.Text, "Welcome to Sukoon") {
+		t.Fatalf("expected /start response to introduce Sukoon, got %q", startMessage.Text)
+	}
+	if startMessage.Options.ReplyToMessageID != 10 {
+		t.Fatalf("expected /start response to reply to message 10, got %+v", startMessage.Options)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		Message: &telegram.Message{
+			MessageID: 11,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      telegram.Chat{ID: -100990, Type: "supergroup", Title: "Help"},
+			Text:      "/help",
+		},
+	}); err != nil {
+		t.Fatalf("help failed: %v", err)
+	}
+
+	helpMessage := h.Client.Messages[len(h.Client.Messages)-1]
+	if !strings.Contains(helpMessage.Text, "/ban") || !strings.Contains(helpMessage.Text, "/reports") || !strings.Contains(helpMessage.Text, "/rules") {
+		t.Fatalf("expected /help response to contain command guidance, got %q", helpMessage.Text)
+	}
+	if helpMessage.Options.ReplyToMessageID != 11 {
+		t.Fatalf("expected /help response to reply to message 11, got %+v", helpMessage.Options)
+	}
+}

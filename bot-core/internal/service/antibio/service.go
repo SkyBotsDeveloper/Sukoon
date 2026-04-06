@@ -73,7 +73,7 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 	if err := serviceutil.EnforceUserAction(ctx, rt, rt.ActorID(), rt.RuntimeBundle.AntiBio.Action, "antibio", rt.Message.MessageID); err != nil {
 		return false, err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "User bio policy triggered.", telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "User bio policy triggered.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	if err != nil {
 		return false, err
 	}
@@ -90,7 +90,7 @@ func (s *Service) antibio(ctx context.Context, rt *runtime.Context) error {
 		if rt.RuntimeBundle.AntiBio.Enabled {
 			status = "on"
 		}
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "AntiBio is "+status+".", telegram.SendMessageOptions{})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "AntiBio is "+status+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 	enabled, err := parseToggle(rt.Command.Args[0])
@@ -110,7 +110,7 @@ func (s *Service) antibio(ctx context.Context, rt *runtime.Context) error {
 	if err := rt.Store.SetAntiBioSettings(ctx, settings); err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "AntiBio updated.", telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "AntiBio updated.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -129,7 +129,7 @@ func (s *Service) free(ctx context.Context, rt *runtime.Context, enabled bool) e
 	if !enabled {
 		text = "AntiBio exemption removed for " + target.Name + "."
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), text, telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -139,14 +139,14 @@ func (s *Service) freeList(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	if len(users) == 0 {
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No AntiBio exemptions.", telegram.SendMessageOptions{})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No AntiBio exemptions.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 	parts := make([]string, 0, len(users))
 	for _, user := range users {
 		parts = append(parts, serviceutil.DisplayNameFromProfile(user))
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "AntiBio exemptions: "+strings.Join(parts, ", "), telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "AntiBio exemptions: "+strings.Join(parts, ", "), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 

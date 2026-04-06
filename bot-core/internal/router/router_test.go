@@ -33,4 +33,10 @@ func TestRoutesBanCommandToModeration(t *testing.T) {
 	if len(h.Client.Bans) != 1 || h.Client.Bans[0].UserID != 20 {
 		t.Fatalf("expected one ban for user 20, got %+v", h.Client.Bans)
 	}
+	if len(h.Client.Messages) != 1 {
+		t.Fatalf("expected one confirmation message, got %+v", h.Client.Messages)
+	}
+	if h.Client.Messages[0].Options.ReplyToMessageID != 10 {
+		t.Fatalf("expected confirmation reply to command message 10, got %+v", h.Client.Messages[0].Options)
+	}
 }

@@ -93,27 +93,27 @@ func (s *Service) lock(ctx context.Context, rt *runtime.Context, enable bool) er
 		if err != nil {
 			return err
 		}
-		_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Locked %s.", lockType), telegram.SendMessageOptions{})
+		_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Locked %s.", lockType), rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 
 	if err := rt.Store.DeleteLock(ctx, rt.Bot.ID, rt.ChatID(), lockType); err != nil {
 		return err
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Unlocked %s.", lockType), telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Unlocked %s.", lockType), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
 func (s *Service) listLocks(ctx context.Context, rt *runtime.Context) error {
 	if len(rt.RuntimeBundle.Locks) == 0 {
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No active locks.", telegram.SendMessageOptions{})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No active locks.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 	keys := make([]string, 0, len(rt.RuntimeBundle.Locks))
 	for lockType := range rt.RuntimeBundle.Locks {
 		keys = append(keys, lockType)
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Active locks: "+strings.Join(keys, ", "), telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Active locks: "+strings.Join(keys, ", "), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -153,7 +153,7 @@ func (s *Service) addBlocklist(ctx context.Context, rt *runtime.Context) error {
 	if err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Added blocklist rule #%d for %q.", rule.ID, pattern), telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Added blocklist rule #%d for %q.", rule.ID, pattern), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -170,20 +170,20 @@ func (s *Service) removeBlocklist(ctx context.Context, rt *runtime.Context) erro
 			return err
 		}
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Removed %d blocklist rule(s).", len(items)), telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Removed %d blocklist rule(s).", len(items)), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
 func (s *Service) listBlocklist(ctx context.Context, rt *runtime.Context) error {
 	if len(rt.RuntimeBundle.Blocklist) == 0 {
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No blocklist rules.", telegram.SendMessageOptions{})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No blocklist rules.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 	lines := make([]string, 0, len(rt.RuntimeBundle.Blocklist))
 	for _, rule := range rt.RuntimeBundle.Blocklist {
 		lines = append(lines, fmt.Sprintf("%d. [%s] %s", rule.ID, rule.MatchMode, rule.Pattern))
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), strings.Join(lines, "\n"), telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), strings.Join(lines, "\n"), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -202,7 +202,7 @@ func (s *Service) setFlood(ctx context.Context, rt *runtime.Context) error {
 		if err := rt.Store.SetAntiflood(ctx, settings); err != nil {
 			return err
 		}
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Antiflood disabled.", telegram.SendMessageOptions{})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Antiflood disabled.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 
@@ -224,7 +224,7 @@ func (s *Service) setFlood(ctx context.Context, rt *runtime.Context) error {
 	if err := rt.Store.SetAntiflood(ctx, settings); err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Antiflood enabled at %d messages per %d seconds.", settings.Limit, settings.WindowSeconds), telegram.SendMessageOptions{})
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Antiflood enabled at %d messages per %d seconds.", settings.Limit, settings.WindowSeconds), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -255,7 +255,7 @@ func (s *Service) setFloodMode(ctx context.Context, rt *runtime.Context) error {
 	if err := rt.Store.SetAntiflood(ctx, settings); err != nil {
 		return err
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Antiflood action set to %s.", mode), telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Antiflood action set to %s.", mode), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 

@@ -70,3 +70,10 @@ func (c *Context) Text() string {
 	}
 	return c.Message.Caption
 }
+
+func (c *Context) ReplyOptions(options telegram.SendMessageOptions) telegram.SendMessageOptions {
+	if options.ReplyToMessageID == 0 && c.Message != nil {
+		options.ReplyToMessageID = c.Message.MessageID
+	}
+	return options
+}
