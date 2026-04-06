@@ -1,17 +1,94 @@
-version: '3.8'
+version: "3.9"
 
 services:
-  sukoon-bot:
+  migrate:
     build:
-      context: .
+      context: ./bot-core
       dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
+    env_file:
+      - ./bot-core/.env
     environment:
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET}
-      - BOT_USERNAME=${BOT_USERNAME}
-      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+      APP_ENV: production
+      DATABASE_URL: postgres://sukoon:sukoon@postgres:5432/sukoon?sslmode=disable
+      REDIS_ADDR: valkey:6379
+    command: ["migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    restart: "no"
+
+  bot-core-web:
+    build:
+      context: ./bot-core
+      dockerfile: Dockerfile
+    env_file:
+      - ./bot-core/.env
+    environment:
+      APP_ENV: production
+      APP_MODE: web
+      APP_ADDR: :8080
+      DATABASE_URL: postgres://sukoon:sukoon@postgres:5432/sukoon?sslmode=disable
+      REDIS_ADDR: valkey:6379
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
+
+  bot-core-worker:
+    build:
+      context: ./bot-core
+      dockerfile: Dockerfile
+    env_file:
+      - ./bot-core/.env
+    environment:
+      APP_ENV: production
+      APP_MODE: worker
+      DATABASE_URL: postgres://sukoon:sukoon@postgres:5432/sukoon?sslmode=disable
+      REDIS_ADDR: valkey:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: sukoon
+      POSTGRES_USER: sukoon
+      POSTGRES_PASSWORD: sukoon
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sukoon -d sukoon"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--appendonly", "yes"]
+    volumes:
+      - valkeydata:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  valkeydata:

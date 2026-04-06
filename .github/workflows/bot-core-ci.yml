@@ -1,0 +1,79 @@
+name: bot-core-ci
+
+on:
+  push:
+    paths:
+      - "bot-core/**"
+      - "docker-compose.yml"
+      - "railway.json"
+      - "railway.worker.json"
+      - "heroku.yml"
+      - ".github/workflows/bot-core-ci.yml"
+  pull_request:
+    paths:
+      - "bot-core/**"
+      - "docker-compose.yml"
+      - "railway.json"
+      - "railway.worker.json"
+      - "heroku.yml"
+      - ".github/workflows/bot-core-ci.yml"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: sukoon_test
+          POSTGRES_USER: sukoon
+          POSTGRES_PASSWORD: sukoon
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sukoon -d sukoon_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      valkey:
+        image: valkey/valkey:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: bot-core
+    env:
+      TEST_DATABASE_URL: postgres://sukoon:sukoon@127.0.0.1:5432/sukoon_test?sslmode=disable
+      TEST_REDIS_ADDR: 127.0.0.1:6379
+      TEST_REDIS_DB: 0
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: bot-core/go.mod
+
+      - name: Check formatting
+        run: |
+          UNFORMATTED=$(gofmt -l ./cmd ./internal ./migrations)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "$UNFORMATTED"
+            exit 1
+          fi
+
+      - name: Run unit tests
+        run: go test ./...
+
+      - name: Run integration tests
+        run: go test -tags=integration ./...
+
+      - name: Build binaries
+        run: go build ./cmd/bot-core && go build ./cmd/migrate
+
+      - name: Docker build smoke test
+        run: docker build -t sukoon-bot-core .

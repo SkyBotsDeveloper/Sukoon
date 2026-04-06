@@ -10,10 +10,7 @@
     ]
   },
   "deploy": {
-    "preDeployCommand": "migrate",
-    "startCommand": "/bin/sh -lc 'APP_MODE=web bot-core'",
-    "healthcheckPath": "/healthz",
-    "healthcheckTimeout": 30,
+    "startCommand": "/bin/sh -lc 'APP_MODE=worker bot-core'",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }

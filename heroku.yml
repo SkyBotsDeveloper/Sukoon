@@ -1,0 +1,11 @@
+build:
+  docker:
+    web: bot-core/Dockerfile
+    worker: bot-core/Dockerfile
+release:
+  image: web
+  command:
+    - migrate
+run:
+  web: APP_MODE=web bot-core
+  worker: APP_MODE=worker bot-core
