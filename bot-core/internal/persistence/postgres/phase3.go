@@ -85,6 +85,9 @@ func (s *Store) CreateJob(ctx context.Context, job domain.Job) error {
 	if job.AvailableAt.IsZero() {
 		job.AvailableAt = time.Now()
 	}
+	if len(job.PayloadJSON) == 0 {
+		job.PayloadJSON = []byte(`{}`)
+	}
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO jobs (id, bot_id, kind, status, requested_by, report_chat_id, progress, total, attempts, max_attempts, payload_json, error_text, result_summary, available_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14)
