@@ -21,6 +21,7 @@ Behavior and product references used during the rebuild:
 
 - Miss Rose docs: https://missrose.org/docs/
 - Group Help site: https://www.grouphelp.top/
+- Help and parity batches use official Miss Rose docs as the primary source of truth, with secondary public guides only as cross-check references. See [OPERATIONS.md](/c:/Users/strad/OneDrive/Documents/shortcuts/Downloads/Sukoon/OPERATIONS.md).
 
 ## Highlights
 
