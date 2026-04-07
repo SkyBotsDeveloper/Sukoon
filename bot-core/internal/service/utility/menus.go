@@ -478,14 +478,9 @@ func cloneLandingMarkup(username string) *telegram.InlineKeyboardMarkup {
 	return serviceutil.Markup(
 		[]telegram.InlineKeyboardButton{
 			{Text: "Open BotFather", URL: "https://t.me/BotFather"},
-			{Text: "Website", URL: serviceutil.WebsiteURL},
-		},
-		[]telegram.InlineKeyboardButton{
 			{Text: "Back", CallbackData: callbackStartHome},
-			{Text: "Help", CallbackData: callbackHelpMain},
 		},
 		[]telegram.InlineKeyboardButton{
-			{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
 			{Text: "Close", CallbackData: callbackClose},
 		},
 	)

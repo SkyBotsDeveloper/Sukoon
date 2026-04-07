@@ -346,11 +346,11 @@ func TestStartCloneGuideUsesInPlaceCallbackUX(t *testing.T) {
 	}
 	cloneMarkup := requireEditedMarkup(t, cloneGuide)
 	assertButton(t, cloneMarkup, 0, 0, "Open BotFather", "", "https://t.me/BotFather")
-	assertButton(t, cloneMarkup, 0, 1, "Website", "", serviceutil.WebsiteURL)
-	assertButton(t, cloneMarkup, 1, 0, "Back", "ux:start:home", "")
-	assertButton(t, cloneMarkup, 1, 1, "Help", "ux:help:root", "")
-	assertButton(t, cloneMarkup, 2, 0, "Add to Group", "", serviceutil.BotAddGroupLink(h.Bot.Username))
-	assertButton(t, cloneMarkup, 2, 1, "Close", "ux:close", "")
+	assertButton(t, cloneMarkup, 0, 1, "Back", "ux:start:home", "")
+	assertButton(t, cloneMarkup, 1, 0, "Close", "ux:close", "")
+	assertNoButtonText(t, cloneMarkup, "Website")
+	assertNoButtonText(t, cloneMarkup, "Help")
+	assertNoButtonText(t, cloneMarkup, "Add to Group")
 
 	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
 		UpdateID: 3,
