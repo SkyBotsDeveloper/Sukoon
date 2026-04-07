@@ -16,6 +16,7 @@ import (
 type Service struct{}
 
 const donateImageURL = "https://files.catbox.moe/25hv2j.jpg"
+const donateCaption = "Hey, thanks for wanting to donate! Sukoon is entirely run by volunteers, so this means a lot.\nWe accept only UPI as donation method."
 
 func New() *Service {
 	return &Service{}
@@ -156,6 +157,7 @@ func (s *Service) donate(ctx context.Context, rt *runtime.Context) error {
 	if rt.Message != nil {
 		options.ReplyToMessageID = rt.Message.MessageID
 	}
+	options.Caption = donateCaption
 	_, err := rt.Client.SendPhoto(ctx, rt.ChatID(), donateImageURL, options)
 	return err
 }

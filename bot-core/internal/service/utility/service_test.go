@@ -333,6 +333,9 @@ func TestDonateCommandSendsSupportImage(t *testing.T) {
 	if photo.Photo != "https://files.catbox.moe/25hv2j.jpg" {
 		t.Fatalf("expected donate photo URL, got %+v", photo)
 	}
+	if photo.Options.Caption != "Hey, thanks for wanting to donate! Sukoon is entirely run by volunteers, so this means a lot.\nWe accept only UPI as donation method." {
+		t.Fatalf("expected donate caption, got %+v", photo.Options)
+	}
 	if photo.Options.ReplyToMessageID != 40 {
 		t.Fatalf("expected donate photo to reply to the command message, got %+v", photo.Options)
 	}
