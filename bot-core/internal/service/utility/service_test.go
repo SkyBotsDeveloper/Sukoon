@@ -121,6 +121,9 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	if startMessage.Options.ParseMode != "HTML" {
 		t.Fatalf("expected /start response to use HTML parse mode, got %+v", startMessage.Options)
 	}
+	if !startMessage.Options.DisableWebPagePreview {
+		t.Fatalf("expected /start response to disable web page preview, got %+v", startMessage.Options)
+	}
 	startMarkup := requireMarkup(t, startMessage)
 	assertButton(t, startMarkup, 0, 0, "Add me to your chat!", "", serviceutil.BotAddGroupLink(h.Bot.Username))
 	assertButton(t, startMarkup, 0, 1, "Get your own Sukoon", "ux:start:clone", "")
@@ -258,6 +261,9 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	}
 	if homeMessage.Options.ParseMode != "HTML" {
 		t.Fatalf("expected home callback to restore start page with HTML parse mode, got %+v", homeMessage.Options)
+	}
+	if !homeMessage.Options.DisableWebPagePreview {
+		t.Fatalf("expected home callback to disable web page preview, got %+v", homeMessage.Options)
 	}
 	homeMarkup := requireEditedMarkup(t, homeMessage)
 	assertButton(t, homeMarkup, 0, 0, "Add me to your chat!", "", serviceutil.BotAddGroupLink(h.Bot.Username))

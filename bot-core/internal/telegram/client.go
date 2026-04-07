@@ -97,6 +97,9 @@ func (c *HTTPClient) SendMessage(ctx context.Context, chatID int64, text string,
 	if options.ParseMode != "" {
 		payload["parse_mode"] = options.ParseMode
 	}
+	if options.DisableWebPagePreview {
+		payload["disable_web_page_preview"] = true
+	}
 	if options.ReplyMarkup != nil {
 		payload["reply_markup"] = options.ReplyMarkup
 	}
@@ -111,6 +114,9 @@ func (c *HTTPClient) EditMessageText(ctx context.Context, chatID int64, messageI
 	}
 	if options.ParseMode != "" {
 		payload["parse_mode"] = options.ParseMode
+	}
+	if options.DisableWebPagePreview {
+		payload["disable_web_page_preview"] = true
 	}
 	if options.ReplyMarkup != nil {
 		payload["reply_markup"] = options.ReplyMarkup

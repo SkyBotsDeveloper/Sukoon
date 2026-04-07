@@ -46,7 +46,7 @@ func (s *Service) HandleCallback(ctx context.Context, rt *runtime.Context) (bool
 	var err error
 	switch rt.CallbackQuery.Data {
 	case callbackStartHome:
-		err = s.sendCallbackPageWithParseMode(ctx, rt, startLandingText(), startLandingMarkup(rt.Bot.Username), "HTML")
+		err = s.sendCallbackPageWithOptions(ctx, rt, startLandingText(), startLandingMarkup(rt.Bot.Username), "HTML", true)
 	case callbackStartClone:
 		err = s.sendCallbackPage(ctx, rt, cloneLandingText(), cloneLandingMarkup(rt.Bot.Username))
 	case callbackHelpMain:
@@ -93,8 +93,9 @@ func (s *Service) start(ctx context.Context, rt *runtime.Context) error {
 	switch {
 	case payload == "", payload == "home":
 		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), startLandingText(), rt.ReplyOptions(telegram.SendMessageOptions{
-			ParseMode:   "HTML",
-			ReplyMarkup: startLandingMarkup(rt.Bot.Username),
+			ParseMode:             "HTML",
+			DisableWebPagePreview: true,
+			ReplyMarkup:           startLandingMarkup(rt.Bot.Username),
 		}))
 		return err
 	case payload == "help", payload == "help_main":
@@ -120,8 +121,9 @@ func (s *Service) start(ctx context.Context, rt *runtime.Context) error {
 		return err
 	default:
 		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), startLandingText(), rt.ReplyOptions(telegram.SendMessageOptions{
-			ParseMode:   "HTML",
-			ReplyMarkup: startLandingMarkup(rt.Bot.Username),
+			ParseMode:             "HTML",
+			DisableWebPagePreview: true,
+			ReplyMarkup:           startLandingMarkup(rt.Bot.Username),
 		}))
 		return err
 	}
@@ -233,17 +235,18 @@ func (s *Service) sendPMGuidance(ctx context.Context, rt *runtime.Context, text 
 }
 
 func (s *Service) sendCallbackPage(ctx context.Context, rt *runtime.Context, text string, markup *telegram.InlineKeyboardMarkup) error {
-	return s.sendCallbackPageWithParseMode(ctx, rt, text, markup, "")
+	return s.sendCallbackPageWithOptions(ctx, rt, text, markup, "", false)
 }
 
-func (s *Service) sendCallbackPageWithParseMode(ctx context.Context, rt *runtime.Context, text string, markup *telegram.InlineKeyboardMarkup, parseMode string) error {
+func (s *Service) sendCallbackPageWithOptions(ctx context.Context, rt *runtime.Context, text string, markup *telegram.InlineKeyboardMarkup, parseMode string, disablePreview bool) error {
 	if rt.CallbackQuery == nil || rt.CallbackQuery.Message == nil {
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, telegram.SendMessageOptions{ParseMode: parseMode, ReplyMarkup: markup})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, telegram.SendMessageOptions{ParseMode: parseMode, DisableWebPagePreview: disablePreview, ReplyMarkup: markup})
 		return err
 	}
 	err := rt.Client.EditMessageText(ctx, rt.ChatID(), rt.CallbackQuery.Message.MessageID, text, telegram.EditMessageTextOptions{
-		ParseMode:   parseMode,
-		ReplyMarkup: markup,
+		ParseMode:             parseMode,
+		DisableWebPagePreview: disablePreview,
+		ReplyMarkup:           markup,
 	})
 	if err != nil && strings.Contains(strings.ToLower(err.Error()), "message is not modified") {
 		return nil

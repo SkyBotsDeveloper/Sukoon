@@ -133,14 +133,16 @@ type MessageEntityMention struct {
 }
 
 type SendMessageOptions struct {
-	ReplyToMessageID int64
-	ParseMode        string
-	ReplyMarkup      *InlineKeyboardMarkup
+	ReplyToMessageID       int64
+	ParseMode              string
+	DisableWebPagePreview  bool
+	ReplyMarkup            *InlineKeyboardMarkup
 }
 
 type EditMessageTextOptions struct {
-	ParseMode   string
-	ReplyMarkup *InlineKeyboardMarkup
+	ParseMode             string
+	DisableWebPagePreview bool
+	ReplyMarkup           *InlineKeyboardMarkup
 }
 
 type SetWebhookOptions struct {
