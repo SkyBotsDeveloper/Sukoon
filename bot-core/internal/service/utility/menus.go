@@ -469,6 +469,9 @@ func cloneLandingText() string {
 		"3. Run /clone <bot_token> from an owner or sudo account.",
 		"4. Use /clone sync <clone> later if your webhook base URL changes.",
 		"5. Use /clones to list your bots and /rmclone <clone> to remove one.",
+		"",
+		"Each account can create only one Sukoon clone.",
+		"If an old clone token was revoked, Sukoon clears the stale clone entry when you create a replacement.",
 	}, "\n")
 }
 

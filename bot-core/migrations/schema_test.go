@@ -28,3 +28,21 @@ func TestCanonicalSchemaContainsCriticalTables(t *testing.T) {
 		}
 	}
 }
+
+func TestCloneLimitMigrationExists(t *testing.T) {
+	body, err := migrations.Files.ReadFile("0005_clone_owner_limit.sql")
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	sql := string(body)
+	for _, fragment := range []string{
+		"CREATE UNIQUE INDEX IF NOT EXISTS bot_instances_one_active_clone_per_owner",
+		"ON bot_instances (created_by_user_id)",
+		"is_primary = FALSE",
+		"status = 'active'",
+	} {
+		if !strings.Contains(sql, fragment) {
+			t.Fatalf("expected clone limit migration to contain %q", fragment)
+		}
+	}
+}

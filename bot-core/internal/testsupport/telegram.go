@@ -29,6 +29,7 @@ type FakeTelegramClient struct {
 	ChatsByID        map[int64]telegram.Chat
 	ChatErrors       map[int64]error
 	Me               telegram.User
+	GetMeError       error
 	SendErrors       map[int64]error
 	DeleteErrors     map[int64]error
 	BanErrors        map[string]error
@@ -217,6 +218,9 @@ func (f *FakeTelegramClient) GetChat(_ context.Context, chatID int64) (telegram.
 func (f *FakeTelegramClient) GetMe(_ context.Context) (telegram.User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.GetMeError != nil {
+		return telegram.User{}, f.GetMeError
+	}
 	return f.Me, nil
 }
 

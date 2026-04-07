@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"sukoon/bot-core/internal/domain"
+	"sukoon/bot-core/internal/persistence"
 	"sukoon/bot-core/internal/telegram"
 )
 
@@ -133,6 +134,17 @@ func (m *MemoryStore) UpsertPrimaryBot(_ context.Context, bot domain.BotInstance
 func (m *MemoryStore) CreateCloneBot(_ context.Context, bot domain.BotInstance, ownerUserID int64) (domain.BotInstance, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	for botID, existing := range m.botsByID {
+		if existing.IsPrimary || existing.Status != "active" {
+			continue
+		}
+		for _, role := range m.roles[botID][ownerUserID] {
+			if role == "owner" {
+				return domain.BotInstance{}, persistence.ErrCloneLimitReached
+			}
+		}
+	}
 
 	bot.Status = "active"
 	bot.CreatedByUserID = ownerUserID

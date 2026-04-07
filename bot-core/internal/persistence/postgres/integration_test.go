@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"sukoon/bot-core/internal/domain"
+	"sukoon/bot-core/internal/persistence"
 	"sukoon/bot-core/internal/telegram"
 )
 
@@ -119,6 +120,33 @@ func TestStoreMigratesAndPersistsCanonicalContracts(t *testing.T) {
 	}
 	if stats.ChatCount < 1 || stats.UserCount < 2 || stats.JobCount < 1 {
 		t.Fatalf("GetStats() = %+v, expected chat/user/job counts to be populated", stats)
+	}
+
+	cloneA, err := store.CreateCloneBot(ctx, domain.BotInstance{
+		ID:            "clone_a",
+		Slug:          "clonea",
+		DisplayName:   "Clone A",
+		TelegramToken: "clone-token-a",
+		WebhookKey:    "clone-hook-a",
+		WebhookSecret: "clone-secret-a",
+		Username:      "clonea_bot",
+	}, 1001)
+	if err != nil {
+		t.Fatalf("CreateCloneBot(first) error = %v", err)
+	}
+	if cloneA.ID == "" {
+		t.Fatal("expected first clone to persist")
+	}
+	if _, err := store.CreateCloneBot(ctx, domain.BotInstance{
+		ID:            "clone_b",
+		Slug:          "cloneb",
+		DisplayName:   "Clone B",
+		TelegramToken: "clone-token-b",
+		WebhookKey:    "clone-hook-b",
+		WebhookSecret: "clone-secret-b",
+		Username:      "cloneb_bot",
+	}, 1001); err != persistence.ErrCloneLimitReached {
+		t.Fatalf("CreateCloneBot(second) error = %v, want ErrCloneLimitReached", err)
 	}
 }
 

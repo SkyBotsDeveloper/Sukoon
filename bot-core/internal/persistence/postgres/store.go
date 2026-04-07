@@ -2,12 +2,14 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"sort"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"sukoon/bot-core/internal/domain"
@@ -205,6 +207,18 @@ func (s *Store) CreateCloneBot(ctx context.Context, bot domain.BotInstance, owne
 	bot.CreatedByUserID = ownerUserID
 	bot.Status = "active"
 
+	var existingClones int
+	if err := tx.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM bot_instances
+		WHERE created_by_user_id = $1 AND is_primary = FALSE AND status = 'active'
+	`, ownerUserID).Scan(&existingClones); err != nil {
+		return domain.BotInstance{}, err
+	}
+	if existingClones > 0 {
+		return domain.BotInstance{}, persistence.ErrCloneLimitReached
+	}
+
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO bot_instances (id, slug, display_name, telegram_token, webhook_key, webhook_secret, username, is_primary, created_by_user_id, status)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, $8, 'active')
@@ -212,6 +226,10 @@ func (s *Store) CreateCloneBot(ctx context.Context, bot domain.BotInstance, owne
 	`, bot.ID, bot.Slug, bot.DisplayName, bot.TelegramToken, bot.WebhookKey, bot.WebhookSecret, bot.Username, ownerUserID).Scan(
 		&bot.ID, &bot.Slug, &bot.DisplayName, &bot.TelegramToken, &bot.WebhookKey, &bot.WebhookSecret, &bot.Username, &bot.IsPrimary, &bot.CreatedByUserID, &bot.Status, &bot.CreatedAt, &bot.UpdatedAt,
 	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "bot_instances_one_active_clone_per_owner" {
+			return domain.BotInstance{}, persistence.ErrCloneLimitReached
+		}
 		return domain.BotInstance{}, err
 	}
 

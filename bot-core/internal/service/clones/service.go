@@ -2,6 +2,7 @@ package clones
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -62,6 +63,11 @@ func (s *Service) clone(ctx context.Context, rt *runtime.Context) error {
 	if s.publicWebhookURL == "" {
 		return fmt.Errorf("PUBLIC_WEBHOOK_BASE_URL is required for clone creation")
 	}
+	if limited, err := s.prepareCloneSlot(ctx, rt); err != nil {
+		return err
+	} else if limited {
+		return nil
+	}
 
 	token := strings.TrimSpace(rt.Command.Args[0])
 	tempBot := domain.BotInstance{
@@ -94,6 +100,13 @@ func (s *Service) clone(ctx context.Context, rt *runtime.Context) error {
 	}
 	clone, err = s.store.CreateCloneBot(ctx, clone, rt.ActorID())
 	if err != nil {
+		if errors.Is(err, persistence.ErrCloneLimitReached) {
+			_, sendErr := rt.Client.SendMessage(ctx, rt.ChatID(), cloneLimitText(), telegram.SendMessageOptions{})
+			if sendErr != nil {
+				return sendErr
+			}
+			return nil
+		}
 		return err
 	}
 
@@ -107,6 +120,35 @@ func (s *Service) clone(ctx context.Context, rt *runtime.Context) error {
 
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Clone created: @%s", clone.Username), telegram.SendMessageOptions{})
 	return err
+}
+
+func (s *Service) prepareCloneSlot(ctx context.Context, rt *runtime.Context) (bool, error) {
+	bots, err := s.store.ListOwnedBots(ctx, rt.ActorID())
+	if err != nil {
+		return false, err
+	}
+	for _, bot := range bots {
+		if bot.IsPrimary || bot.Status != "active" {
+			continue
+		}
+		if _, err := s.factory.ForBot(bot).GetMe(ctx); err != nil {
+			s.logger.Warn("removing stale clone after token validation failed", "bot_id", bot.ID, "owner_user_id", rt.ActorID(), "error", err)
+			if delErr := s.store.DeleteBotInstance(ctx, bot.ID); delErr != nil {
+				return false, delErr
+			}
+			continue
+		}
+		_, sendErr := rt.Client.SendMessage(ctx, rt.ChatID(), cloneLimitText(), telegram.SendMessageOptions{})
+		if sendErr != nil {
+			return false, sendErr
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func cloneLimitText() string {
+	return "Only one Sukoon clone is allowed per account. Remove your existing clone with /rmclone before creating another."
 }
 
 func (s *Service) sync(ctx context.Context, rt *runtime.Context) error {
