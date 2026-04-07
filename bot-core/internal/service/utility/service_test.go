@@ -346,7 +346,7 @@ func TestStartCloneGuideUsesInPlaceCallbackUX(t *testing.T) {
 	}
 	cloneMarkup := requireEditedMarkup(t, cloneGuide)
 	assertButton(t, cloneMarkup, 0, 0, "Back", "ux:start:home", "")
-	assertButton(t, cloneMarkup, 1, 0, "Close", "ux:close", "")
+	assertButton(t, cloneMarkup, 0, 1, "Close", "ux:close", "")
 	assertNoButtonText(t, cloneMarkup, "Open BotFather")
 	assertNoButtonText(t, cloneMarkup, "Website")
 	assertNoButtonText(t, cloneMarkup, "Help")

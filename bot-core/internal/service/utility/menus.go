@@ -476,8 +476,6 @@ func cloneLandingMarkup(username string) *telegram.InlineKeyboardMarkup {
 	return serviceutil.Markup(
 		[]telegram.InlineKeyboardButton{
 			{Text: "Back", CallbackData: callbackStartHome},
-		},
-		[]telegram.InlineKeyboardButton{
 			{Text: "Close", CallbackData: callbackClose},
 		},
 	)
