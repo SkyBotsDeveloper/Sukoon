@@ -469,15 +469,12 @@ func cloneLandingText() string {
 		"3. Run /clone <bot_token> from an owner or sudo account.",
 		"4. Use /clone sync <clone> later if your webhook base URL changes.",
 		"5. Use /clones to list your bots and /rmclone <clone> to remove one.",
-		"",
-		"Clone creation requires PUBLIC_WEBHOOK_BASE_URL to be configured on the server.",
 	}, "\n")
 }
 
 func cloneLandingMarkup(username string) *telegram.InlineKeyboardMarkup {
 	return serviceutil.Markup(
 		[]telegram.InlineKeyboardButton{
-			{Text: "Open BotFather", URL: "https://t.me/BotFather"},
 			{Text: "Back", CallbackData: callbackStartHome},
 		},
 		[]telegram.InlineKeyboardButton{

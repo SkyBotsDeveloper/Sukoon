@@ -341,13 +341,13 @@ func TestStartCloneGuideUsesInPlaceCallbackUX(t *testing.T) {
 	if !strings.Contains(cloneGuide.Text, "Get your own Sukoon") || !strings.Contains(cloneGuide.Text, "/clone <bot_token>") {
 		t.Fatalf("expected clone guide instructions, got %q", cloneGuide.Text)
 	}
-	if !strings.Contains(cloneGuide.Text, "@BotFather") || !strings.Contains(cloneGuide.Text, "PUBLIC_WEBHOOK_BASE_URL") {
-		t.Fatalf("expected BotFather and webhook guidance, got %q", cloneGuide.Text)
+	if !strings.Contains(cloneGuide.Text, "@BotFather") || strings.Contains(cloneGuide.Text, "PUBLIC_WEBHOOK_BASE_URL") {
+		t.Fatalf("expected BotFather mention without server-internal webhook note, got %q", cloneGuide.Text)
 	}
 	cloneMarkup := requireEditedMarkup(t, cloneGuide)
-	assertButton(t, cloneMarkup, 0, 0, "Open BotFather", "", "https://t.me/BotFather")
-	assertButton(t, cloneMarkup, 0, 1, "Back", "ux:start:home", "")
+	assertButton(t, cloneMarkup, 0, 0, "Back", "ux:start:home", "")
 	assertButton(t, cloneMarkup, 1, 0, "Close", "ux:close", "")
+	assertNoButtonText(t, cloneMarkup, "Open BotFather")
 	assertNoButtonText(t, cloneMarkup, "Website")
 	assertNoButtonText(t, cloneMarkup, "Help")
 	assertNoButtonText(t, cloneMarkup, "Add to Group")
