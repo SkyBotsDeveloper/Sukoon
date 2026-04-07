@@ -138,7 +138,7 @@ var helpPages = map[string]helpPage{
 			"/blocklist",
 			"",
 			"Open the examples page below for live command syntax.",
-			"Rose-style blocklist mode, delete toggles, and custom blocklist reasons are still deferred.",
+			"Advanced blocklist mode, delete toggles, and custom blocklist reasons are still deferred.",
 		},
 	},
 	helpBlocklistExamples: {
@@ -165,7 +165,7 @@ var helpPages = map[string]helpPage{
 			"/captchakick [kick|mute|ban]",
 			"/captchakicktime [seconds]",
 			"",
-			"Current captcha mode is button-only. Rose-style custom captcha text, extra rules text, and mute-duration variants are still deferred.",
+			"Current captcha mode is button-only. Custom captcha text, extra rules text, and mute-duration variants are still deferred.",
 		},
 	},
 	helpCleanCommands: {
@@ -201,7 +201,7 @@ var helpPages = map[string]helpPage{
 	helpConnections: {
 		Title: "Connections",
 		Lines: []string{
-			"Connections let admins manage one chat from another place in Rose-style setups.",
+			"Connections let admins manage one chat from another place without switching contexts.",
 			"",
 			"Live runtime status: Sukoon does not expose remote chat connections in production yet.",
 			"",
@@ -284,7 +284,7 @@ var helpPages = map[string]helpPage{
 			"/leavefed",
 			"/chatfed",
 			"",
-			"Rose-style quietfed, fedsubs, and fedstat are still deferred in Sukoon.",
+			"Quiet federation mode, federation subscriptions, and federation stats are still deferred in Sukoon.",
 		},
 	},
 	helpFilters: {
@@ -328,14 +328,14 @@ var helpPages = map[string]helpPage{
 	helpFormattingMarkdown: {
 		Title: "Markdown Formatting",
 		Lines: []string{
-			"Sukoon does not expose the full Rose-style markdown helper set in stored content yet.",
+			"Sukoon does not expose the full markdown helper set in stored content yet.",
 			"",
 			"Guaranteed syntax today:",
 			"- button rows with [Label](buttonurl:https://example.com)",
 			"- contextual fillings such as {first} and {chatname}",
 			"- random choices using %%%",
 			"",
-			"Rose-style bold, italics, spoiler, code blocks, quotes, note buttons, and styled buttons are still deferred in the current runtime.",
+			"Bold, italics, spoiler, code blocks, quotes, note buttons, and styled buttons are still deferred in the current runtime.",
 		},
 	},
 	helpFormattingFillings: {
@@ -380,7 +380,7 @@ var helpPages = map[string]helpPage{
 			"[Docs](buttonurl:https://example.com) [Status](buttonurl:https://example.org)",
 			"",
 			"Buttons on the same line stay in the same row. Start a new line for a new row.",
-			"Callback-style note buttons and Rose-style button styling are still deferred.",
+			"Callback-style note buttons and styled button variants are still deferred.",
 			"",
 			"Website: https://misssukoon.vercel.app/",
 		},
@@ -655,7 +655,7 @@ func helpLandingText() string {
 		"",
 		"Hey! I'm Sukoon, a fast moderation bot for groups and private communities.",
 		"",
-		"Browse the merged Rose-style, Group Help-style, AntiAbuse, and Bio Links sections below.",
+		"Browse the moderation, protection, AntiAbuse, and Bio Links sections below.",
 		"",
 		"Helpful commands:",
 		"- /start: open the landing page",

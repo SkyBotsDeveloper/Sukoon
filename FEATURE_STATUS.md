@@ -57,7 +57,7 @@
 - `/help`
 - `/setlang`, `/language`
 - `/privacy`, `/mydata`, `/forgetme`
-- callback-driven Rose-style help pages for:
+- callback-driven help pages for:
   admin, approval, bans, antiflood, blocklists, captcha, clean commands, disabling, locks, log channels, federations, filters, and formatting
 - help subpages for:
   blocklist command examples, federation admin/owner/user commands, filter examples, markdown formatting truth, fillings, random content, buttons, lock descriptions, and lock examples
@@ -95,8 +95,8 @@
   implemented structured buttons and rows, quoted multi-word filter triggers, contextual fillings, and random content, but not every historical legacy syntax variant
 - metrics:
   observability seam exists, but no external metrics backend is wired by default
-- Rose/Group Help parity:
-  core moderation, rules, saved content, approvals, PM-guidance UX, and the Rose-style help batches through disabling / federations / filters / formatting are now live, but several long-tail utility families are still intentionally deferred
+- help and command-surface parity:
+  core moderation, rules, saved content, approvals, PM-guidance UX, and the structured help batches through disabling / federations / filters / formatting are now live, but several long-tail utility families are still intentionally deferred
 
 ## Deferred Or Intentionally Not Claimed
 
@@ -107,12 +107,12 @@
 - recurring timed messages
 - channel-subscription enforcement
 - private-rules toggle commands
-- Rose-style blocklist modes, blocklist delete toggles, and custom blocklist reasons
-- Rose-style captcha text/rules variants beyond the current button-mode controls
+- advanced blocklist modes, blocklist delete toggles, and custom blocklist reasons
+- advanced captcha text/rules variants beyond the current button-mode controls
 - warn-mode locks and allowlist-based lock exemptions
 - separate admin web panel
-- full Rose-style help or informational command surface beyond the current scoped live sections
-- Rose-style markdown helper parsing for bold/italics/spoilers/code blocks and note-button syntax in stored content
+- full help or informational command surface beyond the current scoped live sections
+- advanced markdown helper parsing for bold/italics/spoilers/code blocks and note-button syntax in stored content
 - advanced federation policy toggles that were unsafe or unclear in the legacy runtime
 
 ## Final Truth

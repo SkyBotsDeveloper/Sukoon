@@ -15,20 +15,14 @@ The old Next.js and Supabase bot runtime has been removed. This repository is no
 
 Sukoon V2 is ready for self-hosted production use with a durable webhook ingress, worker-based update processing, canonical SQL migrations, clone-safe bot scoping, structured logs, automated tests, and CI validation.
 
-Current product direction is aligned with Rose-style moderation ergonomics and Group Help-style group protection where that fits the safer Go architecture.
-
-Behavior and product references used during the rebuild:
-
-- Miss Rose docs: https://missrose.org/docs/
-- Group Help site: https://www.grouphelp.top/
-- Help and parity batches use official Miss Rose docs as the primary source of truth, with secondary public guides only as cross-check references. See [OPERATIONS.md](/c:/Users/strad/OneDrive/Documents/shortcuts/Downloads/Sukoon/OPERATIONS.md).
+Current product direction focuses on fast moderation ergonomics, strong group protection, and a clean operator experience within the safer Go architecture.
 
 ## Highlights
 
 - Fast webhook ack plus async worker execution
 - Durable update idempotency by bot and `update_id`
 - Reliable moderation primitives: bans, mutes, kicks, warns, approvals, locks, blocklists, antiflood, captcha
-- Rose-style help surfaces for admin, approval, bans, antiflood, blocklists, captcha, clean commands, disabling, locks, log channels, federations, filters, and formatting
+- rich help surfaces for admin, approval, bans, antiflood, blocklists, captcha, clean commands, disabling, locks, log channels, federations, filters, and formatting
 - Owner/global tooling with job-backed broadcast and global blacklist controls
 - Federation support with canonical V2 storage, owner/admin/user help pages, and safe rename/chat-status helpers
 - Safe clone lifecycle with explicit per-bot webhook routing

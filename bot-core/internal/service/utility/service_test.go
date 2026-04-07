@@ -287,7 +287,7 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 
 	homeMessage := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
 	if !strings.Contains(homeMessage.Text, "Hey there! My name is Sukoon") {
-		t.Fatalf("expected home callback to restore Rose-style start page, got %q", homeMessage.Text)
+		t.Fatalf("expected home callback to restore the start page, got %q", homeMessage.Text)
 	}
 	if homeMessage.Options.ParseMode != "HTML" {
 		t.Fatalf("expected home callback to restore start page with HTML parse mode, got %+v", homeMessage.Options)
@@ -384,7 +384,7 @@ func TestStartCloneGuideUsesInPlaceCallbackUX(t *testing.T) {
 	}
 }
 
-func TestHelpNavigationSupportsNestedRoseBatchPages(t *testing.T) {
+func TestHelpNavigationSupportsNestedHelpBatchPages(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	chat := telegram.Chat{ID: 51, Type: "private"}
 
@@ -453,7 +453,7 @@ func TestHelpNavigationSupportsNestedRoseBatchPages(t *testing.T) {
 	if !strings.Contains(h.Client.EditedMessages[4].Text, "/filter \"buy now\"") || !strings.Contains(h.Client.EditedMessages[4].Text, "/stop hello | buy now") {
 		t.Fatalf("expected filter examples page, got %q", h.Client.EditedMessages[4].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[7].Text, "Rose-style markdown helper set") {
+	if !strings.Contains(h.Client.EditedMessages[7].Text, "full markdown helper set") {
 		t.Fatalf("expected truthful markdown page, got %q", h.Client.EditedMessages[7].Text)
 	}
 	if !strings.Contains(h.Client.EditedMessages[8].Text, "buttonurl:https://misssukoon.vercel.app/") {

@@ -52,48 +52,29 @@ For clone bots:
 - create or sync clones through the clone commands
 - each clone gets its own webhook key and secret
 
-## Help And Parity Research Policy
+## Help And Parity Policy
 
-Rose-style help and command-parity batches must be researched before implementation.
+Help and command-parity batches must be researched before implementation.
 
 Source priority:
 
-1. Official Miss Rose docs are the primary source of truth for behavior, command names, help structure, and examples.
-2. Trusted public command or setup guides may be used as secondary cross-check references for common aliases, expected UX, and operator-facing examples.
-3. Public GitHub repositories may be used only as tertiary implementation-reference material, never as product truth.
+1. Sukoon's own implemented command surface and tests are the primary source of truth.
+2. Trusted screenshots, operator notes, and provided reference material may be used as secondary cross-check inputs.
+3. Public guides or repositories may be used only as implementation inspiration, never as product truth.
 
 When sources disagree:
 
-- Miss Rose official docs win
-- public guides do not override official docs
+- Sukoon's implemented runtime and tests win
+- secondary references do not override implemented behavior
 - unverified blog or repository examples must not be exposed in Sukoon help
 
 Required workflow for each help or parity batch:
 
-1. Read the matching Miss Rose docs pages for the batch.
-2. Cross-check one or more trusted public guides for common usage expectations.
-3. Compare those references against Sukoon's actual implemented command surface.
-4. Use the user-provided screenshots, PDFs, and Rose docs to shape menu structure and explanatory copy.
-5. Implement only the safe, verified subset that fits Sukoon's current Go architecture.
-6. Keep unimplemented or unsafe commands out of live help and report them as deferred.
-
-Current Rose references used for Sukoon help and parity work:
-
-- Introduction: https://missrose.org/docs/
-- Connecting To Chats: https://missrose.org/docs/basics/connections/
-- Rules: https://missrose.org/docs/basics/rules/
-- Admins in Rose: https://missrose.org/docs/moderation/admins/
-- Command Disabling: https://missrose.org/docs/moderation/disabling/
-- Filters: https://missrose.org/docs/filters/
-- Notes: https://missrose.org/docs/notes/
-- Message formatting: https://missrose.org/docs/formatting/
-- About Federations: https://missrose.org/docs/federations/
-- Managing Your Federation: https://missrose.org/docs/federations/managing/
-- User Federation Commands: https://missrose.org/docs/federations/user-commands/
-
-Current secondary cross-check reference:
-
-- Quantaps Rose bot guide: https://quantaps.com/en/guides/telegram-rose-bot-settings-and-commands/
+1. Review the requested section batch and Sukoon's current command surface.
+2. Cross-check any trusted screenshots, PDFs, or operator notes provided for that batch.
+3. Compare those references against Sukoon's actual implemented behavior.
+4. Shape menu structure and explanatory copy around the safe verified subset.
+5. Keep unimplemented or unsafe commands out of live help and report them as deferred.
 
 ## Scaling
 
