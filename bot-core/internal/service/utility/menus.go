@@ -800,10 +800,6 @@ func helpLandingMarkup(username string) *telegram.InlineKeyboardMarkup {
 		[]telegram.InlineKeyboardButton{
 			{Text: "Docs Website", URL: serviceutil.WebsiteURL},
 		},
-		[]telegram.InlineKeyboardButton{
-			{Text: "Home", CallbackData: callbackStartHome},
-			{Text: "Close", CallbackData: callbackClose},
-		},
 	)
 }
 
@@ -816,14 +812,10 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},
-				{Text: "Home", CallbackData: callbackStartHome},
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Website", URL: serviceutil.WebsiteURL},
 				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
-			},
-			[]telegram.InlineKeyboardButton{
-				{Text: "Close", CallbackData: callbackClose},
 			},
 		)
 	case helpFederations:
@@ -839,14 +831,10 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},
-				{Text: "Home", CallbackData: callbackStartHome},
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Website", URL: serviceutil.WebsiteURL},
 				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
-			},
-			[]telegram.InlineKeyboardButton{
-				{Text: "Close", CallbackData: callbackClose},
 			},
 		)
 	case helpFilters:
@@ -857,14 +845,10 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},
-				{Text: "Home", CallbackData: callbackStartHome},
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Website", URL: serviceutil.WebsiteURL},
 				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
-			},
-			[]telegram.InlineKeyboardButton{
-				{Text: "Close", CallbackData: callbackClose},
 			},
 		)
 	case helpFormatting:
@@ -879,14 +863,10 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},
-				{Text: "Home", CallbackData: callbackStartHome},
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Website", URL: serviceutil.WebsiteURL},
 				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
-			},
-			[]telegram.InlineKeyboardButton{
-				{Text: "Close", CallbackData: callbackClose},
 			},
 		)
 	case helpLocks:
@@ -897,14 +877,10 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},
-				{Text: "Home", CallbackData: callbackStartHome},
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Website", URL: serviceutil.WebsiteURL},
 				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
-			},
-			[]telegram.InlineKeyboardButton{
-				{Text: "Close", CallbackData: callbackClose},
 			},
 		)
 	case helpBlocklistExamples:
@@ -920,14 +896,10 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: helpCallback(helpFormatting)},
-				{Text: "Home", CallbackData: callbackStartHome},
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Website", URL: serviceutil.WebsiteURL},
 				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
-			},
-			[]telegram.InlineKeyboardButton{
-				{Text: "Close", CallbackData: callbackClose},
 			},
 		)
 	case helpFormattingFillings, helpFormattingRandom, helpFormattingButtons:
@@ -938,14 +910,10 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},
-				{Text: "Home", CallbackData: callbackStartHome},
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Website", URL: serviceutil.WebsiteURL},
 				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
-			},
-			[]telegram.InlineKeyboardButton{
-				{Text: "Close", CallbackData: callbackClose},
 			},
 		)
 	}
@@ -955,14 +923,10 @@ func helpSubsectionMarkup(username string, parent string) *telegram.InlineKeyboa
 	return serviceutil.Markup(
 		[]telegram.InlineKeyboardButton{
 			{Text: "Back", CallbackData: helpCallback(parent)},
-			{Text: "Home", CallbackData: callbackStartHome},
 		},
 		[]telegram.InlineKeyboardButton{
 			{Text: "Website", URL: serviceutil.WebsiteURL},
 			{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
-		},
-		[]telegram.InlineKeyboardButton{
-			{Text: "Close", CallbackData: callbackClose},
 		},
 	)
 }

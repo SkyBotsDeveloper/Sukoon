@@ -198,8 +198,8 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	assertButton(t, helpMarkup, 9, 2, "Bio Links", "ux:help:biolinks", "")
 	assertButton(t, helpMarkup, 10, 0, "Custom Instances", "ux:help:custominstances", "")
 	assertButton(t, helpMarkup, 11, 0, "Docs Website", "", serviceutil.WebsiteURL)
-	assertButton(t, helpMarkup, 12, 0, "Home", "ux:start:home", "")
-	assertButton(t, helpMarkup, 12, 1, "Close", "ux:close", "")
+	assertNoButtonText(t, helpMarkup, "Home")
+	assertNoButtonText(t, helpMarkup, "Close")
 
 	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
 		UpdateID: 3,
@@ -223,8 +223,8 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	sectionMarkup := requireEditedMarkup(t, sectionMessage)
 	assertButton(t, sectionMarkup, 0, 0, "Examples", "ux:help:blocklists_examples", "")
 	assertButton(t, sectionMarkup, 1, 0, "Back", "ux:help:root", "")
-	assertButton(t, sectionMarkup, 1, 1, "Home", "ux:start:home", "")
-	assertButton(t, sectionMarkup, 3, 0, "Close", "ux:close", "")
+	assertNoButtonText(t, sectionMarkup, "Home")
+	assertNoButtonText(t, sectionMarkup, "Close")
 
 	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
 		UpdateID: 4,
@@ -247,7 +247,8 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	}
 	examplesMarkup := requireEditedMarkup(t, examplesMessage)
 	assertButton(t, examplesMarkup, 0, 0, "Back", "ux:help:blocklists", "")
-	assertButton(t, examplesMarkup, 0, 1, "Home", "ux:start:home", "")
+	assertNoButtonText(t, examplesMarkup, "Home")
+	assertNoButtonText(t, examplesMarkup, "Close")
 
 	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
 		UpdateID: 5,
@@ -298,32 +299,7 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	assertButton(t, homeMarkup, 0, 0, "Add me to your chat!", "", serviceutil.BotAddGroupLink(h.Bot.Username))
 	assertButton(t, homeMarkup, 0, 1, "Get your own Sukoon", "ux:start:clone", "")
 
-	messageCount := len(h.Client.Messages)
-	editCount := len(h.Client.EditedMessages)
-	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
-		UpdateID: 7,
-		CallbackQuery: &telegram.CallbackQuery{
-			ID:   "cb-close",
-			From: telegram.User{ID: 50, FirstName: "User"},
-			Message: &telegram.Message{
-				MessageID: helpMessage.MessageID,
-				Chat:      chat,
-			},
-			Data: "ux:close",
-		},
-	}); err != nil {
-		t.Fatalf("close callback failed: %v", err)
-	}
-	if len(h.Client.Messages) != messageCount {
-		t.Fatalf("expected close callback to avoid sending a new message, got %+v", h.Client.Messages)
-	}
-	if len(h.Client.EditedMessages) != editCount {
-		t.Fatalf("expected close callback to avoid extra edits, got %+v", h.Client.EditedMessages)
-	}
-	if len(h.Client.DeletedMessages) != 1 || h.Client.DeletedMessages[0].MessageID != helpMessage.MessageID {
-		t.Fatalf("expected close callback to delete the menu message, got %+v", h.Client.DeletedMessages)
-	}
-	if len(h.Client.CallbackAnswers) != 5 {
+	if len(h.Client.CallbackAnswers) != 4 {
 		t.Fatalf("expected callback answers for menu navigation, got %+v", h.Client.CallbackAnswers)
 	}
 }
