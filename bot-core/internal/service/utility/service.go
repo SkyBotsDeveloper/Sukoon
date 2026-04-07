@@ -46,7 +46,9 @@ func (s *Service) HandleCallback(ctx context.Context, rt *runtime.Context) (bool
 	var err error
 	switch rt.CallbackQuery.Data {
 	case callbackStartHome:
-		err = s.sendCallbackPage(ctx, rt, startLandingText(), startLandingMarkup(rt.Bot.Username))
+		err = s.sendCallbackPageWithParseMode(ctx, rt, startLandingText(), startLandingMarkup(rt.Bot.Username), "HTML")
+	case callbackStartClone:
+		err = s.sendCallbackPage(ctx, rt, cloneLandingText(), cloneLandingMarkup(rt.Bot.Username))
 	case callbackHelpMain:
 		err = s.sendCallbackPage(ctx, rt, helpLandingText(), helpLandingMarkup(rt.Bot.Username))
 	case callbackPrivacy:
@@ -91,6 +93,7 @@ func (s *Service) start(ctx context.Context, rt *runtime.Context) error {
 	switch {
 	case payload == "", payload == "home":
 		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), startLandingText(), rt.ReplyOptions(telegram.SendMessageOptions{
+			ParseMode:   "HTML",
 			ReplyMarkup: startLandingMarkup(rt.Bot.Username),
 		}))
 		return err
@@ -117,6 +120,7 @@ func (s *Service) start(ctx context.Context, rt *runtime.Context) error {
 		return err
 	default:
 		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), startLandingText(), rt.ReplyOptions(telegram.SendMessageOptions{
+			ParseMode:   "HTML",
 			ReplyMarkup: startLandingMarkup(rt.Bot.Username),
 		}))
 		return err
@@ -229,11 +233,16 @@ func (s *Service) sendPMGuidance(ctx context.Context, rt *runtime.Context, text 
 }
 
 func (s *Service) sendCallbackPage(ctx context.Context, rt *runtime.Context, text string, markup *telegram.InlineKeyboardMarkup) error {
+	return s.sendCallbackPageWithParseMode(ctx, rt, text, markup, "")
+}
+
+func (s *Service) sendCallbackPageWithParseMode(ctx context.Context, rt *runtime.Context, text string, markup *telegram.InlineKeyboardMarkup, parseMode string) error {
 	if rt.CallbackQuery == nil || rt.CallbackQuery.Message == nil {
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, telegram.SendMessageOptions{ReplyMarkup: markup})
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, telegram.SendMessageOptions{ParseMode: parseMode, ReplyMarkup: markup})
 		return err
 	}
 	err := rt.Client.EditMessageText(ctx, rt.ChatID(), rt.CallbackQuery.Message.MessageID, text, telegram.EditMessageTextOptions{
+		ParseMode:   parseMode,
 		ReplyMarkup: markup,
 	})
 	if err != nil && strings.Contains(strings.ToLower(err.Error()), "message is not modified") {

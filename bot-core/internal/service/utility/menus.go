@@ -10,6 +10,7 @@ import (
 
 const (
 	callbackStartHome  = "ux:start:home"
+	callbackStartClone = "ux:start:clone"
 	callbackHelpPrefix = "ux:help:"
 	callbackHelpMain   = callbackHelpPrefix + "root"
 	callbackPrivacy    = "ux:privacy"
@@ -399,11 +400,11 @@ func helpCallback(page string) string {
 
 func startLandingText() string {
 	return strings.Join([]string{
-		"Sukoon",
+		"Hey there! My name is Sukoon - I'm here to help you manage your groups! Use /help to find out how to use me to my full potential.",
 		"",
-		"Fast moderation, cleaner group management, and safer admin workflows for Telegram groups.",
+		"Join my <a href=\"https://t.me/VivaanUpdates\">support channel</a> to get information on all the latest updates.",
 		"",
-		"Use the buttons below to browse live help sections, open the website, or add Sukoon to another group.",
+		"Check /privacy to view the privacy policy, and interact with your data.",
 	}, "\n")
 }
 
@@ -450,22 +451,41 @@ func rulesText(chatTitle string, rules string) string {
 func startLandingMarkup(username string) *telegram.InlineKeyboardMarkup {
 	return serviceutil.Markup(
 		[]telegram.InlineKeyboardButton{
-			{Text: "Help", CallbackData: callbackHelpMain},
+			{Text: "Add me to your chat!", URL: serviceutil.BotAddGroupLink(username)},
+			{Text: "Get your own Sukoon", CallbackData: callbackStartClone},
+		},
+	)
+}
+
+func cloneLandingText() string {
+	return strings.Join([]string{
+		"Get your own Sukoon",
+		"",
+		"If you want a private Sukoon instance for your own groups, create a bot in @BotFather first and then attach it to this runtime.",
+		"",
+		"Quick flow:",
+		"1. Open @BotFather and use /newbot.",
+		"2. Copy the bot token BotFather gives you.",
+		"3. Run /clone <bot_token> from an owner or sudo account.",
+		"4. Use /clone sync <clone> later if your webhook base URL changes.",
+		"5. Use /clones to list your bots and /rmclone <clone> to remove one.",
+		"",
+		"Clone creation requires PUBLIC_WEBHOOK_BASE_URL to be configured on the server.",
+	}, "\n")
+}
+
+func cloneLandingMarkup(username string) *telegram.InlineKeyboardMarkup {
+	return serviceutil.Markup(
+		[]telegram.InlineKeyboardButton{
+			{Text: "Open BotFather", URL: "https://t.me/BotFather"},
 			{Text: "Website", URL: serviceutil.WebsiteURL},
 		},
 		[]telegram.InlineKeyboardButton{
-			{Text: "Admin", CallbackData: helpCallback(helpAdmin)},
-			{Text: "Bans", CallbackData: helpCallback(helpBans)},
-		},
-		[]telegram.InlineKeyboardButton{
-			{Text: "Filters", CallbackData: helpCallback(helpFilters)},
-			{Text: "Federations", CallbackData: helpCallback(helpFederations)},
+			{Text: "Back", CallbackData: callbackStartHome},
+			{Text: "Help", CallbackData: callbackHelpMain},
 		},
 		[]telegram.InlineKeyboardButton{
 			{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
-			{Text: "Privacy", CallbackData: callbackPrivacy},
-		},
-		[]telegram.InlineKeyboardButton{
 			{Text: "Close", CallbackData: callbackClose},
 		},
 	)
