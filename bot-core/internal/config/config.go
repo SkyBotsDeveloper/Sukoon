@@ -78,7 +78,7 @@ func LoadFromEnv() (Config, error) {
 		RedisPassword:          redisPassword,
 		RedisDB:                redisDB,
 		WorkerConcurrency:      getEnvInt("WORKER_CONCURRENCY", 4),
-		WorkerPollInterval:     getEnvDuration("WORKER_POLL_INTERVAL", time.Second),
+		WorkerPollInterval:     getEnvDuration("WORKER_POLL_INTERVAL", 100*time.Millisecond),
 		TelegramBaseURL:        getEnv("TELEGRAM_BASE_URL", "https://api.telegram.org"),
 		TelegramRequestTimeout: getEnvDuration("TELEGRAM_REQUEST_TIMEOUT", 5*time.Second),
 		TelegramMaxRetries:     getEnvInt("TELEGRAM_MAX_RETRIES", 3),

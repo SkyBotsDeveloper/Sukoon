@@ -25,6 +25,7 @@ type FakeTelegramClient struct {
 	Webhooks         []telegram.SetWebhookOptions
 	DeletedWebhooks  int
 	CallbackAnswers  []CallbackAnswer
+	AdminLookups     []int64
 	AdminsByChat     map[int64][]telegram.ChatAdministrator
 	ChatsByID        map[int64]telegram.Chat
 	ChatErrors       map[int64]error
@@ -203,6 +204,7 @@ func (f *FakeTelegramClient) RestrictChatMember(_ context.Context, chatID int64,
 func (f *FakeTelegramClient) GetChatAdministrators(_ context.Context, chatID int64) ([]telegram.ChatAdministrator, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.AdminLookups = append(f.AdminLookups, chatID)
 	return append([]telegram.ChatAdministrator{}, f.AdminsByChat[chatID]...), nil
 }
 

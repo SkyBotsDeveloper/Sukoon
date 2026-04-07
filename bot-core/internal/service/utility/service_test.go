@@ -118,6 +118,9 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	if startMessage.Options.ReplyToMessageID != 10 {
 		t.Fatalf("expected /start response to reply to message 10, got %+v", startMessage.Options)
 	}
+	if len(h.Client.AdminLookups) != 0 {
+		t.Fatalf("expected private /start to skip admin lookups, got %+v", h.Client.AdminLookups)
+	}
 	if startMessage.Options.ParseMode != "HTML" {
 		t.Fatalf("expected /start response to use HTML parse mode, got %+v", startMessage.Options)
 	}

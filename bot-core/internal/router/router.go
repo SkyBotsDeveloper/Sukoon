@@ -154,7 +154,7 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 
 	actorID := rt.ActorID()
 	if actorID != 0 && chat.Type != "channel" {
-		perms, err := r.permissions.Load(ctx, bot.ID, actorID, chat.ID, client)
+		perms, err := r.permissions.Load(ctx, bot.ID, actorID, chat.ID, chat.Type, client)
 		if err != nil {
 			return err
 		}

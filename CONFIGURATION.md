@@ -53,6 +53,7 @@ The canonical env template is [bot-core/.env.example](/c:/Users/strad/OneDrive/D
 
 `WORKER_POLL_INTERVAL`
 - polling interval for update and job claims
+- default is `100ms` so webhook-queued updates feel responsive without waiting a full second between idle polls
 
 ## Telegram Client Tuning
 

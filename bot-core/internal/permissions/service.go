@@ -16,7 +16,7 @@ func New(store persistence.Store) *Service {
 	return &Service{store: store}
 }
 
-func (s *Service) Load(ctx context.Context, botID string, actorID int64, chatID int64, client telegram.Client) (runtime.ActorPermissions, error) {
+func (s *Service) Load(ctx context.Context, botID string, actorID int64, chatID int64, chatType string, client telegram.Client) (runtime.ActorPermissions, error) {
 	perms := runtime.ActorPermissions{}
 
 	roles, err := s.store.GetBotRoles(ctx, botID, actorID)
@@ -40,6 +40,10 @@ func (s *Service) Load(ctx context.Context, botID string, actorID int64, chatID 
 		perms.CanChangeInfo = true
 		perms.CanPinMessages = true
 		perms.CanPromoteMembers = true
+		return perms, nil
+	}
+
+	if chatType == "private" {
 		return perms, nil
 	}
 

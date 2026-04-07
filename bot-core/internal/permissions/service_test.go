@@ -17,7 +17,7 @@ func TestOwnerGetsElevatedPermissions(t *testing.T) {
 	_, _ = store.UpsertPrimaryBot(context.Background(), testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil))).Bot, []int64{1})
 
 	service := permissions.New(store)
-	perms, err := service.Load(context.Background(), "bot-1", 1, -100123, client)
+	perms, err := service.Load(context.Background(), "bot-1", 1, -100123, "supergroup", client)
 	if err != nil {
 		t.Fatalf("load permissions: %v", err)
 	}
@@ -41,11 +41,30 @@ func TestChatAdminPermissionsUseTelegramAdmins(t *testing.T) {
 	}
 
 	service := permissions.New(store)
-	perms, err := service.Load(context.Background(), bot.ID, 99, -100123, client)
+	perms, err := service.Load(context.Background(), bot.ID, 99, -100123, "supergroup", client)
 	if err != nil {
 		t.Fatalf("load permissions: %v", err)
 	}
 	if !perms.IsChatAdmin || !perms.CanDeleteMessages || !perms.CanRestrictMembers {
 		t.Fatalf("expected admin permissions, got %+v", perms)
+	}
+}
+
+func TestPrivateChatsSkipTelegramAdminLookup(t *testing.T) {
+	store := testsupport.NewMemoryStore()
+	client := testsupport.NewFakeTelegramClient()
+	bot := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil))).Bot
+	_, _ = store.UpsertPrimaryBot(context.Background(), bot, nil)
+
+	service := permissions.New(store)
+	perms, err := service.Load(context.Background(), bot.ID, 99, 99, "private", client)
+	if err != nil {
+		t.Fatalf("load permissions: %v", err)
+	}
+	if perms.IsChatAdmin || perms.CanDeleteMessages || perms.CanRestrictMembers {
+		t.Fatalf("expected private chat without elevated permissions, got %+v", perms)
+	}
+	if len(client.AdminLookups) != 0 {
+		t.Fatalf("expected no admin lookups in private chat, got %v", client.AdminLookups)
 	}
 }

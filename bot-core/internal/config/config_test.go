@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestLoadFromEnvUsesPortAndRedisURL(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@db:5432/sukoon?sslmode=disable")
@@ -36,5 +39,18 @@ func TestLoadFromEnvRejectsInvalidAppMode(t *testing.T) {
 
 	if _, err := LoadFromEnv(); err == nil {
 		t.Fatal("expected error for invalid APP_MODE")
+	}
+}
+
+func TestLoadFromEnvUsesFastDefaultWorkerPollInterval(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@db:5432/sukoon?sslmode=disable")
+	t.Setenv("APP_MODE", "worker")
+
+	cfg, err := LoadFromEnv()
+	if err != nil {
+		t.Fatalf("LoadFromEnv() error = %v", err)
+	}
+	if cfg.WorkerPollInterval != 100*time.Millisecond {
+		t.Fatalf("expected default worker poll interval 100ms, got %s", cfg.WorkerPollInterval)
 	}
 }
