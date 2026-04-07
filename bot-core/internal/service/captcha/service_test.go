@@ -69,3 +69,36 @@ func TestCaptchaJoinAndCallbackFlow(t *testing.T) {
 		t.Fatalf("expected final unrestrict call, got %+v", last)
 	}
 }
+
+func TestCaptchaControlCommands(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100401, Type: "supergroup", Title: "Captcha Controls"}
+
+	for idx, text := range []string{
+		"/captchamode",
+		"/captchamode button",
+		"/captchakick mute",
+		"/captchakicktime 90",
+		"/captcha on",
+	} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(idx + 1),
+			Message: &telegram.Message{
+				MessageID: int64(30 + idx),
+				From:      &telegram.User{ID: 1, FirstName: "Owner"},
+				Chat:      chat,
+				Text:      text,
+			},
+		}); err != nil {
+			t.Fatalf("command %q failed: %v", text, err)
+		}
+	}
+
+	bundle, err := h.Store.LoadRuntimeBundle(context.Background(), h.Bot.ID, chat.ID)
+	if err != nil {
+		t.Fatalf("load runtime bundle failed: %v", err)
+	}
+	if !bundle.Captcha.Enabled || bundle.Captcha.Mode != "button" || bundle.Captcha.FailureAction != "mute" || bundle.Captcha.TimeoutSeconds != 90 {
+		t.Fatalf("unexpected captcha settings: %+v", bundle.Captcha)
+	}
+}

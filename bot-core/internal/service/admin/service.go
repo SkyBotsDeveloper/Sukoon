@@ -23,28 +23,36 @@ func New(jobService *jobs.Service) *Service {
 
 func (s *Service) Handle(ctx context.Context, rt *runtime.Context) (bool, error) {
 	switch rt.Command.Name {
+	case "approval":
+		return true, s.approvalStatus(ctx, rt)
 	case "approve":
 		return true, s.approve(ctx, rt, true)
 	case "unapprove":
 		return true, s.approve(ctx, rt, false)
 	case "approved":
 		return true, s.listApproved(ctx, rt)
+	case "unapproveall":
+		return true, s.unapproveAll(ctx, rt)
 	case "disable":
 		return true, s.disable(ctx, rt, true)
 	case "enable":
 		return true, s.disable(ctx, rt, false)
 	case "disabled":
 		return true, s.listDisabled(ctx, rt)
-	case "logchannel":
+	case "logchannel", "setlog", "unsetlog", "log", "nolog":
 		return true, s.logChannel(ctx, rt)
+	case "logcategories":
+		return true, s.logCategories(ctx, rt)
 	case "reports":
 		return true, s.reports(ctx, rt)
 	case "report":
 		return true, s.report(ctx, rt)
 	case "admins", "adminlist":
 		return true, s.admins(ctx, rt)
-	case "cleancommands":
+	case "cleancommands", "cleancommand", "keepcommand":
 		return true, s.cleanCommands(ctx, rt)
+	case "cleancommandtypes":
+		return true, s.cleanCommandTypes(ctx, rt)
 	case "cleanservice":
 		return true, s.cleanService(ctx, rt)
 	case "nocleanservice":
@@ -129,6 +137,26 @@ func (s *Service) approve(ctx context.Context, rt *runtime.Context, approved boo
 	return err
 }
 
+func (s *Service) approvalStatus(ctx context.Context, rt *runtime.Context) error {
+	if err := s.ensureChatAdmin(rt); err != nil {
+		return err
+	}
+	target, _, err := moderationTarget(ctx, rt)
+	if err != nil {
+		return fmt.Errorf("usage: /approval <reply|user>")
+	}
+	approved, err := rt.Store.IsApproved(ctx, rt.Bot.ID, rt.ChatID(), target.UserID)
+	if err != nil {
+		return err
+	}
+	text := target.Name + " is not approved."
+	if approved {
+		text = target.Name + " is approved."
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
 func (s *Service) listApproved(ctx context.Context, rt *runtime.Context) error {
 	approvedUsers, err := rt.Store.ListApprovedUsers(ctx, rt.Bot.ID, rt.ChatID())
 	if err != nil {
@@ -143,6 +171,27 @@ func (s *Service) listApproved(ctx context.Context, rt *runtime.Context) error {
 		parts = append(parts, strconv.FormatInt(userID, 10))
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Approved users: "+strings.Join(parts, ", "), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) unapproveAll(ctx context.Context, rt *runtime.Context) error {
+	if err := s.ensureChatAdmin(rt); err != nil {
+		return err
+	}
+	approvedUsers, err := rt.Store.ListApprovedUsers(ctx, rt.Bot.ID, rt.ChatID())
+	if err != nil {
+		return err
+	}
+	if len(approvedUsers) == 0 {
+		_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "No approved users to remove.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	for _, userID := range approvedUsers {
+		if err := rt.Store.SetApproval(ctx, rt.Bot.ID, rt.ChatID(), userID, rt.ActorID(), false); err != nil {
+			return err
+		}
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Removed approvals for %d user(s).", len(approvedUsers)), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -182,6 +231,18 @@ func (s *Service) logChannel(ctx context.Context, rt *runtime.Context) error {
 	if err := s.ensureChatAdmin(rt); err != nil {
 		return err
 	}
+	switch rt.Command.Name {
+	case "unsetlog", "nolog":
+		if err := rt.Store.SetLogChannel(ctx, rt.Bot.ID, rt.ChatID(), nil); err != nil {
+			return err
+		}
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Log channel disabled.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	case "setlog":
+		if len(rt.Command.Args) == 0 {
+			return fmt.Errorf("usage: /setlog <chat_id>")
+		}
+	}
 	if len(rt.Command.Args) == 0 {
 		if rt.RuntimeBundle.Settings.LogChannelID == nil {
 			_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No log channel configured.", rt.ReplyOptions(telegram.SendMessageOptions{}))
@@ -208,6 +269,12 @@ func (s *Service) logChannel(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Log channel set to %d.", channelID), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) logCategories(ctx context.Context, rt *runtime.Context) error {
+	text := "Current log categories: moderation, antispam, antiabuse, antibio, reports."
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -283,6 +350,13 @@ func (s *Service) cleanCommands(ctx context.Context, rt *runtime.Context) error 
 	if err := s.ensureChatAdmin(rt); err != nil {
 		return err
 	}
+	if rt.Command.Name == "keepcommand" {
+		if err := rt.Store.SetCleanCommands(ctx, rt.Bot.ID, rt.ChatID(), false); err != nil {
+			return err
+		}
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Clean commands disabled.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
 	if len(rt.Command.Args) == 0 {
 		status := "off"
 		if rt.RuntimeBundle.Settings.CleanCommands {
@@ -299,6 +373,12 @@ func (s *Service) cleanCommands(ctx context.Context, rt *runtime.Context) error 
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Clean commands %s.", toggleWord(enabled)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) cleanCommandTypes(ctx context.Context, rt *runtime.Context) error {
+	text := "Clean command types: command messages only in the current build. Service-message cleanup is configured separately with /cleanservice."
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 

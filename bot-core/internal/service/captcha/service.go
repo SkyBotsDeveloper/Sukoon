@@ -31,9 +31,21 @@ func New(store persistence.Store, factory telegram.Factory, logger *slog.Logger)
 }
 
 func (s *Service) HandleCommand(ctx context.Context, rt *runtime.Context) (bool, error) {
-	if rt.Command.Name != "captcha" {
+	switch rt.Command.Name {
+	case "captcha":
+		return s.handleCaptcha(ctx, rt)
+	case "captchamode":
+		return true, s.captchaMode(ctx, rt)
+	case "captchakick":
+		return true, s.captchaKick(ctx, rt)
+	case "captchakicktime":
+		return true, s.captchaKickTime(ctx, rt)
+	default:
 		return false, nil
 	}
+}
+
+func (s *Service) handleCaptcha(ctx context.Context, rt *runtime.Context) (bool, error) {
 	if !rt.ActorPermissions.IsChatAdmin {
 		return true, fmt.Errorf("admin rights required")
 	}
@@ -50,27 +62,78 @@ func (s *Service) HandleCommand(ctx context.Context, rt *runtime.Context) (bool,
 	if err != nil {
 		return true, err
 	}
-	settings := rt.RuntimeBundle.Captcha
-	settings.BotID = rt.Bot.ID
-	settings.ChatID = rt.ChatID()
+	settings := normalizedSettings(rt)
 	settings.Enabled = enabled
-	if settings.Mode == "" {
-		settings.Mode = "button"
-	}
-	if settings.TimeoutSeconds == 0 {
-		settings.TimeoutSeconds = 120
-	}
-	if settings.FailureAction == "" {
-		settings.FailureAction = "kick"
-	}
-	if settings.ChallengeDigits == 0 {
-		settings.ChallengeDigits = 2
-	}
 	if err := rt.Store.SetCaptchaSettings(ctx, settings); err != nil {
 		return true, err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Captcha updated.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return true, err
+}
+
+func (s *Service) captchaMode(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	settings := normalizedSettings(rt)
+	if len(rt.Command.Args) == 0 {
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Captcha mode is "+settings.Mode+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	mode := strings.ToLower(strings.TrimSpace(rt.Command.Args[0]))
+	if mode != "button" {
+		return fmt.Errorf("only button captcha mode is supported")
+	}
+	settings.Mode = mode
+	if err := rt.Store.SetCaptchaSettings(ctx, settings); err != nil {
+		return err
+	}
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Captcha mode set to button.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) captchaKick(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	settings := normalizedSettings(rt)
+	if len(rt.Command.Args) == 0 {
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Captcha failure action is "+settings.FailureAction+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	action := strings.ToLower(strings.TrimSpace(rt.Command.Args[0]))
+	switch action {
+	case "kick", "mute", "ban":
+	default:
+		return fmt.Errorf("captcha failure action must be kick, mute, or ban")
+	}
+	settings.FailureAction = action
+	if err := rt.Store.SetCaptchaSettings(ctx, settings); err != nil {
+		return err
+	}
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Captcha failure action set to "+action+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) captchaKickTime(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	settings := normalizedSettings(rt)
+	if len(rt.Command.Args) == 0 {
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Captcha timeout is %d seconds.", settings.TimeoutSeconds), rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	seconds, err := strconv.Atoi(rt.Command.Args[0])
+	if err != nil || seconds < 10 {
+		return fmt.Errorf("captcha timeout must be at least 10 seconds")
+	}
+	settings.TimeoutSeconds = seconds
+	if err := rt.Store.SetCaptchaSettings(ctx, settings); err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Captcha timeout set to %d seconds.", seconds), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
 }
 
 func (s *Service) HandleJoin(ctx context.Context, rt *runtime.Context, user telegram.User) error {
@@ -216,4 +279,23 @@ func parseToggle(value string) (bool, error) {
 	default:
 		return false, fmt.Errorf("expected on or off")
 	}
+}
+
+func normalizedSettings(rt *runtime.Context) domain.CaptchaSettings {
+	settings := rt.RuntimeBundle.Captcha
+	settings.BotID = rt.Bot.ID
+	settings.ChatID = rt.ChatID()
+	if settings.Mode == "" {
+		settings.Mode = "button"
+	}
+	if settings.TimeoutSeconds == 0 {
+		settings.TimeoutSeconds = 120
+	}
+	if settings.FailureAction == "" {
+		settings.FailureAction = "kick"
+	}
+	if settings.ChallengeDigits == 0 {
+		settings.ChallengeDigits = 2
+	}
+	return settings
 }

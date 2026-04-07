@@ -345,7 +345,7 @@ func (s *Service) rules(ctx context.Context, rt *runtime.Context) error {
 					{Text: "Show Here", CallbackData: "ux:rules:show"},
 				},
 				[]telegram.InlineKeyboardButton{
-					{Text: "Help", URL: serviceutil.BotDeepLink(rt.Bot.Username, "help_ruleswelcome")},
+					{Text: "Help", URL: serviceutil.BotDeepLink(rt.Bot.Username, "help_main")},
 					{Text: "Website", URL: serviceutil.WebsiteURL},
 				},
 				[]telegram.InlineKeyboardButton{
@@ -359,7 +359,7 @@ func (s *Service) rules(ctx context.Context, rt *runtime.Context) error {
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), rt.RuntimeBundle.Settings.RulesText, rt.ReplyOptions(telegram.SendMessageOptions{
 		ReplyMarkup: serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
-				{Text: "Help", CallbackData: "ux:help:ruleswelcome"},
+				{Text: "Help", CallbackData: "ux:help:root"},
 				{Text: "Website", URL: serviceutil.WebsiteURL},
 			},
 			[]telegram.InlineKeyboardButton{

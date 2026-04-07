@@ -4,7 +4,8 @@
 
 ### Moderation
 
-- `/ban`, `/unban`, `/tban`
+- `/kickme`
+- `/ban`, `/dban`, `/sban`, `/unban`, `/tban`
 - `/mute`, `/unmute`, `/tmute`, `/smute`, `/dmute`
 - `/kick`, `/dkick`, `/skick`
 - `/warn`, `/warns`, `/resetwarns`
@@ -12,12 +13,12 @@
 
 ### Admin And Cleanup
 
-- `/approve`, `/unapprove`, `/approved`
+- `/approval`, `/approve`, `/unapprove`, `/approved`, `/unapproveall`
 - `/admins`, `/adminlist`
 - `/disable`, `/enable`, `/disabled`
-- `/logchannel`
+- `/logchannel`, `/setlog`, `/unsetlog`, `/log`, `/nolog`, `/logcategories`
 - `/reports`, `/report`
-- `/cleancommands`
+- `/cleancommands`, `/cleancommand`, `/keepcommand`, `/cleancommandtypes`
 - `/cleanservice`
 - `/nocleanservice`
 - `/cleanservicetypes`
@@ -32,10 +33,10 @@
 
 ### Anti-Spam And Verification
 
-- `/lock`, `/unlock`, `/locks`
-- `/addblocklist`, `/rmbl`, `/blocklist`
-- `/antiflood`
-- `/captcha`
+- `/lock`, `/unlock`, `/locks`, `/locktypes`
+- `/addblocklist`, `/rmbl`, `/rmblocklist`, `/unblocklistall`, `/blocklist`
+- `/flood`, `/setflood`, `/setfloodtimer`, `/floodmode`, `/setfloodmode`, `/clearflood`
+- `/captcha`, `/captchamode`, `/captchakick`, `/captchakicktime`
 
 ### Content And Presence
 
@@ -52,6 +53,10 @@
 - `/help`
 - `/setlang`, `/language`
 - `/privacy`, `/mydata`, `/forgetme`
+- callback-driven Rose-style help pages for:
+  admin, approval, bans, antiflood, blocklists, captcha, clean commands, locks, and log channels
+- help subpages for:
+  blocklist command examples, lock descriptions, and lock examples
 
 ### Owner, Federation, And Clones
 
@@ -86,7 +91,7 @@
 - metrics:
   observability seam exists, but no external metrics backend is wired by default
 - Rose/Group Help parity:
-  core moderation, rules, saved content, approvals, and PM-guidance UX are strong, but several long-tail utility families are still intentionally deferred
+  core moderation, rules, saved content, approvals, and PM-guidance UX are strong, and the Rose-style help batch through clean commands / locks / log channels is now live, but several long-tail utility families are still intentionally deferred
 
 ## Deferred Or Intentionally Not Claimed
 
@@ -97,8 +102,11 @@
 - recurring timed messages
 - channel-subscription enforcement
 - private-rules toggle commands
+- Rose-style blocklist modes, blocklist delete toggles, and custom blocklist reasons
+- Rose-style captcha text/rules variants beyond the current button-mode controls
+- warn-mode locks and allowlist-based lock exemptions
 - separate admin web panel
-- full Rose-style help or informational command surface beyond the current moderation core
+- full Rose-style help or informational command surface beyond the current scoped live sections
 - advanced federation policy toggles that were unsafe or unclear in the legacy runtime
 
 ## Final Truth

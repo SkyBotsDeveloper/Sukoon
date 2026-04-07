@@ -22,6 +22,10 @@ func (s *Service) Handle(ctx context.Context, rt *runtime.Context) (bool, error)
 	switch rt.Command.Name {
 	case "ban":
 		return true, s.ban(ctx, rt, false, false)
+	case "dban":
+		return true, s.ban(ctx, rt, false, true)
+	case "sban":
+		return true, s.ban(ctx, rt, true, false)
 	case "unban":
 		return true, s.unban(ctx, rt)
 	case "tban":
@@ -42,6 +46,8 @@ func (s *Service) Handle(ctx context.Context, rt *runtime.Context) (bool, error)
 		return true, s.kick(ctx, rt, false, true)
 	case "skick":
 		return true, s.kick(ctx, rt, true, false)
+	case "kickme":
+		return true, s.kickMe(ctx, rt)
 	case "warn":
 		return true, s.warn(ctx, rt)
 	case "warns":
@@ -214,6 +220,21 @@ func (s *Service) kick(ctx context.Context, rt *runtime.Context, silent bool, de
 	}
 	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("kick: actor=%d target=%d reason=%s", rt.ActorID(), target.UserID, reason))
 	return nil
+}
+
+func (s *Service) kickMe(ctx context.Context, rt *runtime.Context) error {
+	if rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admins cannot use /kickme")
+	}
+	until := time.Now().Add(30 * time.Second)
+	if err := rt.Client.BanChatMember(ctx, rt.ChatID(), rt.ActorID(), &until, true); err != nil {
+		return err
+	}
+	if err := rt.Client.UnbanChatMember(ctx, rt.ChatID(), rt.ActorID(), true); err != nil {
+		return err
+	}
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "You asked Sukoon to kick you from the chat.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
 }
 
 func (s *Service) warn(ctx context.Context, rt *runtime.Context) error {

@@ -84,3 +84,30 @@ func TestBulkRemoveBlocklistEntries(t *testing.T) {
 		t.Fatalf("expected blocklist to be empty after bulk remove, got %+v", rules)
 	}
 }
+
+func TestBlocklistAliasesAndRemoveAll(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100722, Type: "supergroup", Title: "Blocklist Aliases"}
+
+	for idx, cmd := range []string{"/addblocklist word spam", "/addblocklist phrase buy now", "/rmblocklist spam", "/unblocklistall"} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(idx + 1),
+			Message: &telegram.Message{
+				MessageID: int64(idx + 40),
+				From:      &telegram.User{ID: 1, FirstName: "Owner"},
+				Chat:      chat,
+				Text:      cmd,
+			},
+		}); err != nil {
+			t.Fatalf("command %q failed: %v", cmd, err)
+		}
+	}
+
+	rules, err := h.Store.ListBlocklistRules(context.Background(), h.Bot.ID, chat.ID)
+	if err != nil {
+		t.Fatalf("list blocklist rules failed: %v", err)
+	}
+	if len(rules) != 0 {
+		t.Fatalf("expected unblocklistall to clear remaining rules, got %+v", rules)
+	}
+}

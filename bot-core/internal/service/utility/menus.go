@@ -9,188 +9,209 @@ import (
 )
 
 const (
-	callbackStartHome        = "ux:start:home"
-	callbackHelpMain         = "ux:help:main"
-	callbackHelpModeration   = "ux:help:moderation"
-	callbackHelpWarnings     = "ux:help:warnings"
-	callbackHelpApprovals    = "ux:help:approvals"
-	callbackHelpAdmin        = "ux:help:admin"
-	callbackHelpCleanup      = "ux:help:cleanup"
-	callbackHelpProtection   = "ux:help:protection"
-	callbackHelpNotesFilters = "ux:help:notesfilters"
-	callbackHelpRulesWelcome = "ux:help:ruleswelcome"
-	callbackHelpUtility      = "ux:help:utility"
-	callbackHelpOwner        = "ux:help:owner"
-	callbackHelpFederation   = "ux:help:federation"
-	callbackHelpClones       = "ux:help:clones"
-	callbackPrivacy          = "ux:privacy"
-	callbackClose            = "ux:close"
-	callbackRulesShow        = "ux:rules:show"
+	callbackStartHome  = "ux:start:home"
+	callbackHelpPrefix = "ux:help:"
+	callbackHelpMain   = callbackHelpPrefix + "root"
+	callbackPrivacy    = "ux:privacy"
+	callbackClose      = "ux:close"
+	callbackRulesShow  = "ux:rules:show"
+
+	helpRoot              = "root"
+	helpAdmin             = "admin"
+	helpAntiflood         = "antiflood"
+	helpApproval          = "approval"
+	helpBans              = "bans"
+	helpBlocklists        = "blocklists"
+	helpBlocklistExamples = "blocklists_examples"
+	helpCaptcha           = "captcha"
+	helpCleanCommands     = "cleancommands"
+	helpLocks             = "locks"
+	helpLockDescriptions  = "locks_descriptions"
+	helpLockExamples      = "locks_examples"
+	helpLogChannels       = "logchannels"
 )
 
 type helpPage struct {
-	Title    string
-	Callback string
-	Lines    []string
+	Title string
+	Lines []string
 }
 
 var helpPages = map[string]helpPage{
-	"moderation": {
-		Title:    "Moderation",
-		Callback: callbackHelpModeration,
+	helpAdmin: {
+		Title: "Admin",
 		Lines: []string{
-			"Direct actions for handling problem users.",
-			"",
-			"/ban, /unban, /tban",
-			"/mute, /unmute, /tmute, /smute, /dmute",
-			"/kick, /dkick, /skick",
-			"",
-			"Best workflow: reply to the target user's message before running the command.",
-		},
-	},
-	"warnings": {
-		Title:    "Warnings",
-		Callback: callbackHelpWarnings,
-		Lines: []string{
-			"Warning-based moderation and escalation policy.",
-			"",
-			"/warn, /warns, /resetwarns",
-			"/setwarnlimit",
-			"/setwarnmode",
-			"",
-			"Warn mode supports mute, kick, or ban after the configured limit.",
-		},
-	},
-	"approvals": {
-		Title:    "Approvals",
-		Callback: callbackHelpApprovals,
-		Lines: []string{
-			"Allow trusted users to bypass selected protection checks.",
-			"",
-			"/approve, /unapprove, /approved",
-			"",
-			"Approved users bypass blocklist and antibio checks in the current build.",
-		},
-	},
-	"admin": {
-		Title:    "Admin",
-		Callback: callbackHelpAdmin,
-		Lines: []string{
-			"Core admin control surfaces and group visibility tools.",
+			"Admin visibility and Sukoon staff workflows.",
 			"",
 			"/admins, /adminlist",
-			"/disable, /enable, /disabled",
-			"/logchannel",
-			"/reports, /report",
-			"/mod, /unmod, /muter, /unmuter, /mods",
+			"/mods, /mod, /unmod, /muter, /unmuter",
 			"",
-			"Silent mod powers are internal Sukoon roles, not Telegram admin promotion.",
+			"Sukoon loads Telegram admin permissions live on each update, so there is no separate /admincache refresh command in the current build.",
+			"Telegram promote/demote and anonymous-admin controls are still deferred.",
 		},
 	},
-	"cleanup": {
-		Title:    "Cleanup",
-		Callback: callbackHelpCleanup,
+	helpAntiflood: {
+		Title: "Antiflood",
 		Lines: []string{
-			"Chat cleanup, service cleanup, and pin management.",
+			"Antiflood tracks bursty users and applies the configured action once they exceed the limit inside the active window.",
 			"",
-			"/cleancommands",
-			"/cleanservice, /nocleanservice, /cleanservicetypes",
-			"/purge, /del",
-			"/pin, /unpin, /unpinall",
+			"/flood",
+			"/setflood <count|off>",
+			"/setfloodtimer <seconds>",
+			"/floodmode [mute|kick|ban]",
+			"/clearflood [reply|user]",
+			"",
+			"Examples:",
+			"/setflood 6",
+			"/setfloodtimer 10",
+			"/floodmode mute",
 		},
 	},
-	"protection": {
-		Title:    "Protection",
-		Callback: callbackHelpProtection,
+	helpApproval: {
+		Title: "Approval",
 		Lines: []string{
-			"Automated protection, anti-spam, and verification.",
+			"Approvals mark trusted members so they bypass selected protections without weakening the whole chat.",
 			"",
-			"/lock, /unlock, /locks",
-			"/addblocklist, /rmbl, /blocklist",
-			"/setflood, /setfloodmode",
-			"/captcha",
-			"/antiabuse",
-			"/antibio, /free, /unfree, /freelist",
+			"/approval <reply|user>",
+			"/approve <reply|user>",
+			"/unapprove <reply|user>",
+			"/approved",
+			"/unapproveall",
+			"",
+			"Approved users currently bypass blocklist and antibio enforcement.",
 		},
 	},
-	"notesfilters": {
-		Title:    "Notes And Filters",
-		Callback: callbackHelpNotesFilters,
+	helpBans: {
+		Title: "Bans And Mutes",
 		Lines: []string{
-			"Saved responses, note retrieval, and trigger-based replies.",
+			"Direct moderation actions. Reply to the target user's message whenever possible.",
 			"",
-			"/save, /notes, /saved",
-			"/get, /clear",
-			"/filter, /filters, /stop",
+			"/kickme",
+			"/ban, /dban, /sban, /tban, /unban",
+			"/mute, /dmute, /smute, /tmute, /unmute",
+			"/kick, /dkick, /skick",
 			"",
-			"Structured inline buttons are supported in saved notes and filter responses.",
+			"Examples:",
+			"/ban spam links",
+			"/tban @user 24h repeated abuse",
+			"/tmute @user 30m cooldown",
 		},
 	},
-	"ruleswelcome": {
-		Title:    "Rules And Greetings",
-		Callback: callbackHelpRulesWelcome,
+	helpBlocklists: {
+		Title: "Blocklists",
 		Lines: []string{
-			"Rules, welcome flows, and goodbye messaging.",
+			"Blocklists delete matching content automatically. The current build supports word, phrase, and regex patterns with approved-user bypass.",
 			"",
-			"/setrules, /resetrules, /rules",
-			"/welcome, /setwelcome",
-			"/goodbye, /setgoodbye",
+			"/addblocklist <word|phrase|regex> <pattern>",
+			"/rmbl <pattern> or /rmblocklist <pattern>",
+			"/unblocklistall",
+			"/blocklist",
 			"",
-			"Group /rules prompts users toward PM while still offering a show-here button.",
+			"Open the examples page below for live command syntax.",
+			"Rose-style blocklist mode, delete toggles, and custom blocklist reasons are still deferred.",
 		},
 	},
-	"utility": {
-		Title:    "Utility And Privacy",
-		Callback: callbackHelpUtility,
+	helpBlocklistExamples: {
+		Title: "Blocklist Command Examples",
 		Lines: []string{
-			"Start/help entry points, language, AFK, and personal-data controls.",
+			"Examples for the current Sukoon parser:",
 			"",
-			"/start, /help",
-			"/setlang, /language",
-			"/privacy, /mydata, /forgetme confirm",
-			"/afk",
+			"/addblocklist word spam",
+			"/addblocklist phrase buy now",
+			"/addblocklist regex (?i)free\\s+crypto",
+			"/rmblocklist spam | buy now",
+			"/unblocklistall",
 			"",
-			"Privacy-sensitive flows are PM-first by design.",
+			"Bulk removal accepts the same pipe-separated syntax already used elsewhere in Sukoon.",
 		},
 	},
-	"owner": {
-		Title:    "Owner And Global",
-		Callback: callbackHelpOwner,
+	helpCaptcha: {
+		Title: "CAPTCHA",
 		Lines: []string{
-			"Owner or sudo tooling with durable job-backed fanout where required.",
+			"New members can be challenge-restricted until they solve the current button-based captcha.",
 			"",
-			"/broadcast",
-			"/stats",
-			"/gban, /ungban",
-			"/bluser, /unbluser, /blchat, /unblchat",
-			"/addsudo, /rmsudo",
+			"/captcha [on|off]",
+			"/captchamode [button]",
+			"/captchakick [kick|mute|ban]",
+			"/captchakicktime [seconds]",
+			"",
+			"Current captcha mode is button-only. Rose-style custom captcha text, extra rules text, and mute-duration variants are still deferred.",
 		},
 	},
-	"federation": {
-		Title:    "Federation",
-		Callback: callbackHelpFederation,
+	helpCleanCommands: {
+		Title: "Clean Commands",
 		Lines: []string{
-			"Federation lifecycle, admin assignment, and federation-wide bans.",
+			"Command cleanup removes handled command messages after Sukoon responds, reducing admin clutter.",
 			"",
-			"/newfed, /delfed",
-			"/joinfed, /leavefed",
-			"/fedinfo, /fedadmins, /myfeds",
-			"/fedpromote, /feddemote",
-			"/fban, /unfban, /fedtransfer",
+			"/cleancommands [on|off]",
+			"/cleancommand [on|off]",
+			"/keepcommand",
+			"/cleancommandtypes",
+			"",
+			"Examples:",
+			"/cleancommand on",
+			"/keepcommand",
 		},
 	},
-	"clones": {
-		Title:    "Clones",
-		Callback: callbackHelpClones,
+	helpLocks: {
+		Title: "Locks",
 		Lines: []string{
-			"Operator flows for bot-instance lifecycle and webhook sync.",
+			"Locks delete matching content types automatically for non-admin users.",
 			"",
-			"/clone",
-			"/clone sync",
-			"/clones",
-			"/rmclone",
+			"/lock <type>",
+			"/unlock <type>",
+			"/locks",
+			"/locktypes",
+			"",
+			"Open the descriptions and examples pages below for the live lock set.",
+			"Warn-mode locks and allowlist commands are still deferred.",
 		},
 	},
+	helpLockDescriptions: {
+		Title: "Lock Descriptions",
+		Lines: []string{
+			"Supported lock types in the current build:",
+			"",
+			"links: deletes messages containing URLs or t.me links",
+			"forwards: deletes forwarded messages",
+			"media: deletes photos, videos, documents, and animations",
+			"sticker: deletes stickers",
+			"gif: deletes animation/GIF posts",
+			"",
+			"Aliases like url, urls, forward, stickers, gifs, and animations map to the same canonical lock types.",
+		},
+	},
+	helpLockExamples: {
+		Title: "Lock Examples",
+		Lines: []string{
+			"Example commands for the supported lock set:",
+			"",
+			"/lock links",
+			"/lock forwards",
+			"/lock media",
+			"/lock gifs",
+			"/unlock sticker",
+			"/locks",
+		},
+	},
+	helpLogChannels: {
+		Title: "Log Channels",
+		Lines: []string{
+			"Log channels receive moderation and protection events outside the main chat.",
+			"",
+			"/logchannel [chat_id|off]",
+			"/setlog <chat_id>",
+			"/unsetlog",
+			"/log [chat_id|off]",
+			"/nolog",
+			"/logcategories",
+			"",
+			"Reports also use the configured log channel when /reports is enabled.",
+		},
+	},
+}
+
+func helpCallback(page string) string {
+	return callbackHelpPrefix + page
 }
 
 func startLandingText() string {
@@ -199,7 +220,7 @@ func startLandingText() string {
 		"",
 		"Fast moderation, cleaner group management, and safer admin workflows for Telegram groups.",
 		"",
-		"Use the buttons below to browse live command sections, open the website, or add Sukoon to another group.",
+		"Use the buttons below to browse live help sections, open the website, or add Sukoon to another group.",
 	}, "\n")
 }
 
@@ -207,13 +228,16 @@ func helpLandingText() string {
 	return strings.Join([]string{
 		"Sukoon Help",
 		"",
-		"Browse implemented command families using the sections below.",
+		"Browse the currently implemented Rose-style help sections below.",
 		"",
-		"Moderation works best by replying to the target user. PM-first flows are used where privacy or cleaner navigation matters.",
+		"Only live Sukoon commands are shown. Help navigation edits the same message to avoid spam.",
 	}, "\n")
 }
 
 func helpPageText(section string) string {
+	if section == helpRoot {
+		return helpLandingText()
+	}
 	page, ok := helpPages[section]
 	if !ok {
 		return helpLandingText()
@@ -247,8 +271,8 @@ func startLandingMarkup(username string) *telegram.InlineKeyboardMarkup {
 			{Text: "Website", URL: serviceutil.WebsiteURL},
 		},
 		[]telegram.InlineKeyboardButton{
-			{Text: "Moderation", CallbackData: callbackHelpModeration},
-			{Text: "Protection", CallbackData: callbackHelpProtection},
+			{Text: "Admin", CallbackData: helpCallback(helpAdmin)},
+			{Text: "Bans", CallbackData: helpCallback(helpBans)},
 		},
 		[]telegram.InlineKeyboardButton{
 			{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
@@ -263,28 +287,23 @@ func startLandingMarkup(username string) *telegram.InlineKeyboardMarkup {
 func helpLandingMarkup(username string) *telegram.InlineKeyboardMarkup {
 	return serviceutil.Markup(
 		[]telegram.InlineKeyboardButton{
-			{Text: "Moderation", CallbackData: callbackHelpModeration},
-			{Text: "Warnings", CallbackData: callbackHelpWarnings},
+			{Text: "Admin", CallbackData: helpCallback(helpAdmin)},
+			{Text: "Approval", CallbackData: helpCallback(helpApproval)},
 		},
 		[]telegram.InlineKeyboardButton{
-			{Text: "Approvals", CallbackData: callbackHelpApprovals},
-			{Text: "Admin", CallbackData: callbackHelpAdmin},
+			{Text: "Bans", CallbackData: helpCallback(helpBans)},
+			{Text: "Antiflood", CallbackData: helpCallback(helpAntiflood)},
 		},
 		[]telegram.InlineKeyboardButton{
-			{Text: "Cleanup", CallbackData: callbackHelpCleanup},
-			{Text: "Protection", CallbackData: callbackHelpProtection},
+			{Text: "Blocklists", CallbackData: helpCallback(helpBlocklists)},
+			{Text: "CAPTCHA", CallbackData: helpCallback(helpCaptcha)},
 		},
 		[]telegram.InlineKeyboardButton{
-			{Text: "Notes & Filters", CallbackData: callbackHelpNotesFilters},
-			{Text: "Rules & Welcome", CallbackData: callbackHelpRulesWelcome},
+			{Text: "Clean Commands", CallbackData: helpCallback(helpCleanCommands)},
+			{Text: "Locks", CallbackData: helpCallback(helpLocks)},
 		},
 		[]telegram.InlineKeyboardButton{
-			{Text: "Utility", CallbackData: callbackHelpUtility},
-			{Text: "Owner", CallbackData: callbackHelpOwner},
-		},
-		[]telegram.InlineKeyboardButton{
-			{Text: "Federation", CallbackData: callbackHelpFederation},
-			{Text: "Clones", CallbackData: callbackHelpClones},
+			{Text: "Log Channels", CallbackData: helpCallback(helpLogChannels)},
 		},
 		[]telegram.InlineKeyboardButton{
 			{Text: "Website", URL: serviceutil.WebsiteURL},
@@ -297,10 +316,68 @@ func helpLandingMarkup(username string) *telegram.InlineKeyboardMarkup {
 	)
 }
 
-func helpSectionMarkup(username string, backCallback string) *telegram.InlineKeyboardMarkup {
+func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMarkup {
+	switch page {
+	case helpBlocklists:
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Examples", CallbackData: helpCallback(helpBlocklistExamples)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: callbackHelpMain},
+				{Text: "Home", CallbackData: callbackStartHome},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Website", URL: serviceutil.WebsiteURL},
+				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Close", CallbackData: callbackClose},
+			},
+		)
+	case helpLocks:
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Lock Descriptions", CallbackData: helpCallback(helpLockDescriptions)},
+				{Text: "Example Commands", CallbackData: helpCallback(helpLockExamples)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: callbackHelpMain},
+				{Text: "Home", CallbackData: callbackStartHome},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Website", URL: serviceutil.WebsiteURL},
+				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Close", CallbackData: callbackClose},
+			},
+		)
+	case helpBlocklistExamples:
+		return helpSubsectionMarkup(username, helpBlocklists)
+	case helpLockDescriptions, helpLockExamples:
+		return helpSubsectionMarkup(username, helpLocks)
+	default:
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: callbackHelpMain},
+				{Text: "Home", CallbackData: callbackStartHome},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Website", URL: serviceutil.WebsiteURL},
+				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Close", CallbackData: callbackClose},
+			},
+		)
+	}
+}
+
+func helpSubsectionMarkup(username string, parent string) *telegram.InlineKeyboardMarkup {
 	return serviceutil.Markup(
 		[]telegram.InlineKeyboardButton{
-			{Text: "Back", CallbackData: backCallback},
+			{Text: "Back", CallbackData: helpCallback(parent)},
 			{Text: "Home", CallbackData: callbackStartHome},
 		},
 		[]telegram.InlineKeyboardButton{
@@ -316,7 +393,7 @@ func helpSectionMarkup(username string, backCallback string) *telegram.InlineKey
 func privacyMarkup(username string) *telegram.InlineKeyboardMarkup {
 	return serviceutil.Markup(
 		[]telegram.InlineKeyboardButton{
-			{Text: "Help", CallbackData: callbackHelpUtility},
+			{Text: "Help", CallbackData: callbackHelpMain},
 			{Text: "Website", URL: serviceutil.WebsiteURL},
 		},
 		[]telegram.InlineKeyboardButton{
@@ -346,7 +423,7 @@ func rulesGroupMarkup(username string, chatID int64) *telegram.InlineKeyboardMar
 			{Text: "Show Here", CallbackData: callbackRulesShow},
 		},
 		[]telegram.InlineKeyboardButton{
-			{Text: "Help", URL: serviceutil.BotDeepLink(username, "help_ruleswelcome")},
+			{Text: "Help", URL: serviceutil.BotDeepLink(username, "help_main")},
 			{Text: "Website", URL: serviceutil.WebsiteURL},
 		},
 		[]telegram.InlineKeyboardButton{
@@ -359,7 +436,7 @@ func rulesShownHereMarkup(username string, chatID int64) *telegram.InlineKeyboar
 	return serviceutil.Markup(
 		[]telegram.InlineKeyboardButton{
 			{Text: "Open PM", URL: serviceutil.BotDeepLink(username, fmt.Sprintf("rules_%d", chatID))},
-			{Text: "Help", URL: serviceutil.BotDeepLink(username, "help_ruleswelcome")},
+			{Text: "Help", URL: serviceutil.BotDeepLink(username, "help_main")},
 		},
 		[]telegram.InlineKeyboardButton{
 			{Text: "Website", URL: serviceutil.WebsiteURL},
@@ -371,7 +448,7 @@ func rulesShownHereMarkup(username string, chatID int64) *telegram.InlineKeyboar
 func rulesPMMarkup(username string) *telegram.InlineKeyboardMarkup {
 	return serviceutil.Markup(
 		[]telegram.InlineKeyboardButton{
-			{Text: "Help", CallbackData: callbackHelpRulesWelcome},
+			{Text: "Help", CallbackData: callbackHelpMain},
 			{Text: "Website", URL: serviceutil.WebsiteURL},
 		},
 		[]telegram.InlineKeyboardButton{
@@ -384,30 +461,36 @@ func rulesPMMarkup(username string) *telegram.InlineKeyboardMarkup {
 func normalizeHelpSection(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	switch value {
-	case "mod", "moderation", "ban", "bans", "mute", "mutes", "kick", "kicks":
-		return "moderation"
-	case "warn", "warnings", "warns":
-		return "warnings"
-	case "approve", "approvals", "approved":
-		return "approvals"
-	case "admin", "admins", "report", "reports", "log", "logs", "staff", "silent":
-		return "admin"
-	case "cleanup", "clean", "purge", "pin", "pins":
-		return "cleanup"
-	case "protection", "antispam", "security", "locks", "lock", "blocklist", "flood", "captcha", "antiabuse", "antibio":
-		return "protection"
-	case "content", "notes", "note", "filters", "filter", "saved":
-		return "notesfilters"
-	case "rules", "welcome", "goodbye", "greetings":
-		return "ruleswelcome"
-	case "utility", "info", "language", "privacy", "afk", "start", "help":
-		return "utility"
-	case "owner", "sudo", "global", "broadcast", "stats":
-		return "owner"
-	case "federation", "fed", "feds":
-		return "federation"
-	case "clone", "clones", "instance", "instances":
-		return "clones"
+	case "", "main", "home", "root":
+		return helpRoot
+	case "admin", "admins", "adminlist", "mods", "mod", "silent", "staff", "promote", "demote", "admincache", "anonadmin", "adminerror":
+		return helpAdmin
+	case "antiflood", "flood", "setflood", "setfloodtimer", "floodmode", "clearflood":
+		return helpAntiflood
+	case "approval", "approve", "approvals", "approved", "unapprove", "unapproveall":
+		return helpApproval
+	case "bans", "ban", "moderation", "mute", "kick", "kickme", "warn", "warnings":
+		return helpBans
+	case "protection", "security", "spam":
+		return helpRoot
+	case "blocklist", "blocklists", "rmblocklist", "rmbl", "unblocklistall":
+		return helpBlocklists
+	case "blocklists_examples", "blocklistexamples", "blocklist_examples":
+		return helpBlocklistExamples
+	case "captcha", "captchas", "captchamode", "captchakick", "captchakicktime":
+		return helpCaptcha
+	case "clean", "cleanup", "cleancommands", "cleancommand", "keepcommand", "cleancommandtypes":
+		return helpCleanCommands
+	case "locks", "lock", "unlock", "locktypes":
+		return helpLocks
+	case "locks_descriptions", "lockdescriptions", "lock_descriptions":
+		return helpLockDescriptions
+	case "locks_examples", "lockexamples", "lock_examples":
+		return helpLockExamples
+	case "log", "logs", "logchannel", "logchannels", "setlog", "unsetlog", "nolog", "logcategories":
+		return helpLogChannels
+	case "notesfilters", "notes", "filters", "ruleswelcome", "rules", "utility", "privacy", "owner", "federation", "clones":
+		return helpRoot
 	default:
 		return ""
 	}

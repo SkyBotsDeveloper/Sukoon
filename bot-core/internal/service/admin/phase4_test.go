@@ -205,3 +205,89 @@ func TestAdminsListsVisibleChatAdmins(t *testing.T) {
 		t.Fatalf("expected admin list in response, got %q", last.Text)
 	}
 }
+
+func TestApprovalStatusUnapproveAllAndLogAliases(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100716, Type: "supergroup", Title: "Approvals"}
+	if err := h.Store.EnsureUser(context.Background(), telegram.User{ID: 20, Username: "target", FirstName: "Target"}); err != nil {
+		t.Fatalf("ensure user failed: %v", err)
+	}
+
+	for idx, text := range []string{
+		"/approve @target",
+		"/approval @target",
+		"/setlog -100999",
+		"/logcategories",
+		"/nolog",
+		"/unapproveall",
+	} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(idx + 1),
+			Message: &telegram.Message{
+				MessageID: int64(50 + idx),
+				From:      &telegram.User{ID: 1, FirstName: "Owner"},
+				Chat:      chat,
+				Text:      text,
+			},
+		}); err != nil {
+			t.Fatalf("command %q failed: %v", text, err)
+		}
+	}
+
+	if got := h.Client.Messages[1].Text; !strings.Contains(got, "is approved") {
+		t.Fatalf("expected approval status response, got %q", got)
+	}
+
+	bundle, err := h.Store.LoadRuntimeBundle(context.Background(), h.Bot.ID, chat.ID)
+	if err != nil {
+		t.Fatalf("load runtime bundle failed: %v", err)
+	}
+	if bundle.Settings.LogChannelID != nil {
+		t.Fatalf("expected nolog to clear log channel, got %+v", bundle.Settings.LogChannelID)
+	}
+	if got := h.Client.Messages[3].Text; !strings.Contains(got, "Current log categories") {
+		t.Fatalf("expected logcategories response, got %q", got)
+	}
+
+	approved, err := h.Store.IsApproved(context.Background(), h.Bot.ID, chat.ID, 20)
+	if err != nil {
+		t.Fatalf("approval lookup failed: %v", err)
+	}
+	if approved {
+		t.Fatalf("expected unapproveall to clear approvals")
+	}
+}
+
+func TestCleanCommandAliases(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100717, Type: "supergroup", Title: "Clean Commands"}
+
+	for idx, text := range []string{
+		"/cleancommand on",
+		"/cleancommandtypes",
+		"/keepcommand",
+	} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(idx + 1),
+			Message: &telegram.Message{
+				MessageID: int64(80 + idx),
+				From:      &telegram.User{ID: 1, FirstName: "Owner"},
+				Chat:      chat,
+				Text:      text,
+			},
+		}); err != nil {
+			t.Fatalf("command %q failed: %v", text, err)
+		}
+	}
+
+	bundle, err := h.Store.LoadRuntimeBundle(context.Background(), h.Bot.ID, chat.ID)
+	if err != nil {
+		t.Fatalf("load runtime bundle failed: %v", err)
+	}
+	if bundle.Settings.CleanCommands {
+		t.Fatalf("expected keepcommand to disable clean commands")
+	}
+	if got := h.Client.Messages[1].Text; !strings.Contains(got, "Clean command types") {
+		t.Fatalf("expected cleancommandtypes response, got %q", got)
+	}
+}

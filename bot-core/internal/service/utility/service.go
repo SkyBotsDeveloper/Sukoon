@@ -67,7 +67,7 @@ func (s *Service) HandleCallback(ctx context.Context, rt *runtime.Context) (bool
 		if !ok {
 			return false, nil
 		}
-		err = s.sendCallbackPage(ctx, rt, helpPageText(section), helpSectionMarkup(rt.Bot.Username, callbackHelpMain))
+		err = s.sendCallbackPage(ctx, rt, helpPageText(section), helpMarkup(section, rt.Bot.Username))
 	}
 
 	if ackErr := rt.Client.AnswerCallbackQuery(ctx, rt.CallbackQuery.ID, "", false); ackErr != nil && err == nil {
@@ -102,7 +102,7 @@ func (s *Service) start(ctx context.Context, rt *runtime.Context) error {
 			return fmt.Errorf("unknown help section")
 		}
 		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), helpPageText(section), rt.ReplyOptions(telegram.SendMessageOptions{
-			ReplyMarkup: helpSectionMarkup(rt.Bot.Username, callbackHelpMain),
+			ReplyMarkup: helpMarkup(section, rt.Bot.Username),
 		}))
 		return err
 	case strings.HasPrefix(payload, "rules_"):
@@ -138,7 +138,7 @@ func (s *Service) help(ctx context.Context, rt *runtime.Context) error {
 		section := normalizeHelpSection(rt.Command.Args[0])
 		if section != "" {
 			_, err := rt.Client.SendMessage(ctx, rt.ChatID(), helpPageText(section), rt.ReplyOptions(telegram.SendMessageOptions{
-				ReplyMarkup: helpSectionMarkup(rt.Bot.Username, callbackHelpMain),
+				ReplyMarkup: helpMarkup(section, rt.Bot.Username),
 			}))
 			return err
 		}
@@ -280,31 +280,24 @@ func isPrivateChat(rt *runtime.Context) bool {
 
 func helpSectionFromCallback(data string) (string, bool) {
 	switch data {
-	case callbackHelpModeration:
-		return "moderation", true
-	case callbackHelpWarnings:
-		return "warnings", true
-	case callbackHelpApprovals:
-		return "approvals", true
-	case callbackHelpAdmin:
-		return "admin", true
-	case callbackHelpCleanup:
-		return "cleanup", true
-	case callbackHelpProtection:
-		return "protection", true
-	case callbackHelpNotesFilters:
-		return "notesfilters", true
-	case callbackHelpRulesWelcome:
-		return "ruleswelcome", true
-	case callbackHelpUtility:
-		return "utility", true
-	case callbackHelpOwner:
-		return "owner", true
-	case callbackHelpFederation:
-		return "federation", true
-	case callbackHelpClones:
-		return "clones", true
-	default:
+	case "ux:help:main":
+		return helpRoot, true
+	case callbackHelpMain:
+		return helpRoot, true
+	}
+	if !strings.HasPrefix(data, callbackHelpPrefix) {
 		return "", false
 	}
+	section := normalizeHelpSection(strings.TrimPrefix(data, callbackHelpPrefix))
+	if section == "" {
+		return "", false
+	}
+	return section, true
+}
+
+func helpMarkup(section string, username string) *telegram.InlineKeyboardMarkup {
+	if section == helpRoot {
+		return helpLandingMarkup(username)
+	}
+	return helpSectionMarkup(section, username)
 }

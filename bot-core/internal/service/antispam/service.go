@@ -29,16 +29,24 @@ func (s *Service) HandleCommand(ctx context.Context, rt *runtime.Context) (bool,
 		return true, s.lock(ctx, rt, false)
 	case "locks":
 		return true, s.listLocks(ctx, rt)
+	case "locktypes":
+		return true, s.lockTypes(ctx, rt)
 	case "addblocklist":
 		return true, s.addBlocklist(ctx, rt)
-	case "rmbl":
+	case "rmbl", "rmblocklist":
 		return true, s.removeBlocklist(ctx, rt)
+	case "unblocklistall":
+		return true, s.removeAllBlocklist(ctx, rt)
 	case "blocklist":
 		return true, s.listBlocklist(ctx, rt)
-	case "setflood":
+	case "setflood", "flood":
 		return true, s.setFlood(ctx, rt)
-	case "setfloodmode":
+	case "setfloodmode", "floodmode":
 		return true, s.setFloodMode(ctx, rt)
+	case "setfloodtimer":
+		return true, s.setFloodTimer(ctx, rt)
+	case "clearflood":
+		return true, s.clearFlood(ctx, rt)
 	default:
 		return false, nil
 	}
@@ -79,8 +87,8 @@ func (s *Service) lock(ctx context.Context, rt *runtime.Context, enable bool) er
 	if len(rt.Command.Args) == 0 {
 		return fmt.Errorf("usage: /lock <type>")
 	}
-	lockType := strings.ToLower(rt.Command.Args[0])
-	if !slices.Contains([]string{"links", "forwards", "media", "sticker", "gif"}, lockType) {
+	lockType := canonicalLockType(rt.Command.Args[0])
+	if lockType == "" || !slices.Contains(supportedLockTypes(), lockType) {
 		return fmt.Errorf("unsupported lock type")
 	}
 	if enable {
@@ -114,6 +122,12 @@ func (s *Service) listLocks(ctx context.Context, rt *runtime.Context) error {
 		keys = append(keys, lockType)
 	}
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Active locks: "+strings.Join(keys, ", "), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) lockTypes(ctx context.Context, rt *runtime.Context) error {
+	text := "Supported lock types: links, forwards, media, sticker, gif."
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -174,6 +188,27 @@ func (s *Service) removeBlocklist(ctx context.Context, rt *runtime.Context) erro
 	return err
 }
 
+func (s *Service) removeAllBlocklist(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	rules, err := rt.Store.ListBlocklistRules(ctx, rt.Bot.ID, rt.ChatID())
+	if err != nil {
+		return err
+	}
+	if len(rules) == 0 {
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No blocklist rules to remove.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	for _, rule := range rules {
+		if err := rt.Store.DeleteBlocklistRule(ctx, rt.Bot.ID, rt.ChatID(), rule.Pattern); err != nil {
+			return err
+		}
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Removed %d blocklist rule(s).", len(rules)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
 func (s *Service) listBlocklist(ctx context.Context, rt *runtime.Context) error {
 	if len(rt.RuntimeBundle.Blocklist) == 0 {
 		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No blocklist rules.", rt.ReplyOptions(telegram.SendMessageOptions{}))
@@ -192,7 +227,12 @@ func (s *Service) setFlood(ctx context.Context, rt *runtime.Context) error {
 		return fmt.Errorf("admin rights required")
 	}
 	if len(rt.Command.Args) == 0 {
-		return fmt.Errorf("usage: /setflood <count|off>")
+		if !rt.RuntimeBundle.Antiflood.Enabled {
+			_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Antiflood is off.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+			return err
+		}
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Antiflood is on: limit=%d window=%ds action=%s.", rt.RuntimeBundle.Antiflood.Limit, rt.RuntimeBundle.Antiflood.WindowSeconds, rt.RuntimeBundle.Antiflood.Action), rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
 	}
 	if strings.EqualFold(rt.Command.Args[0], "off") {
 		settings := rt.RuntimeBundle.Antiflood
@@ -233,7 +273,12 @@ func (s *Service) setFloodMode(ctx context.Context, rt *runtime.Context) error {
 		return fmt.Errorf("admin rights required")
 	}
 	if len(rt.Command.Args) == 0 {
-		return fmt.Errorf("usage: /setfloodmode <mute|ban|kick>")
+		action := rt.RuntimeBundle.Antiflood.Action
+		if action == "" {
+			action = "mute"
+		}
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Antiflood action is "+action+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
 	}
 	mode := strings.ToLower(rt.Command.Args[0])
 	switch mode {
@@ -256,6 +301,55 @@ func (s *Service) setFloodMode(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Antiflood action set to %s.", mode), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) setFloodTimer(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	if len(rt.Command.Args) == 0 {
+		return fmt.Errorf("usage: /setfloodtimer <seconds>")
+	}
+	seconds, err := strconv.Atoi(rt.Command.Args[0])
+	if err != nil || seconds < 1 {
+		return fmt.Errorf("flood timer must be at least 1 second")
+	}
+	settings := rt.RuntimeBundle.Antiflood
+	settings.BotID = rt.Bot.ID
+	settings.ChatID = rt.ChatID()
+	settings.WindowSeconds = seconds
+	if settings.Limit == 0 {
+		settings.Limit = 6
+	}
+	if settings.Action == "" {
+		settings.Action = "mute"
+	}
+	if err := rt.Store.SetAntiflood(ctx, settings); err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Antiflood timer set to %d seconds.", seconds), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) clearFlood(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	targetID := rt.ActorID()
+	targetName := "yourself"
+	if (rt.Message != nil && rt.Message.ReplyToMessage != nil) || len(rt.Command.Args) > 0 {
+		target, err := serviceutil.ResolveTarget(ctx, rt, rt.Command.Args)
+		if err != nil {
+			return err
+		}
+		targetID = target.UserID
+		targetName = target.Name
+	}
+	if err := rt.State.ClearFlood(ctx, rt.Bot.ID, rt.ChatID(), targetID); err != nil {
+		return err
+	}
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Cleared antiflood history for "+targetName+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -324,6 +418,27 @@ func matchesLock(lockType string, message *telegram.Message) bool {
 		return message.Animation != nil
 	default:
 		return false
+	}
+}
+
+func supportedLockTypes() []string {
+	return []string{"links", "forwards", "media", "sticker", "gif"}
+}
+
+func canonicalLockType(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "link", "links", "url", "urls":
+		return "links"
+	case "forward", "forwards":
+		return "forwards"
+	case "media":
+		return "media"
+	case "sticker", "stickers":
+		return "sticker"
+	case "gif", "gifs", "animation", "animations":
+		return "gif"
+	default:
+		return ""
 	}
 }
 

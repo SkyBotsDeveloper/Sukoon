@@ -79,7 +79,7 @@ func TestRulesSurfaceUsesButtonsInGroupAndCallbackFlow(t *testing.T) {
 	groupMarkup := requireRulesMarkup(t, groupPrompt)
 	assertRulesButton(t, groupMarkup, 0, 0, "Open PM", "", serviceutil.BotDeepLink(h.Bot.Username, "rules_-100501"))
 	assertRulesButton(t, groupMarkup, 0, 1, "Show Here", "ux:rules:show", "")
-	assertRulesButton(t, groupMarkup, 1, 0, "Help", "", serviceutil.BotDeepLink(h.Bot.Username, "help_ruleswelcome"))
+	assertRulesButton(t, groupMarkup, 1, 0, "Help", "", serviceutil.BotDeepLink(h.Bot.Username, "help_main"))
 	assertRulesButton(t, groupMarkup, 1, 1, "Website", "", serviceutil.WebsiteURL)
 
 	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
@@ -109,7 +109,7 @@ func TestRulesSurfaceUsesButtonsInGroupAndCallbackFlow(t *testing.T) {
 	}
 	shownMarkup := requireEditedRulesMarkup(t, shownRules)
 	assertRulesButton(t, shownMarkup, 0, 0, "Open PM", "", serviceutil.BotDeepLink(h.Bot.Username, "rules_-100501"))
-	assertRulesButton(t, shownMarkup, 0, 1, "Help", "", serviceutil.BotDeepLink(h.Bot.Username, "help_ruleswelcome"))
+	assertRulesButton(t, shownMarkup, 0, 1, "Help", "", serviceutil.BotDeepLink(h.Bot.Username, "help_main"))
 	assertRulesButton(t, shownMarkup, 1, 0, "Website", "", serviceutil.WebsiteURL)
 	assertRulesButton(t, shownMarkup, 1, 1, "Close", "ux:close", "")
 }
