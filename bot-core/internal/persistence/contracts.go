@@ -48,6 +48,7 @@ type Store interface {
 	SetLanguage(ctx context.Context, botID string, chatID int64, language string) error
 	UpsertNote(ctx context.Context, note domain.Note) error
 	GetNote(ctx context.Context, botID string, chatID int64, name string) (domain.Note, error)
+	ListNotes(ctx context.Context, botID string, chatID int64) ([]domain.Note, error)
 	DeleteNote(ctx context.Context, botID string, chatID int64, name string) error
 	UpsertFilter(ctx context.Context, filter domain.FilterRule) error
 	DeleteFilter(ctx context.Context, botID string, chatID int64, trigger string) error

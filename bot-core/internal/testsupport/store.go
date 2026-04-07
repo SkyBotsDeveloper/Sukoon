@@ -532,6 +532,18 @@ func (m *MemoryStore) GetNote(_ context.Context, botID string, chatID int64, nam
 	return note, nil
 }
 
+func (m *MemoryStore) ListNotes(_ context.Context, botID string, chatID int64) ([]domain.Note, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := chatKey(botID, chatID)
+	var notes []domain.Note
+	for _, note := range m.notes[key] {
+		notes = append(notes, note)
+	}
+	sort.Slice(notes, func(i, j int) bool { return notes[i].Name < notes[j].Name })
+	return notes, nil
+}
+
 func (m *MemoryStore) DeleteNote(_ context.Context, botID string, chatID int64, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

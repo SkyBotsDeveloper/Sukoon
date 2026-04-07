@@ -94,3 +94,58 @@ func TestAntiAbuseAvoidsFalsePositivesAndAdmins(t *testing.T) {
 		t.Fatalf("expected no antiabuse enforcement for false positive/admin, warnings=%d deletions=%+v", count, h.Client.DeletedMessages)
 	}
 }
+
+func TestAntiAbuseRespectsApprovalBypassAndPunctuation(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100742, Type: "supergroup", Title: "Abuse"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 10,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/antiabuse on delete_warn",
+		},
+	}); err != nil {
+		t.Fatalf("enable antiabuse failed: %v", err)
+	}
+
+	if err := h.Store.SetApproval(context.Background(), h.Bot.ID, chat.ID, 25, 1, true); err != nil {
+		t.Fatalf("set approval failed: %v", err)
+	}
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		Message: &telegram.Message{
+			MessageID: 11,
+			From:      &telegram.User{ID: 25, FirstName: "Approved"},
+			Chat:      chat,
+			Text:      "What a bastard!",
+		},
+	}); err != nil {
+		t.Fatalf("approved abusive message failed: %v", err)
+	}
+	if len(h.Client.DeletedMessages) != 0 {
+		t.Fatalf("expected approved user to bypass antiabuse, got deletions %+v", h.Client.DeletedMessages)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 3,
+		Message: &telegram.Message{
+			MessageID: 12,
+			From:      &telegram.User{ID: 26, FirstName: "User"},
+			Chat:      chat,
+			Text:      "You motherfucker!",
+		},
+	}); err != nil {
+		t.Fatalf("punctuated abusive message failed: %v", err)
+	}
+
+	count, err := h.Store.GetWarnings(context.Background(), h.Bot.ID, chat.ID, 26)
+	if err != nil {
+		t.Fatalf("get warnings failed: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected one warning for punctuated abuse, got %d", count)
+	}
+}

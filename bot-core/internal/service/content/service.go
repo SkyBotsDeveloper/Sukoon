@@ -24,20 +24,26 @@ func (s *Service) HandleCommand(ctx context.Context, rt *runtime.Context) (bool,
 	switch rt.Command.Name {
 	case "save":
 		return true, s.save(ctx, rt)
+	case "notes", "saved":
+		return true, s.notes(ctx, rt)
 	case "get":
 		return true, s.get(ctx, rt)
 	case "clear":
 		return true, s.clear(ctx, rt)
 	case "filter":
 		return true, s.filter(ctx, rt)
+	case "filters":
+		return true, s.filters(ctx, rt)
 	case "stop":
 		return true, s.stop(ctx, rt)
-	case "welcome":
+	case "welcome", "setwelcome":
 		return true, s.welcome(ctx, rt)
-	case "goodbye":
+	case "goodbye", "setgoodbye":
 		return true, s.goodbye(ctx, rt)
 	case "setrules":
 		return true, s.setRules(ctx, rt)
+	case "resetrules":
+		return true, s.resetRules(ctx, rt)
 	case "rules":
 		return true, s.rules(ctx, rt)
 	default:
@@ -132,6 +138,23 @@ func (s *Service) save(ctx context.Context, rt *runtime.Context) error {
 	return err
 }
 
+func (s *Service) notes(ctx context.Context, rt *runtime.Context) error {
+	notes, err := rt.Store.ListNotes(ctx, rt.Bot.ID, rt.ChatID())
+	if err != nil {
+		return err
+	}
+	if len(notes) == 0 {
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No saved notes.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	names := make([]string, 0, len(notes))
+	for _, note := range notes {
+		names = append(names, "#"+note.Name)
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Saved notes: "+strings.Join(names, ", "), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
 func (s *Service) get(ctx context.Context, rt *runtime.Context) error {
 	if len(rt.Command.Args) == 0 {
 		return fmt.Errorf("usage: /get <name>")
@@ -210,6 +233,26 @@ func (s *Service) stop(ctx context.Context, rt *runtime.Context) error {
 	return err
 }
 
+func (s *Service) filters(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	filters, err := rt.Store.ListFilters(ctx, rt.Bot.ID, rt.ChatID())
+	if err != nil {
+		return err
+	}
+	if len(filters) == 0 {
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No saved filters.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	parts := make([]string, 0, len(filters))
+	for _, filter := range filters {
+		parts = append(parts, filter.Trigger)
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Saved filters: "+strings.Join(parts, ", "), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
 func (s *Service) welcome(ctx context.Context, rt *runtime.Context) error {
 	if !rt.ActorPermissions.IsChatAdmin {
 		return fmt.Errorf("admin rights required")
@@ -278,6 +321,17 @@ func (s *Service) setRules(ctx context.Context, rt *runtime.Context) error {
 	return err
 }
 
+func (s *Service) resetRules(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	if err := rt.Store.SetRules(ctx, rt.Bot.ID, rt.ChatID(), ""); err != nil {
+		return err
+	}
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Rules cleared.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
 func (s *Service) rules(ctx context.Context, rt *runtime.Context) error {
 	if strings.TrimSpace(rt.RuntimeBundle.Settings.RulesText) == "" {
 		return fmt.Errorf("rules are not set")
@@ -291,7 +345,7 @@ func (s *Service) rules(ctx context.Context, rt *runtime.Context) error {
 					{Text: "Show Here", CallbackData: "ux:rules:show"},
 				},
 				[]telegram.InlineKeyboardButton{
-					{Text: "Help", URL: serviceutil.BotDeepLink(rt.Bot.Username, "help_main")},
+					{Text: "Help", URL: serviceutil.BotDeepLink(rt.Bot.Username, "help_ruleswelcome")},
 					{Text: "Website", URL: serviceutil.WebsiteURL},
 				},
 				[]telegram.InlineKeyboardButton{
@@ -305,7 +359,7 @@ func (s *Service) rules(ctx context.Context, rt *runtime.Context) error {
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), rt.RuntimeBundle.Settings.RulesText, rt.ReplyOptions(telegram.SendMessageOptions{
 		ReplyMarkup: serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
-				{Text: "Help", CallbackData: "ux:help:main"},
+				{Text: "Help", CallbackData: "ux:help:ruleswelcome"},
 				{Text: "Website", URL: serviceutil.WebsiteURL},
 			},
 			[]telegram.InlineKeyboardButton{

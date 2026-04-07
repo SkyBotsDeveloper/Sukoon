@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"sukoon/bot-core/internal/telegram"
@@ -161,5 +162,46 @@ func TestModsRepliesToTriggerMessage(t *testing.T) {
 	last := h.Client.Messages[len(h.Client.Messages)-1]
 	if last.Options.ReplyToMessageID != 22 {
 		t.Fatalf("expected /mods response to reply to message 22, got %+v", last.Options)
+	}
+}
+
+func TestAdminsListsVisibleChatAdmins(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100715, Type: "supergroup", Title: "Admins"}
+	h.Client.AdminsByChat[chat.ID] = []telegram.ChatAdministrator{
+		{
+			User:   telegram.User{ID: 1, FirstName: "Owner", Username: "owner"},
+			Status: "creator",
+		},
+		{
+			User:              telegram.User{ID: 2, FirstName: "Mod", Username: "mod"},
+			Status:            "administrator",
+			CanDeleteMessages: true,
+		},
+		{
+			User:        telegram.User{ID: 3, FirstName: "Anon"},
+			Status:      "administrator",
+			IsAnonymous: true,
+		},
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 30,
+			From:      &telegram.User{ID: 20, FirstName: "User"},
+			Chat:      chat,
+			Text:      "/admins",
+		},
+	}); err != nil {
+		t.Fatalf("admins failed: %v", err)
+	}
+
+	if len(h.Client.Messages) == 0 {
+		t.Fatalf("expected admins response")
+	}
+	last := h.Client.Messages[len(h.Client.Messages)-1]
+	if !strings.Contains(last.Text, "@owner [owner]") || !strings.Contains(last.Text, "@mod") || !strings.Contains(last.Text, "Anonymous admin") {
+		t.Fatalf("expected admin list in response, got %q", last.Text)
 	}
 }

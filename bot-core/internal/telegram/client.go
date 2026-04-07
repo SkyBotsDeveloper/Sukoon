@@ -15,6 +15,7 @@ import (
 
 type Client interface {
 	SendMessage(ctx context.Context, chatID int64, text string, options SendMessageOptions) (Message, error)
+	EditMessageText(ctx context.Context, chatID int64, messageID int64, text string, options EditMessageTextOptions) error
 	DeleteMessage(ctx context.Context, chatID int64, messageID int64) error
 	PinChatMessage(ctx context.Context, chatID int64, messageID int64, disableNotification bool) error
 	UnpinChatMessage(ctx context.Context, chatID int64, messageID *int64) error
@@ -100,6 +101,22 @@ func (c *HTTPClient) SendMessage(ctx context.Context, chatID int64, text string,
 		payload["reply_markup"] = options.ReplyMarkup
 	}
 	return request[Message](ctx, c, "sendMessage", payload)
+}
+
+func (c *HTTPClient) EditMessageText(ctx context.Context, chatID int64, messageID int64, text string, options EditMessageTextOptions) error {
+	payload := map[string]any{
+		"chat_id":    chatID,
+		"message_id": messageID,
+		"text":       text,
+	}
+	if options.ParseMode != "" {
+		payload["parse_mode"] = options.ParseMode
+	}
+	if options.ReplyMarkup != nil {
+		payload["reply_markup"] = options.ReplyMarkup
+	}
+	_, err := request[Message](ctx, c, "editMessageText", payload)
+	return err
 }
 
 func (c *HTTPClient) DeleteMessage(ctx context.Context, chatID int64, messageID int64) error {

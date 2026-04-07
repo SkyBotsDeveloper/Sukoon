@@ -13,6 +13,7 @@ import (
 type FakeTelegramClient struct {
 	mu               sync.Mutex
 	Messages         []SentMessage
+	EditedMessages   []EditedMessage
 	DeletedMessages  []DeletedMessage
 	PinnedMessages   []PinnedMessage
 	UnpinnedMessages []UnpinnedMessage
@@ -26,6 +27,7 @@ type FakeTelegramClient struct {
 	CallbackAnswers  []CallbackAnswer
 	AdminsByChat     map[int64][]telegram.ChatAdministrator
 	ChatsByID        map[int64]telegram.Chat
+	ChatErrors       map[int64]error
 	Me               telegram.User
 	SendErrors       map[int64]error
 	DeleteErrors     map[int64]error
@@ -43,6 +45,13 @@ type SentMessage struct {
 	ChatID    int64
 	Text      string
 	Options   telegram.SendMessageOptions
+}
+
+type EditedMessage struct {
+	ChatID    int64
+	MessageID int64
+	Text      string
+	Options   telegram.EditMessageTextOptions
 }
 
 type DeletedMessage struct {
@@ -89,6 +98,7 @@ func NewFakeTelegramClient() *FakeTelegramClient {
 	return &FakeTelegramClient{
 		AdminsByChat:  map[int64][]telegram.ChatAdministrator{},
 		ChatsByID:     map[int64]telegram.Chat{},
+		ChatErrors:    map[int64]error{},
 		SendErrors:    map[int64]error{},
 		DeleteErrors:  map[int64]error{},
 		BanErrors:     map[string]error{},
@@ -115,6 +125,18 @@ func (f *FakeTelegramClient) SendMessage(_ context.Context, chatID int64, text s
 		Chat:      telegram.Chat{ID: chatID},
 		Text:      text,
 	}, nil
+}
+
+func (f *FakeTelegramClient) EditMessageText(_ context.Context, chatID int64, messageID int64, text string, options telegram.EditMessageTextOptions) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.EditedMessages = append(f.EditedMessages, EditedMessage{
+		ChatID:    chatID,
+		MessageID: messageID,
+		Text:      text,
+		Options:   options,
+	})
+	return nil
 }
 
 func (f *FakeTelegramClient) DeleteMessage(_ context.Context, chatID int64, messageID int64) error {
@@ -186,6 +208,9 @@ func (f *FakeTelegramClient) GetChatAdministrators(_ context.Context, chatID int
 func (f *FakeTelegramClient) GetChat(_ context.Context, chatID int64) (telegram.Chat, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if err, ok := f.ChatErrors[chatID]; ok {
+		return telegram.Chat{}, err
+	}
 	return f.ChatsByID[chatID], nil
 }
 

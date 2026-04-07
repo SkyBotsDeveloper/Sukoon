@@ -14,4 +14,6 @@ type Store interface {
 	TrackFlood(ctx context.Context, botID string, chatID int64, userID int64, messageID int64, window time.Duration) (int64, error)
 	ClearFlood(ctx context.Context, botID string, chatID int64, userID int64) error
 	AcquireLease(ctx context.Context, key string, ttl time.Duration) (bool, error)
+	SetLease(ctx context.Context, key string, ttl time.Duration) error
+	DeleteLease(ctx context.Context, key string) error
 }

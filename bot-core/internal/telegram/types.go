@@ -138,6 +138,11 @@ type SendMessageOptions struct {
 	ReplyMarkup      *InlineKeyboardMarkup
 }
 
+type EditMessageTextOptions struct {
+	ParseMode   string
+	ReplyMarkup *InlineKeyboardMarkup
+}
+
 type SetWebhookOptions struct {
 	URL         string
 	SecretToken string

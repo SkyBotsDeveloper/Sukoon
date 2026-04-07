@@ -115,9 +115,11 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	startMarkup := requireMarkup(t, startMessage)
 	assertButton(t, startMarkup, 0, 0, "Help", "ux:help:main", "")
 	assertButton(t, startMarkup, 0, 1, "Website", "", serviceutil.WebsiteURL)
-	assertButton(t, startMarkup, 1, 0, "Add to Group", "", serviceutil.BotAddGroupLink(h.Bot.Username))
-	assertButton(t, startMarkup, 1, 1, "Privacy", "ux:privacy", "")
-	assertButton(t, startMarkup, 2, 0, "Close", "ux:close", "")
+	assertButton(t, startMarkup, 1, 0, "Moderation", "ux:help:moderation", "")
+	assertButton(t, startMarkup, 1, 1, "Protection", "ux:help:protection", "")
+	assertButton(t, startMarkup, 2, 0, "Add to Group", "", serviceutil.BotAddGroupLink(h.Bot.Username))
+	assertButton(t, startMarkup, 2, 1, "Privacy", "ux:privacy", "")
+	assertButton(t, startMarkup, 3, 0, "Close", "ux:close", "")
 
 	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
 		UpdateID: 2,
@@ -134,18 +136,26 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 		t.Fatalf("help callback failed: %v", err)
 	}
 
-	helpMessage := h.Client.Messages[len(h.Client.Messages)-1]
+	if len(h.Client.Messages) != 1 {
+		t.Fatalf("expected callback navigation to edit in place, got messages %+v", h.Client.Messages)
+	}
+	if len(h.Client.EditedMessages) == 0 {
+		t.Fatalf("expected edited help message, got %+v", h.Client.EditedMessages)
+	}
+	helpMessage := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
 	if !strings.Contains(helpMessage.Text, "Sukoon Help") {
 		t.Fatalf("expected help landing page, got %q", helpMessage.Text)
 	}
-	if len(h.Client.DeletedMessages) == 0 || h.Client.DeletedMessages[0].MessageID != startMessage.MessageID {
-		t.Fatalf("expected callback navigation to delete the previous menu, got %+v", h.Client.DeletedMessages)
+	if helpMessage.MessageID != startMessage.MessageID {
+		t.Fatalf("expected in-place help edit of message %d, got %+v", startMessage.MessageID, helpMessage)
 	}
-	helpMarkup := requireMarkup(t, helpMessage)
+	helpMarkup := requireEditedMarkup(t, helpMessage)
 	assertButton(t, helpMarkup, 0, 0, "Moderation", "ux:help:moderation", "")
-	assertButton(t, helpMarkup, 0, 1, "Admin", "ux:help:admin", "")
-	assertButton(t, helpMarkup, 4, 0, "Back", "ux:start:home", "")
-	assertButton(t, helpMarkup, 4, 1, "Close", "ux:close", "")
+	assertButton(t, helpMarkup, 0, 1, "Warnings", "ux:help:warnings", "")
+	assertButton(t, helpMarkup, 3, 0, "Notes & Filters", "ux:help:notesfilters", "")
+	assertButton(t, helpMarkup, 5, 0, "Federation", "ux:help:federation", "")
+	assertButton(t, helpMarkup, 7, 0, "Home", "ux:start:home", "")
+	assertButton(t, helpMarkup, 7, 1, "Close", "ux:close", "")
 
 	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
 		UpdateID: 3,
@@ -153,31 +163,33 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 			ID:   "cb-help-moderation",
 			From: telegram.User{ID: 50, FirstName: "User"},
 			Message: &telegram.Message{
-				MessageID: helpMessage.MessageID,
+				MessageID: startMessage.MessageID,
 				Chat:      chat,
 			},
-			Data: "ux:help:moderation",
+			Data: "ux:help:notesfilters",
 		},
 	}); err != nil {
-		t.Fatalf("help moderation callback failed: %v", err)
+		t.Fatalf("help notes callback failed: %v", err)
 	}
 
-	moderationMessage := h.Client.Messages[len(h.Client.Messages)-1]
-	if !strings.Contains(moderationMessage.Text, "/ban") || !strings.Contains(moderationMessage.Text, "/warn") {
-		t.Fatalf("expected moderation help page, got %q", moderationMessage.Text)
+	sectionMessage := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	if !strings.Contains(sectionMessage.Text, "/save") || !strings.Contains(sectionMessage.Text, "/filters") {
+		t.Fatalf("expected notes/filter help page, got %q", sectionMessage.Text)
 	}
-	moderationMarkup := requireMarkup(t, moderationMessage)
-	assertButton(t, moderationMarkup, 0, 0, "Back", "ux:help:main", "")
-	assertButton(t, moderationMarkup, 0, 1, "Close", "ux:close", "")
+	sectionMarkup := requireEditedMarkup(t, sectionMessage)
+	assertButton(t, sectionMarkup, 0, 0, "Back", "ux:help:main", "")
+	assertButton(t, sectionMarkup, 0, 1, "Home", "ux:start:home", "")
+	assertButton(t, sectionMarkup, 2, 0, "Close", "ux:close", "")
 
 	messageCount := len(h.Client.Messages)
+	editCount := len(h.Client.EditedMessages)
 	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
 		UpdateID: 4,
 		CallbackQuery: &telegram.CallbackQuery{
 			ID:   "cb-close",
 			From: telegram.User{ID: 50, FirstName: "User"},
 			Message: &telegram.Message{
-				MessageID: moderationMessage.MessageID,
+				MessageID: startMessage.MessageID,
 				Chat:      chat,
 			},
 			Data: "ux:close",
@@ -187,6 +199,12 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	}
 	if len(h.Client.Messages) != messageCount {
 		t.Fatalf("expected close callback to avoid sending a new message, got %+v", h.Client.Messages)
+	}
+	if len(h.Client.EditedMessages) != editCount {
+		t.Fatalf("expected close callback to avoid extra edits, got %+v", h.Client.EditedMessages)
+	}
+	if len(h.Client.DeletedMessages) != 1 || h.Client.DeletedMessages[0].MessageID != startMessage.MessageID {
+		t.Fatalf("expected close callback to delete the menu message, got %+v", h.Client.DeletedMessages)
 	}
 	if len(h.Client.CallbackAnswers) != 3 {
 		t.Fatalf("expected callback answers for menu navigation, got %+v", h.Client.CallbackAnswers)
@@ -243,6 +261,14 @@ func TestGroupPMGuidanceUsesButtonsForHelpAndPrivacy(t *testing.T) {
 }
 
 func requireMarkup(t *testing.T, msg testsupport.SentMessage) *telegram.InlineKeyboardMarkup {
+	t.Helper()
+	if msg.Options.ReplyMarkup == nil {
+		t.Fatalf("expected inline keyboard markup, got %+v", msg.Options)
+	}
+	return msg.Options.ReplyMarkup
+}
+
+func requireEditedMarkup(t *testing.T, msg testsupport.EditedMessage) *telegram.InlineKeyboardMarkup {
 	t.Helper()
 	if msg.Options.ReplyMarkup == nil {
 		t.Fatalf("expected inline keyboard markup, got %+v", msg.Options)

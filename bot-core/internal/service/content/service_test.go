@@ -79,7 +79,7 @@ func TestRulesSurfaceUsesButtonsInGroupAndCallbackFlow(t *testing.T) {
 	groupMarkup := requireRulesMarkup(t, groupPrompt)
 	assertRulesButton(t, groupMarkup, 0, 0, "Open PM", "", serviceutil.BotDeepLink(h.Bot.Username, "rules_-100501"))
 	assertRulesButton(t, groupMarkup, 0, 1, "Show Here", "ux:rules:show", "")
-	assertRulesButton(t, groupMarkup, 1, 0, "Help", "", serviceutil.BotDeepLink(h.Bot.Username, "help_main"))
+	assertRulesButton(t, groupMarkup, 1, 0, "Help", "", serviceutil.BotDeepLink(h.Bot.Username, "help_ruleswelcome"))
 	assertRulesButton(t, groupMarkup, 1, 1, "Website", "", serviceutil.WebsiteURL)
 
 	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
@@ -97,18 +97,32 @@ func TestRulesSurfaceUsesButtonsInGroupAndCallbackFlow(t *testing.T) {
 		t.Fatalf("rules callback failed: %v", err)
 	}
 
-	shownRules := h.Client.Messages[len(h.Client.Messages)-1]
+	if len(h.Client.EditedMessages) == 0 {
+		t.Fatalf("expected rules callback to edit in place, got %+v", h.Client.EditedMessages)
+	}
+	shownRules := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	if shownRules.MessageID != groupPrompt.MessageID {
+		t.Fatalf("expected rules callback to edit message %d, got %+v", groupPrompt.MessageID, shownRules)
+	}
 	if !strings.Contains(shownRules.Text, "Rules for Rules") || !strings.Contains(shownRules.Text, "Be respectful.") {
 		t.Fatalf("expected shown rules message, got %q", shownRules.Text)
 	}
-	shownMarkup := requireRulesMarkup(t, shownRules)
+	shownMarkup := requireEditedRulesMarkup(t, shownRules)
 	assertRulesButton(t, shownMarkup, 0, 0, "Open PM", "", serviceutil.BotDeepLink(h.Bot.Username, "rules_-100501"))
-	assertRulesButton(t, shownMarkup, 0, 1, "Help", "", serviceutil.BotDeepLink(h.Bot.Username, "help_main"))
+	assertRulesButton(t, shownMarkup, 0, 1, "Help", "", serviceutil.BotDeepLink(h.Bot.Username, "help_ruleswelcome"))
 	assertRulesButton(t, shownMarkup, 1, 0, "Website", "", serviceutil.WebsiteURL)
 	assertRulesButton(t, shownMarkup, 1, 1, "Close", "ux:close", "")
 }
 
 func requireRulesMarkup(t *testing.T, msg testsupport.SentMessage) *telegram.InlineKeyboardMarkup {
+	t.Helper()
+	if msg.Options.ReplyMarkup == nil {
+		t.Fatalf("expected rules reply markup, got %+v", msg.Options)
+	}
+	return msg.Options.ReplyMarkup
+}
+
+func requireEditedRulesMarkup(t *testing.T, msg testsupport.EditedMessage) *telegram.InlineKeyboardMarkup {
 	t.Helper()
 	if msg.Options.ReplyMarkup == nil {
 		t.Fatalf("expected rules reply markup, got %+v", msg.Options)

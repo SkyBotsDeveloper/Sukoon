@@ -56,7 +56,8 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 	if exempt {
 		return false, nil
 	}
-	acquired, err := rt.State.AcquireLease(ctx, fmt.Sprintf("antibio:%s:%d:%d", rt.Bot.ID, rt.ChatID(), rt.ActorID()), 6*time.Hour)
+	leaseKey := fmt.Sprintf("antibio:%s:%d:%d", rt.Bot.ID, rt.ChatID(), rt.ActorID())
+	acquired, err := rt.State.AcquireLease(ctx, leaseKey, 30*time.Second)
 	if err != nil {
 		return false, err
 	}
@@ -65,14 +66,18 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 	}
 	chat, err := rt.Client.GetChat(ctx, rt.ActorID())
 	if err != nil {
+		_ = rt.State.DeleteLease(ctx, leaseKey)
 		return false, nil
 	}
 	if !bioLinkMatcher.MatchString(strings.TrimSpace(chat.Bio)) {
+		_ = rt.State.SetLease(ctx, leaseKey, 6*time.Hour)
 		return false, nil
 	}
 	if err := serviceutil.EnforceUserAction(ctx, rt, rt.ActorID(), rt.RuntimeBundle.AntiBio.Action, "antibio", rt.Message.MessageID); err != nil {
+		_ = rt.State.DeleteLease(ctx, leaseKey)
 		return false, err
 	}
+	_ = rt.State.SetLease(ctx, leaseKey, 6*time.Hour)
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "User bio policy triggered.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 	if err != nil {
 		return false, err

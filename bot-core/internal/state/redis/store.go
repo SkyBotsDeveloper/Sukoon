@@ -83,3 +83,11 @@ func (s *Store) ClearFlood(ctx context.Context, botID string, chatID int64, user
 func (s *Store) AcquireLease(ctx context.Context, key string, ttl time.Duration) (bool, error) {
 	return s.client.SetNX(ctx, "lease:"+key, "1", ttl).Result()
 }
+
+func (s *Store) SetLease(ctx context.Context, key string, ttl time.Duration) error {
+	return s.client.Set(ctx, "lease:"+key, "1", ttl).Err()
+}
+
+func (s *Store) DeleteLease(ctx context.Context, key string) error {
+	return s.client.Del(ctx, "lease:"+key).Err()
+}

@@ -13,6 +13,7 @@
 ### Admin And Cleanup
 
 - `/approve`, `/unapprove`, `/approved`
+- `/admins`, `/adminlist`
 - `/disable`, `/enable`, `/disabled`
 - `/logchannel`
 - `/reports`, `/report`
@@ -38,11 +39,11 @@
 
 ### Content And Presence
 
-- `/save`, `/get`, `/clear`
-- `/filter`, `/stop`
+- `/save`, `/notes`, `/saved`, `/get`, `/clear`
+- `/filter`, `/filters`, `/stop`
 - `/setwelcome`, `/welcome`
 - `/setgoodbye`, `/goodbye`
-- `/setrules`, `/rules`
+- `/setrules`, `/resetrules`, `/rules`
 - `/afk`
 
 ### Utility And Help
@@ -71,9 +72,10 @@
 ### Policy Features
 
 - antiabuse with narrowed curated matcher
-- antibio with exemptions and lease-based checks
+- antibio with exemptions, approval bypass, and lease-based checks
 - privacy export and delete flows
 - per-bot language selection foundation
+- callback-driven help and rules UX with in-place message editing
 
 ## Partial
 
@@ -83,14 +85,18 @@
   implemented structured buttons and rows, but not every historical legacy syntax variant
 - metrics:
   observability seam exists, but no external metrics backend is wired by default
+- Rose/Group Help parity:
+  core moderation, rules, saved content, approvals, and PM-guidance UX are strong, but several long-tail utility families are still intentionally deferred
 
 ## Deferred Or Intentionally Not Claimed
 
 - antiraid
+- chat connections / remote management
 - anti-porn
 - night mode
 - recurring timed messages
 - channel-subscription enforcement
+- private-rules toggle commands
 - separate admin web panel
 - full Rose-style help or informational command surface beyond the current moderation core
 - advanced federation policy toggles that were unsafe or unclear in the legacy runtime

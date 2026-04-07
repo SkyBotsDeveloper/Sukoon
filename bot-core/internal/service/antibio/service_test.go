@@ -2,6 +2,7 @@ package antibio_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"testing"
@@ -99,5 +100,87 @@ func TestAntiBioApprovalBypassAndBioEnforcement(t *testing.T) {
 	}
 	if len(h2.Client.Bans) != 1 || h2.Client.Bans[0].UserID != 21 {
 		t.Fatalf("expected antibio ban for user 21, got %+v", h2.Client.Bans)
+	}
+}
+
+func TestAntiBioExemptionAndLookupFailureRecovery(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100752, Type: "supergroup", Title: "Bio"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 10,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/antibio on ban",
+		},
+	}); err != nil {
+		t.Fatalf("enable antibio failed: %v", err)
+	}
+
+	if err := h.Store.SetAntiBioExemption(context.Background(), h.Bot.ID, chat.ID, 22, 1, true); err != nil {
+		t.Fatalf("set exemption failed: %v", err)
+	}
+	h.Client.ChatsByID[22] = telegram.Chat{ID: 22, Bio: "https://spam.example"}
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		Message: &telegram.Message{
+			MessageID: 11,
+			From:      &telegram.User{ID: 22, FirstName: "Exempt"},
+			Chat:      chat,
+			Text:      "hello",
+		},
+	}); err != nil {
+		t.Fatalf("exempt user message failed: %v", err)
+	}
+	if len(h.Client.Bans) != 0 {
+		t.Fatalf("expected exempt user to bypass antibio, got %+v", h.Client.Bans)
+	}
+
+	h2 := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err := h2.Router.HandleUpdate(context.Background(), h2.Bot, h2.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 10,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/antibio on ban",
+		},
+	}); err != nil {
+		t.Fatalf("enable antibio failed: %v", err)
+	}
+
+	h2.Client.ChatErrors[23] = errors.New("temporary getChat failure")
+	if err := h2.Router.HandleUpdate(context.Background(), h2.Bot, h2.Client, telegram.Update{
+		UpdateID: 2,
+		Message: &telegram.Message{
+			MessageID: 11,
+			From:      &telegram.User{ID: 23, FirstName: "Retry"},
+			Chat:      chat,
+			Text:      "hello",
+		},
+	}); err != nil {
+		t.Fatalf("lookup failure message failed: %v", err)
+	}
+	if len(h2.Client.Bans) != 0 {
+		t.Fatalf("expected no ban on failed lookup, got %+v", h2.Client.Bans)
+	}
+
+	delete(h2.Client.ChatErrors, 23)
+	h2.Client.ChatsByID[23] = telegram.Chat{ID: 23, Bio: "t.me/retryspam"}
+	if err := h2.Router.HandleUpdate(context.Background(), h2.Bot, h2.Client, telegram.Update{
+		UpdateID: 3,
+		Message: &telegram.Message{
+			MessageID: 12,
+			From:      &telegram.User{ID: 23, FirstName: "Retry"},
+			Chat:      chat,
+			Text:      "hello again",
+		},
+	}); err != nil {
+		t.Fatalf("lookup retry message failed: %v", err)
+	}
+	if len(h2.Client.Bans) != 1 || h2.Client.Bans[0].UserID != 23 {
+		t.Fatalf("expected retry after lookup failure to enforce antibio, got %+v", h2.Client.Bans)
 	}
 }

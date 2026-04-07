@@ -85,3 +85,87 @@ func TestSaveNoteParsesButtonsAndRows(t *testing.T) {
 		t.Fatalf("unexpected button row layout: %+v", last.Options.ReplyMarkup.InlineKeyboard)
 	}
 }
+
+func TestNotesAndFiltersListingAndRulesAliases(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100732, Type: "supergroup", Title: "Discovery"}
+
+	for idx, cmd := range []string{
+		"/save greet Hello there",
+		"/save rulesnote Read the rules",
+		"/filter hello Hi",
+		"/filter bye Bye",
+		"/setwelcome on Welcome {first}",
+		"/setgoodbye on Bye {first}",
+		"/setrules Be respectful",
+	} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(idx + 1),
+			Message: &telegram.Message{
+				MessageID: int64(idx + 10),
+				From:      &telegram.User{ID: 1, FirstName: "Owner"},
+				Chat:      chat,
+				Text:      cmd,
+			},
+		}); err != nil {
+			t.Fatalf("setup command %q failed: %v", cmd, err)
+		}
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 20,
+		Message: &telegram.Message{
+			MessageID: 40,
+			From:      &telegram.User{ID: 20, FirstName: "User"},
+			Chat:      chat,
+			Text:      "/notes",
+		},
+	}); err != nil {
+		t.Fatalf("notes failed: %v", err)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 21,
+		Message: &telegram.Message{
+			MessageID: 41,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/filters",
+		},
+	}); err != nil {
+		t.Fatalf("filters failed: %v", err)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 22,
+		Message: &telegram.Message{
+			MessageID: 42,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/resetrules",
+		},
+	}); err != nil {
+		t.Fatalf("resetrules failed: %v", err)
+	}
+
+	notesMsg := h.Client.Messages[len(h.Client.Messages)-3]
+	if notesMsg.Text != "Saved notes: #greet, #rulesnote" {
+		t.Fatalf("unexpected notes listing: %q", notesMsg.Text)
+	}
+
+	filtersMsg := h.Client.Messages[len(h.Client.Messages)-2]
+	if filtersMsg.Text != "Saved filters: hello, bye" && filtersMsg.Text != "Saved filters: bye, hello" {
+		t.Fatalf("unexpected filters listing: %q", filtersMsg.Text)
+	}
+
+	bundle, err := h.Store.LoadRuntimeBundle(context.Background(), h.Bot.ID, chat.ID)
+	if err != nil {
+		t.Fatalf("load runtime bundle failed: %v", err)
+	}
+	if bundle.Settings.WelcomeText == "" || bundle.Settings.GoodbyeText == "" {
+		t.Fatalf("expected setwelcome/setgoodbye aliases to update settings, got %+v", bundle.Settings)
+	}
+	if bundle.Settings.RulesText != "" {
+		t.Fatalf("expected resetrules to clear rules, got %q", bundle.Settings.RulesText)
+	}
+}

@@ -41,6 +41,8 @@ func (s *Service) Handle(ctx context.Context, rt *runtime.Context) (bool, error)
 		return true, s.reports(ctx, rt)
 	case "report":
 		return true, s.report(ctx, rt)
+	case "admins", "adminlist":
+		return true, s.admins(ctx, rt)
 	case "cleancommands":
 		return true, s.cleanCommands(ctx, rt)
 	case "cleanservice":
@@ -249,6 +251,31 @@ func (s *Service) report(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Report sent.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) admins(ctx context.Context, rt *runtime.Context) error {
+	admins, err := rt.Client.GetChatAdministrators(ctx, rt.ChatID())
+	if err != nil {
+		return err
+	}
+	if len(admins) == 0 {
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No visible chat admins.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	parts := make([]string, 0, len(admins))
+	for _, admin := range admins {
+		if admin.IsAnonymous {
+			parts = append(parts, "Anonymous admin")
+			continue
+		}
+		label := serviceutil.DisplayName(admin.User)
+		if admin.Status == "creator" {
+			label += " [owner]"
+		}
+		parts = append(parts, label)
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Chat admins: "+strings.Join(parts, ", "), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 

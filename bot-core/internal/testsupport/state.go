@@ -76,3 +76,17 @@ func (m *MemoryState) AcquireLease(_ context.Context, key string, ttl time.Durat
 	m.lease[key] = now.Add(ttl)
 	return true, nil
 }
+
+func (m *MemoryState) SetLease(_ context.Context, key string, ttl time.Duration) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.lease[key] = time.Now().Add(ttl)
+	return nil
+}
+
+func (m *MemoryState) DeleteLease(_ context.Context, key string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.lease, key)
+	return nil
+}

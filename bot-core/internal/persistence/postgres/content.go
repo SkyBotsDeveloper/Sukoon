@@ -32,6 +32,29 @@ func (s *Store) GetNote(ctx context.Context, botID string, chatID int64, name st
 	return note, err
 }
 
+func (s *Store) ListNotes(ctx context.Context, botID string, chatID int64) ([]domain.Note, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT bot_id, chat_id, name, text, parse_mode, buttons_json::text, created_by, created_at, updated_at
+		FROM notes
+		WHERE bot_id=$1 AND chat_id=$2
+		ORDER BY name ASC
+	`, botID, chatID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var notes []domain.Note
+	for rows.Next() {
+		var note domain.Note
+		if err := rows.Scan(&note.BotID, &note.ChatID, &note.Name, &note.Text, &note.ParseMode, &note.ButtonsJSON, &note.CreatedBy, &note.CreatedAt, &note.UpdatedAt); err != nil {
+			return nil, err
+		}
+		notes = append(notes, note)
+	}
+	return notes, rows.Err()
+}
+
 func (s *Store) DeleteNote(ctx context.Context, botID string, chatID int64, name string) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM notes WHERE bot_id=$1 AND chat_id=$2 AND name=$3`, botID, chatID, name)
 	return err

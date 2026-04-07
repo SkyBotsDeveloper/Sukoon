@@ -31,6 +31,7 @@ Behavior and product references used during the rebuild:
 - Federation support with canonical V2 storage
 - Safe clone lifecycle with explicit per-bot webhook routing
 - Structured note and filter buttons without legacy regex parsing
+- Button-driven help and rules flows with PM-first guidance and in-place menu editing
 - Privacy export and delete flows against the canonical schema
 - VPS, Railway, and Heroku deployment artifacts
 

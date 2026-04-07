@@ -48,18 +48,6 @@ func (s *Service) HandleCallback(ctx context.Context, rt *runtime.Context) (bool
 		err = s.sendCallbackPage(ctx, rt, startLandingText(), startLandingMarkup(rt.Bot.Username))
 	case callbackHelpMain:
 		err = s.sendCallbackPage(ctx, rt, helpLandingText(), helpLandingMarkup(rt.Bot.Username))
-	case callbackHelpModeration:
-		err = s.sendCallbackPage(ctx, rt, helpPageText("moderation"), helpSectionMarkup(rt.Bot.Username))
-	case callbackHelpAdmin:
-		err = s.sendCallbackPage(ctx, rt, helpPageText("admin"), helpSectionMarkup(rt.Bot.Username))
-	case callbackHelpProtection:
-		err = s.sendCallbackPage(ctx, rt, helpPageText("protection"), helpSectionMarkup(rt.Bot.Username))
-	case callbackHelpContent:
-		err = s.sendCallbackPage(ctx, rt, helpPageText("content"), helpSectionMarkup(rt.Bot.Username))
-	case callbackHelpUtility:
-		err = s.sendCallbackPage(ctx, rt, helpPageText("utility"), helpSectionMarkup(rt.Bot.Username))
-	case callbackHelpAdvanced:
-		err = s.sendCallbackPage(ctx, rt, helpPageText("advanced"), helpSectionMarkup(rt.Bot.Username))
 	case callbackPrivacy:
 		err = s.sendCallbackPage(ctx, rt, privacyText(), privacyMarkup(rt.Bot.Username))
 	case callbackRulesShow:
@@ -75,7 +63,11 @@ func (s *Service) HandleCallback(ctx context.Context, rt *runtime.Context) (bool
 	case callbackClose:
 		err = s.closeCallbackMessage(ctx, rt)
 	default:
-		return false, nil
+		section, ok := helpSectionFromCallback(rt.CallbackQuery.Data)
+		if !ok {
+			return false, nil
+		}
+		err = s.sendCallbackPage(ctx, rt, helpPageText(section), helpSectionMarkup(rt.Bot.Username, callbackHelpMain))
 	}
 
 	if ackErr := rt.Client.AnswerCallbackQuery(ctx, rt.CallbackQuery.ID, "", false); ackErr != nil && err == nil {
@@ -110,7 +102,7 @@ func (s *Service) start(ctx context.Context, rt *runtime.Context) error {
 			return fmt.Errorf("unknown help section")
 		}
 		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), helpPageText(section), rt.ReplyOptions(telegram.SendMessageOptions{
-			ReplyMarkup: helpSectionMarkup(rt.Bot.Username),
+			ReplyMarkup: helpSectionMarkup(rt.Bot.Username, callbackHelpMain),
 		}))
 		return err
 	case strings.HasPrefix(payload, "rules_"):
@@ -146,7 +138,7 @@ func (s *Service) help(ctx context.Context, rt *runtime.Context) error {
 		section := normalizeHelpSection(rt.Command.Args[0])
 		if section != "" {
 			_, err := rt.Client.SendMessage(ctx, rt.ChatID(), helpPageText(section), rt.ReplyOptions(telegram.SendMessageOptions{
-				ReplyMarkup: helpSectionMarkup(rt.Bot.Username),
+				ReplyMarkup: helpSectionMarkup(rt.Bot.Username, callbackHelpMain),
 			}))
 			return err
 		}
@@ -234,12 +226,16 @@ func (s *Service) sendPMGuidance(ctx context.Context, rt *runtime.Context, text 
 }
 
 func (s *Service) sendCallbackPage(ctx context.Context, rt *runtime.Context, text string, markup *telegram.InlineKeyboardMarkup) error {
-	if err := s.closeCallbackMessage(ctx, rt); err != nil {
+	if rt.CallbackQuery == nil || rt.CallbackQuery.Message == nil {
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, telegram.SendMessageOptions{ReplyMarkup: markup})
 		return err
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, telegram.SendMessageOptions{
+	err := rt.Client.EditMessageText(ctx, rt.ChatID(), rt.CallbackQuery.Message.MessageID, text, telegram.EditMessageTextOptions{
 		ReplyMarkup: markup,
 	})
+	if err != nil && strings.Contains(strings.ToLower(err.Error()), "message is not modified") {
+		return nil
+	}
 	return err
 }
 
@@ -280,4 +276,35 @@ func isPrivateChat(rt *runtime.Context) bool {
 		return rt.CallbackQuery.Message.Chat.Type == "private"
 	}
 	return false
+}
+
+func helpSectionFromCallback(data string) (string, bool) {
+	switch data {
+	case callbackHelpModeration:
+		return "moderation", true
+	case callbackHelpWarnings:
+		return "warnings", true
+	case callbackHelpApprovals:
+		return "approvals", true
+	case callbackHelpAdmin:
+		return "admin", true
+	case callbackHelpCleanup:
+		return "cleanup", true
+	case callbackHelpProtection:
+		return "protection", true
+	case callbackHelpNotesFilters:
+		return "notesfilters", true
+	case callbackHelpRulesWelcome:
+		return "ruleswelcome", true
+	case callbackHelpUtility:
+		return "utility", true
+	case callbackHelpOwner:
+		return "owner", true
+	case callbackHelpFederation:
+		return "federation", true
+	case callbackHelpClones:
+		return "clones", true
+	default:
+		return "", false
+	}
 }
