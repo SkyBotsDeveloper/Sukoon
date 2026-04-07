@@ -153,27 +153,53 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	if !strings.Contains(helpMessage.Text, "Sukoon Help") {
 		t.Fatalf("expected help landing page, got %q", helpMessage.Text)
 	}
+	if !strings.Contains(helpMessage.Text, "https://t.me/VivaanUpdates") || !strings.Contains(helpMessage.Text, serviceutil.WebsiteURL) {
+		t.Fatalf("expected help landing page to link support and website, got %q", helpMessage.Text)
+	}
 	if helpMessage.Options.ReplyToMessageID != 11 {
 		t.Fatalf("expected /help response to reply to message 11, got %+v", helpMessage.Options)
 	}
+	if helpMessage.Options.ParseMode != "HTML" {
+		t.Fatalf("expected /help response to use HTML parse mode, got %+v", helpMessage.Options)
+	}
+	if !helpMessage.Options.DisableWebPagePreview {
+		t.Fatalf("expected /help response to disable web previews, got %+v", helpMessage.Options)
+	}
 	helpMarkup := requireMarkup(t, helpMessage)
 	assertButton(t, helpMarkup, 0, 0, "Admin", "ux:help:admin", "")
-	assertButton(t, helpMarkup, 0, 1, "Approval", "ux:help:approval", "")
-	assertButton(t, helpMarkup, 1, 0, "Bans", "ux:help:bans", "")
-	assertButton(t, helpMarkup, 1, 1, "Antiflood", "ux:help:antiflood", "")
-	assertButton(t, helpMarkup, 2, 0, "Blocklists", "ux:help:blocklists", "")
-	assertButton(t, helpMarkup, 2, 1, "CAPTCHA", "ux:help:captcha", "")
-	assertButton(t, helpMarkup, 3, 0, "Clean Commands", "ux:help:cleancommands", "")
-	assertButton(t, helpMarkup, 3, 1, "Locks", "ux:help:locks", "")
-	assertButton(t, helpMarkup, 4, 0, "Log Channels", "ux:help:logchannels", "")
-	assertButton(t, helpMarkup, 4, 1, "Disabling", "ux:help:disabling", "")
-	assertButton(t, helpMarkup, 5, 0, "Federations", "ux:help:federations", "")
-	assertButton(t, helpMarkup, 5, 1, "Filters", "ux:help:filters", "")
-	assertButton(t, helpMarkup, 6, 0, "Formatting", "ux:help:formatting", "")
-	assertButton(t, helpMarkup, 8, 0, "Home", "ux:start:home", "")
-	assertButton(t, helpMarkup, 8, 1, "Close", "ux:close", "")
-	assertNoButtonText(t, helpMarkup, "AntiRaid")
-	assertNoButtonText(t, helpMarkup, "Connections")
+	assertButton(t, helpMarkup, 0, 1, "Antiflood", "ux:help:antiflood", "")
+	assertButton(t, helpMarkup, 0, 2, "AntiRaid", "ux:help:antiraid", "")
+	assertButton(t, helpMarkup, 1, 0, "Approval", "ux:help:approval", "")
+	assertButton(t, helpMarkup, 1, 1, "Bans", "ux:help:bans", "")
+	assertButton(t, helpMarkup, 1, 2, "Blocklists", "ux:help:blocklists", "")
+	assertButton(t, helpMarkup, 2, 0, "CAPTCHA", "ux:help:captcha", "")
+	assertButton(t, helpMarkup, 2, 1, "Clean Commands", "ux:help:cleancommands", "")
+	assertButton(t, helpMarkup, 2, 2, "Clean Service", "ux:help:cleanservice", "")
+	assertButton(t, helpMarkup, 3, 0, "Connections", "ux:help:connections", "")
+	assertButton(t, helpMarkup, 3, 1, "Disabling", "ux:help:disabling", "")
+	assertButton(t, helpMarkup, 3, 2, "Locks", "ux:help:locks", "")
+	assertButton(t, helpMarkup, 4, 0, "Federations", "ux:help:federations", "")
+	assertButton(t, helpMarkup, 4, 1, "Filters", "ux:help:filters", "")
+	assertButton(t, helpMarkup, 4, 2, "Formatting", "ux:help:formatting", "")
+	assertButton(t, helpMarkup, 5, 0, "Greetings", "ux:help:greetings", "")
+	assertButton(t, helpMarkup, 5, 1, "Import/Export", "ux:help:importexport", "")
+	assertButton(t, helpMarkup, 5, 2, "Languages", "ux:help:languages", "")
+	assertButton(t, helpMarkup, 6, 0, "Log Channels", "ux:help:logchannels", "")
+	assertButton(t, helpMarkup, 6, 1, "Misc", "ux:help:misc", "")
+	assertButton(t, helpMarkup, 6, 2, "Notes", "ux:help:notes", "")
+	assertButton(t, helpMarkup, 7, 0, "Pin", "ux:help:pin", "")
+	assertButton(t, helpMarkup, 7, 1, "Privacy", "ux:help:privacy", "")
+	assertButton(t, helpMarkup, 7, 2, "Purges", "ux:help:purges", "")
+	assertButton(t, helpMarkup, 8, 0, "Reports", "ux:help:reports", "")
+	assertButton(t, helpMarkup, 8, 1, "Rules", "ux:help:rules", "")
+	assertButton(t, helpMarkup, 8, 2, "Topics", "ux:help:topics", "")
+	assertButton(t, helpMarkup, 9, 0, "Warnings", "ux:help:warnings", "")
+	assertButton(t, helpMarkup, 9, 1, "AntiAbuse", "ux:help:antiabuse", "")
+	assertButton(t, helpMarkup, 9, 2, "Bio Links", "ux:help:biolinks", "")
+	assertButton(t, helpMarkup, 10, 0, "Custom Instances", "ux:help:custominstances", "")
+	assertButton(t, helpMarkup, 11, 0, "Docs Website", "", serviceutil.WebsiteURL)
+	assertButton(t, helpMarkup, 12, 0, "Home", "ux:start:home", "")
+	assertButton(t, helpMarkup, 12, 1, "Close", "ux:close", "")
 
 	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
 		UpdateID: 3,
@@ -415,6 +441,11 @@ func TestHelpNavigationSupportsNestedRoseBatchPages(t *testing.T) {
 		{10, "ux:help:formatting_buttons", "Buttons"},
 		{11, "ux:help:formatting", "Formatting"},
 		{12, "ux:help:disabling", "Disabling"},
+		{13, "ux:help:connections", "Connections"},
+		{14, "ux:help:antiraid", "AntiRaid"},
+		{15, "ux:help:antiabuse", "AntiAbuse"},
+		{16, "ux:help:biolinks", "Bio Links"},
+		{17, "ux:help:custominstances", "Custom Instances"},
 	}
 	for _, step := range sequence {
 		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
@@ -452,8 +483,23 @@ func TestHelpNavigationSupportsNestedRoseBatchPages(t *testing.T) {
 	if !strings.Contains(h.Client.EditedMessages[8].Text, "buttonurl:https://misssukoon.vercel.app/") {
 		t.Fatalf("expected buttons page to show live syntax, got %q", h.Client.EditedMessages[8].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[len(h.Client.EditedMessages)-1].Text, "/disabledel [on|off]") {
-		t.Fatalf("expected disabling page, got %q", h.Client.EditedMessages[len(h.Client.EditedMessages)-1].Text)
+	if !strings.Contains(h.Client.EditedMessages[10].Text, "/disabledel [on|off]") {
+		t.Fatalf("expected disabling page, got %q", h.Client.EditedMessages[10].Text)
+	}
+	if !strings.Contains(h.Client.EditedMessages[11].Text, "does not expose remote chat connections") {
+		t.Fatalf("expected truthful connections placeholder, got %q", h.Client.EditedMessages[11].Text)
+	}
+	if !strings.Contains(h.Client.EditedMessages[12].Text, "does not expose dedicated antiraid commands yet") {
+		t.Fatalf("expected truthful antiraid placeholder, got %q", h.Client.EditedMessages[12].Text)
+	}
+	if !strings.Contains(h.Client.EditedMessages[13].Text, "/antiabuse <on|off>") {
+		t.Fatalf("expected antiabuse page, got %q", h.Client.EditedMessages[13].Text)
+	}
+	if !strings.Contains(h.Client.EditedMessages[14].Text, "/freelist") || !strings.Contains(h.Client.EditedMessages[14].Text, "Approved users and freed users bypass") {
+		t.Fatalf("expected bio links page, got %q", h.Client.EditedMessages[14].Text)
+	}
+	if !strings.Contains(h.Client.EditedMessages[15].Text, "/mybot") || !strings.Contains(h.Client.EditedMessages[15].Text, "one active clone") {
+		t.Fatalf("expected custom instances page, got %q", h.Client.EditedMessages[15].Text)
 	}
 }
 

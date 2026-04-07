@@ -50,7 +50,7 @@ func (s *Service) HandleCallback(ctx context.Context, rt *runtime.Context) (bool
 	case callbackStartClone:
 		err = s.sendCallbackPage(ctx, rt, cloneLandingText(), cloneLandingMarkup(rt.Bot.Username))
 	case callbackHelpMain:
-		err = s.sendCallbackPage(ctx, rt, helpLandingText(), helpLandingMarkup(rt.Bot.Username))
+		err = s.sendHelpCallbackPage(ctx, rt, helpRoot)
 	case callbackPrivacy:
 		err = s.sendCallbackPage(ctx, rt, privacyText(), privacyMarkup(rt.Bot.Username))
 	case callbackRulesShow:
@@ -72,7 +72,7 @@ func (s *Service) HandleCallback(ctx context.Context, rt *runtime.Context) (bool
 		if !ok {
 			return false, nil
 		}
-		err = s.sendCallbackPage(ctx, rt, helpPageText(section), helpMarkup(section, rt.Bot.Username))
+		err = s.sendHelpCallbackPage(ctx, rt, section)
 	}
 
 	if ackErr := rt.Client.AnswerCallbackQuery(ctx, rt.CallbackQuery.ID, "", false); ackErr != nil && err == nil {
@@ -99,19 +99,13 @@ func (s *Service) start(ctx context.Context, rt *runtime.Context) error {
 		}))
 		return err
 	case payload == "help", payload == "help_main":
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), helpLandingText(), rt.ReplyOptions(telegram.SendMessageOptions{
-			ReplyMarkup: helpLandingMarkup(rt.Bot.Username),
-		}))
-		return err
+		return s.sendHelpMessage(ctx, rt, helpRoot)
 	case strings.HasPrefix(payload, "help_"):
 		section := normalizeHelpSection(strings.TrimPrefix(payload, "help_"))
 		if section == "" {
 			return fmt.Errorf("unknown help section")
 		}
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), helpPageText(section), rt.ReplyOptions(telegram.SendMessageOptions{
-			ReplyMarkup: helpMarkup(section, rt.Bot.Username),
-		}))
-		return err
+		return s.sendHelpMessage(ctx, rt, section)
 	case strings.HasPrefix(payload, "rules_"):
 		return s.startRules(ctx, rt, strings.TrimPrefix(payload, "rules_"))
 	case payload == "privacy":
@@ -146,17 +140,11 @@ func (s *Service) help(ctx context.Context, rt *runtime.Context) error {
 	if len(rt.Command.Args) > 0 {
 		section := normalizeHelpSection(rt.Command.Args[0])
 		if section != "" {
-			_, err := rt.Client.SendMessage(ctx, rt.ChatID(), helpPageText(section), rt.ReplyOptions(telegram.SendMessageOptions{
-				ReplyMarkup: helpMarkup(section, rt.Bot.Username),
-			}))
-			return err
+			return s.sendHelpMessage(ctx, rt, section)
 		}
 	}
 
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), helpLandingText(), rt.ReplyOptions(telegram.SendMessageOptions{
-		ReplyMarkup: helpLandingMarkup(rt.Bot.Username),
-	}))
-	return err
+	return s.sendHelpMessage(ctx, rt, helpRoot)
 }
 
 func (s *Service) language(ctx context.Context, rt *runtime.Context) error {
@@ -232,6 +220,21 @@ func (s *Service) sendPMGuidance(ctx context.Context, rt *runtime.Context, text 
 		ReplyMarkup: pmGuidanceMarkup(rt.Bot.Username, payload),
 	}))
 	return err
+}
+
+func (s *Service) sendHelpMessage(ctx context.Context, rt *runtime.Context, section string) error {
+	parseMode, disablePreview := helpSectionOptions(section)
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), helpPageText(section), rt.ReplyOptions(telegram.SendMessageOptions{
+		ParseMode:             parseMode,
+		DisableWebPagePreview: disablePreview,
+		ReplyMarkup:           helpMarkup(section, rt.Bot.Username),
+	}))
+	return err
+}
+
+func (s *Service) sendHelpCallbackPage(ctx context.Context, rt *runtime.Context, section string) error {
+	parseMode, disablePreview := helpSectionOptions(section)
+	return s.sendCallbackPageWithOptions(ctx, rt, helpPageText(section), helpMarkup(section, rt.Bot.Username), parseMode, disablePreview)
 }
 
 func (s *Service) sendCallbackPage(ctx context.Context, rt *runtime.Context, text string, markup *telegram.InlineKeyboardMarkup) error {
