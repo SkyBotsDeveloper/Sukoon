@@ -166,6 +166,12 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 		if handled || err != nil {
 			return err
 		}
+		if r.utility != nil {
+			handled, err = r.utility.HandleCallback(ctx, rt)
+			if handled || err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 

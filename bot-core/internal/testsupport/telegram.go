@@ -39,9 +39,10 @@ type StaticClientFactory struct {
 }
 
 type SentMessage struct {
-	ChatID  int64
-	Text    string
-	Options telegram.SendMessageOptions
+	MessageID int64
+	ChatID    int64
+	Text      string
+	Options   telegram.SendMessageOptions
 }
 
 type DeletedMessage struct {
@@ -108,7 +109,7 @@ func (f *FakeTelegramClient) SendMessage(_ context.Context, chatID int64, text s
 		return telegram.Message{}, err
 	}
 	f.nextMessageID++
-	f.Messages = append(f.Messages, SentMessage{ChatID: chatID, Text: text, Options: options})
+	f.Messages = append(f.Messages, SentMessage{MessageID: f.nextMessageID, ChatID: chatID, Text: text, Options: options})
 	return telegram.Message{
 		MessageID: f.nextMessageID,
 		Chat:      telegram.Chat{ID: chatID},

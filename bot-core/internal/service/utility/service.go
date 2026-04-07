@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"sukoon/bot-core/internal/i18n"
@@ -36,42 +37,124 @@ func (s *Service) Handle(ctx context.Context, rt *runtime.Context) (bool, error)
 	}
 }
 
-func (s *Service) start(ctx context.Context, rt *runtime.Context) error {
-	text := "Sukoon is online and ready.\nUse /help to see the command groups and common moderation flows."
-	if rt.Message != nil && rt.Message.Chat.Type == "private" {
-		text = strings.Join([]string{
-			"Welcome to Sukoon.",
-			"Sukoon is a Telegram moderation and group-management bot built for fast admin workflows.",
-			"Add the bot to a group, grant the permissions you want it to enforce, then use /help for the main command set.",
-		}, "\n")
+func (s *Service) HandleCallback(ctx context.Context, rt *runtime.Context) (bool, error) {
+	if rt.CallbackQuery == nil || !strings.HasPrefix(rt.CallbackQuery.Data, "ux:") {
+		return false, nil
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
-	return err
+
+	var err error
+	switch rt.CallbackQuery.Data {
+	case callbackStartHome:
+		err = s.sendCallbackPage(ctx, rt, startLandingText(), startLandingMarkup(rt.Bot.Username))
+	case callbackHelpMain:
+		err = s.sendCallbackPage(ctx, rt, helpLandingText(), helpLandingMarkup(rt.Bot.Username))
+	case callbackHelpModeration:
+		err = s.sendCallbackPage(ctx, rt, helpPageText("moderation"), helpSectionMarkup(rt.Bot.Username))
+	case callbackHelpAdmin:
+		err = s.sendCallbackPage(ctx, rt, helpPageText("admin"), helpSectionMarkup(rt.Bot.Username))
+	case callbackHelpProtection:
+		err = s.sendCallbackPage(ctx, rt, helpPageText("protection"), helpSectionMarkup(rt.Bot.Username))
+	case callbackHelpContent:
+		err = s.sendCallbackPage(ctx, rt, helpPageText("content"), helpSectionMarkup(rt.Bot.Username))
+	case callbackHelpUtility:
+		err = s.sendCallbackPage(ctx, rt, helpPageText("utility"), helpSectionMarkup(rt.Bot.Username))
+	case callbackHelpAdvanced:
+		err = s.sendCallbackPage(ctx, rt, helpPageText("advanced"), helpSectionMarkup(rt.Bot.Username))
+	case callbackPrivacy:
+		err = s.sendCallbackPage(ctx, rt, privacyText(), privacyMarkup(rt.Bot.Username))
+	case callbackRulesShow:
+		if strings.TrimSpace(rt.RuntimeBundle.Settings.RulesText) == "" {
+			err = fmt.Errorf("rules are not set")
+			break
+		}
+		chatTitle := ""
+		if rt.CallbackQuery.Message != nil {
+			chatTitle = rt.CallbackQuery.Message.Chat.Title
+		}
+		err = s.sendCallbackPage(ctx, rt, rulesText(chatTitle, rt.RuntimeBundle.Settings.RulesText), rulesShownHereMarkup(rt.Bot.Username, rt.ChatID()))
+	case callbackClose:
+		err = s.closeCallbackMessage(ctx, rt)
+	default:
+		return false, nil
+	}
+
+	if ackErr := rt.Client.AnswerCallbackQuery(ctx, rt.CallbackQuery.ID, "", false); ackErr != nil && err == nil {
+		err = ackErr
+	}
+	return true, err
+}
+
+func (s *Service) start(ctx context.Context, rt *runtime.Context) error {
+	if !isPrivateChat(rt) {
+		return s.sendPMGuidance(ctx, rt,
+			"Sukoon is active in this group. Open PM for the full help menu, personal tools, and cleaner navigation.",
+			"help_main",
+		)
+	}
+
+	payload := strings.ToLower(strings.TrimSpace(rt.Command.RawArgs))
+	switch {
+	case payload == "", payload == "home":
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), startLandingText(), rt.ReplyOptions(telegram.SendMessageOptions{
+			ReplyMarkup: startLandingMarkup(rt.Bot.Username),
+		}))
+		return err
+	case payload == "help", payload == "help_main":
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), helpLandingText(), rt.ReplyOptions(telegram.SendMessageOptions{
+			ReplyMarkup: helpLandingMarkup(rt.Bot.Username),
+		}))
+		return err
+	case strings.HasPrefix(payload, "help_"):
+		section := normalizeHelpSection(strings.TrimPrefix(payload, "help_"))
+		if section == "" {
+			return fmt.Errorf("unknown help section")
+		}
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), helpPageText(section), rt.ReplyOptions(telegram.SendMessageOptions{
+			ReplyMarkup: helpSectionMarkup(rt.Bot.Username),
+		}))
+		return err
+	case strings.HasPrefix(payload, "rules_"):
+		return s.startRules(ctx, rt, strings.TrimPrefix(payload, "rules_"))
+	case payload == "privacy":
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), privacyText(), rt.ReplyOptions(telegram.SendMessageOptions{
+			ReplyMarkup: privacyMarkup(rt.Bot.Username),
+		}))
+		return err
+	default:
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), startLandingText(), rt.ReplyOptions(telegram.SendMessageOptions{
+			ReplyMarkup: startLandingMarkup(rt.Bot.Username),
+		}))
+		return err
+	}
 }
 
 func (s *Service) help(ctx context.Context, rt *runtime.Context) error {
-	lines := []string{
-		"Sukoon help",
-		"",
-		"Moderation:",
-		"/ban, /tban, /unban, /mute, /tmute, /unmute, /kick, /warn, /warns, /resetwarns",
-		"",
-		"Admin:",
-		"/approve, /unapprove, /approved, /disable, /enable, /disabled, /logchannel, /reports, /report",
-		"/cleancommands, /cleanservice, /nocleanservice, /cleanservicetypes, /pin, /unpin, /unpinall, /mods",
-		"",
-		"Protection:",
-		"/lock, /unlock, /locks, /addblocklist, /rmbl, /blocklist, /setflood, /setfloodmode, /captcha",
-		"",
-		"Content and info:",
-		"/setrules, /rules, /save, /get, /clear, /filter, /stop, /welcome, /goodbye",
-		"",
-		"Utility:",
-		"/start, /help, /privacy, /mydata, /forgetme confirm, /setlang",
-		"",
-		"Tip: for most moderation actions, reply to the target user's message before running the command.",
+	if !isPrivateChat(rt) {
+		payload := "help_main"
+		if len(rt.Command.Args) > 0 {
+			if section := normalizeHelpSection(rt.Command.Args[0]); section != "" {
+				payload = "help_" + section
+			}
+		}
+		return s.sendPMGuidance(ctx, rt,
+			"The full help menu is easier to browse in PM. Open Sukoon privately for category buttons and cleaner help pages.",
+			payload,
+		)
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), strings.Join(lines, "\n"), rt.ReplyOptions(telegram.SendMessageOptions{}))
+
+	if len(rt.Command.Args) > 0 {
+		section := normalizeHelpSection(rt.Command.Args[0])
+		if section != "" {
+			_, err := rt.Client.SendMessage(ctx, rt.ChatID(), helpPageText(section), rt.ReplyOptions(telegram.SendMessageOptions{
+				ReplyMarkup: helpSectionMarkup(rt.Bot.Username),
+			}))
+			return err
+		}
+	}
+
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), helpLandingText(), rt.ReplyOptions(telegram.SendMessageOptions{
+		ReplyMarkup: helpLandingMarkup(rt.Bot.Username),
+	}))
 	return err
 }
 
@@ -95,11 +178,25 @@ func (s *Service) language(ctx context.Context, rt *runtime.Context) error {
 }
 
 func (s *Service) privacy(ctx context.Context, rt *runtime.Context) error {
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), i18n.T(rt.RuntimeBundle.Settings.Language, "privacy.info"), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	if !isPrivateChat(rt) {
+		return s.sendPMGuidance(ctx, rt,
+			"Privacy and personal data controls are better handled in PM.",
+			"privacy",
+		)
+	}
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), privacyText(), rt.ReplyOptions(telegram.SendMessageOptions{
+		ReplyMarkup: privacyMarkup(rt.Bot.Username),
+	}))
 	return err
 }
 
 func (s *Service) myData(ctx context.Context, rt *runtime.Context) error {
+	if !isPrivateChat(rt) {
+		return s.sendPMGuidance(ctx, rt,
+			"Use /mydata in PM so your exported data stays private.",
+			"privacy",
+		)
+	}
 	export, err := rt.Store.ExportUserData(ctx, rt.Bot.ID, rt.ActorID())
 	if err != nil {
 		return err
@@ -113,6 +210,12 @@ func (s *Service) myData(ctx context.Context, rt *runtime.Context) error {
 }
 
 func (s *Service) forgetMe(ctx context.Context, rt *runtime.Context) error {
+	if !isPrivateChat(rt) {
+		return s.sendPMGuidance(ctx, rt,
+			"Use /forgetme in PM before deleting personal data for this bot.",
+			"privacy",
+		)
+	}
 	if len(rt.Command.Args) == 0 || !strings.EqualFold(rt.Command.Args[0], "confirm") {
 		return fmt.Errorf("usage: /forgetme confirm")
 	}
@@ -121,4 +224,60 @@ func (s *Service) forgetMe(ctx context.Context, rt *runtime.Context) error {
 	}
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), i18n.T(rt.RuntimeBundle.Settings.Language, "privacy.deleted"), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
+}
+
+func (s *Service) sendPMGuidance(ctx context.Context, rt *runtime.Context, text string, payload string) error {
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{
+		ReplyMarkup: pmGuidanceMarkup(rt.Bot.Username, payload),
+	}))
+	return err
+}
+
+func (s *Service) sendCallbackPage(ctx context.Context, rt *runtime.Context, text string, markup *telegram.InlineKeyboardMarkup) error {
+	if err := s.closeCallbackMessage(ctx, rt); err != nil {
+		return err
+	}
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, telegram.SendMessageOptions{
+		ReplyMarkup: markup,
+	})
+	return err
+}
+
+func (s *Service) closeCallbackMessage(ctx context.Context, rt *runtime.Context) error {
+	if rt.CallbackQuery == nil || rt.CallbackQuery.Message == nil {
+		return nil
+	}
+	return rt.Client.DeleteMessage(ctx, rt.ChatID(), rt.CallbackQuery.Message.MessageID)
+}
+
+func (s *Service) startRules(ctx context.Context, rt *runtime.Context, rawChatID string) error {
+	chatID, err := strconv.ParseInt(strings.TrimSpace(rawChatID), 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid rules target")
+	}
+	bundle, err := rt.Store.LoadRuntimeBundle(ctx, rt.Bot.ID, chatID)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(bundle.Settings.RulesText) == "" {
+		return fmt.Errorf("rules are not set")
+	}
+	chatTitle := "this group"
+	if chat, err := rt.Client.GetChat(ctx, chatID); err == nil && strings.TrimSpace(chat.Title) != "" {
+		chatTitle = chat.Title
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rulesText(chatTitle, bundle.Settings.RulesText), rt.ReplyOptions(telegram.SendMessageOptions{
+		ReplyMarkup: rulesPMMarkup(rt.Bot.Username),
+	}))
+	return err
+}
+
+func isPrivateChat(rt *runtime.Context) bool {
+	if rt.Message != nil {
+		return rt.Message.Chat.Type == "private"
+	}
+	if rt.CallbackQuery != nil && rt.CallbackQuery.Message != nil {
+		return rt.CallbackQuery.Message.Chat.Type == "private"
+	}
+	return false
 }

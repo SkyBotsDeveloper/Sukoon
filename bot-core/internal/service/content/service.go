@@ -282,6 +282,37 @@ func (s *Service) rules(ctx context.Context, rt *runtime.Context) error {
 	if strings.TrimSpace(rt.RuntimeBundle.Settings.RulesText) == "" {
 		return fmt.Errorf("rules are not set")
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), rt.RuntimeBundle.Settings.RulesText, rt.ReplyOptions(telegram.SendMessageOptions{}))
+	if rt.Message != nil && rt.Message.Chat.Type != "private" {
+		text := "Rules are available below. Open them in PM for a cleaner view, or use the inline button to show them here."
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{
+			ReplyMarkup: serviceutil.Markup(
+				[]telegram.InlineKeyboardButton{
+					{Text: "Open PM", URL: serviceutil.BotDeepLink(rt.Bot.Username, fmt.Sprintf("rules_%d", rt.ChatID()))},
+					{Text: "Show Here", CallbackData: "ux:rules:show"},
+				},
+				[]telegram.InlineKeyboardButton{
+					{Text: "Help", URL: serviceutil.BotDeepLink(rt.Bot.Username, "help_main")},
+					{Text: "Website", URL: serviceutil.WebsiteURL},
+				},
+				[]telegram.InlineKeyboardButton{
+					{Text: "Close", CallbackData: "ux:close"},
+				},
+			),
+		}))
+		return err
+	}
+
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), rt.RuntimeBundle.Settings.RulesText, rt.ReplyOptions(telegram.SendMessageOptions{
+		ReplyMarkup: serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Help", CallbackData: "ux:help:main"},
+				{Text: "Website", URL: serviceutil.WebsiteURL},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: "ux:start:home"},
+				{Text: "Close", CallbackData: "ux:close"},
+			},
+		),
+	}))
 	return err
 }
