@@ -16,19 +16,31 @@ const (
 	callbackClose      = "ux:close"
 	callbackRulesShow  = "ux:rules:show"
 
-	helpRoot              = "root"
-	helpAdmin             = "admin"
-	helpAntiflood         = "antiflood"
-	helpApproval          = "approval"
-	helpBans              = "bans"
-	helpBlocklists        = "blocklists"
-	helpBlocklistExamples = "blocklists_examples"
-	helpCaptcha           = "captcha"
-	helpCleanCommands     = "cleancommands"
-	helpLocks             = "locks"
-	helpLockDescriptions  = "locks_descriptions"
-	helpLockExamples      = "locks_examples"
-	helpLogChannels       = "logchannels"
+	helpRoot               = "root"
+	helpAdmin              = "admin"
+	helpAntiflood          = "antiflood"
+	helpApproval           = "approval"
+	helpBans               = "bans"
+	helpBlocklists         = "blocklists"
+	helpBlocklistExamples  = "blocklists_examples"
+	helpCaptcha            = "captcha"
+	helpCleanCommands      = "cleancommands"
+	helpDisabling          = "disabling"
+	helpFederations        = "federations"
+	helpFederationsAdmin   = "federations_admin"
+	helpFederationsOwner   = "federations_owner"
+	helpFederationsUser    = "federations_user"
+	helpFilters            = "filters"
+	helpFilterExamples     = "filters_examples"
+	helpFormatting         = "formatting"
+	helpFormattingMarkdown = "formatting_markdown"
+	helpFormattingFillings = "formatting_fillings"
+	helpFormattingRandom   = "formatting_random"
+	helpFormattingButtons  = "formatting_buttons"
+	helpLocks              = "locks"
+	helpLockDescriptions   = "locks_descriptions"
+	helpLockExamples       = "locks_examples"
+	helpLogChannels        = "logchannels"
 )
 
 type helpPage struct {
@@ -150,6 +162,177 @@ var helpPages = map[string]helpPage{
 			"Examples:",
 			"/cleancommand on",
 			"/keepcommand",
+		},
+	},
+	helpDisabling: {
+		Title: "Disabling",
+		Lines: []string{
+			"Disable command families for normal members without removing the feature from Sukoon entirely.",
+			"",
+			"/disable <commandname>",
+			"/enable <commandname>",
+			"/disableable",
+			"/disabledel [on|off]",
+			"/disableadmin [on|off]",
+			"/disabled",
+			"",
+			"By default, disabled commands affect non-admins only. Enable /disableadmin if chat admins should also be blocked.",
+			"Turn on /disabledel to delete disabled command messages instead of replying.",
+			"",
+			"Examples:",
+			"/disable reports",
+			"/disabledel on",
+			"/disableadmin on",
+		},
+	},
+	helpFederations: {
+		Title: "Federations",
+		Lines: []string{
+			"Federations link multiple chats under one shared moderation namespace.",
+			"",
+			"Use federation pages below for the live Sukoon command groups: shared bans, federation admins, chat linking, and ownership workflows.",
+			"",
+			"Only the commands backed by the current Go runtime are shown.",
+		},
+	},
+	helpFederationsAdmin: {
+		Title: "Fed Admin Commands",
+		Lines: []string{
+			"Federation admins manage shared bans across every joined chat.",
+			"",
+			"/fban <reply|user> [reason]",
+			"/unfban <reply|user>",
+			"/feddemoteme [federation]",
+			"/myfeds",
+			"",
+			"Use these from a fed-linked chat, or pass a federation short name where the command supports it.",
+		},
+	},
+	helpFederationsOwner: {
+		Title: "Federation Owner Commands",
+		Lines: []string{
+			"Federation owners manage the federation itself and its admin list.",
+			"",
+			"/newfed <short_name> [display name]",
+			"/renamefed <short_name> [display name]",
+			"/delfed",
+			"/fedtransfer <reply|user>",
+			"/fedpromote <reply|user>",
+			"/feddemote <reply|user>",
+			"",
+			"Fed notifications, subscriptions, import/export, fed logs, and fed language settings are still deferred.",
+		},
+	},
+	helpFederationsUser: {
+		Title: "Federation User Commands",
+		Lines: []string{
+			"These commands inspect or link the current chat to a federation.",
+			"",
+			"/fedinfo",
+			"/fedadmins",
+			"/joinfed <federation>",
+			"/leavefed",
+			"/chatfed",
+			"",
+			"Rose-style quietfed, fedsubs, and fedstat are still deferred in Sukoon.",
+		},
+	},
+	helpFilters: {
+		Title: "Filters",
+		Lines: []string{
+			"Filters auto-reply when incoming text contains the configured trigger. Matching is case-insensitive in the current build.",
+			"",
+			"/filter <trigger> <reply>",
+			"/filters",
+			"/stop <trigger>",
+			"/stopall",
+			"",
+			"Quoted triggers are supported for multi-word phrases. Open the example and formatting pages below for live syntax.",
+		},
+	},
+	helpFilterExamples: {
+		Title: "Filter Example Usage",
+		Lines: []string{
+			"Truthful examples for the current Sukoon filter parser:",
+			"",
+			"/filter hello Hi there",
+			"/filter \"buy now\" Sales links are not allowed here.",
+			"/filter welcome Welcome {first}",
+			"/filter rules Please read {rules}",
+			"/filter ping Pong %%% Still here %%% Online",
+			"/stop hello | buy now",
+			"",
+			"Reply-tag filters, protected filters, exact/prefix match toggles, and media-save shortcuts are still deferred.",
+		},
+	},
+	helpFormatting: {
+		Title: "Formatting",
+		Lines: []string{
+			"Sukoon's stored-content formatting is intentionally narrow and safe.",
+			"",
+			"Current support focuses on real runtime features: button rows, contextual fillings, and random-content separators.",
+			"",
+			"Open the pages below for the exact syntax Sukoon currently supports.",
+		},
+	},
+	helpFormattingMarkdown: {
+		Title: "Markdown Formatting",
+		Lines: []string{
+			"Sukoon does not expose the full Rose-style markdown helper set in stored content yet.",
+			"",
+			"Guaranteed syntax today:",
+			"- button rows with [Label](buttonurl:https://example.com)",
+			"- contextual fillings such as {first} and {chatname}",
+			"- random choices using %%%",
+			"",
+			"Rose-style bold, italics, spoiler, code blocks, quotes, note buttons, and styled buttons are still deferred in the current runtime.",
+		},
+	},
+	helpFormattingFillings: {
+		Title: "Fillings",
+		Lines: []string{
+			"Supported contextual fillings in the current build:",
+			"",
+			"{first}",
+			"{last}",
+			"{fullname}",
+			"{username}",
+			"{mention}",
+			"{id}",
+			"{chat}",
+			"{chatname}",
+			"{rules}",
+			"{rules:same}",
+			"",
+			"{mention} renders @username when available, otherwise the user's display name.",
+			"Preview/protect/nonotif/mediaspoiler control tags are still deferred.",
+		},
+	},
+	helpFormattingRandom: {
+		Title: "Random Content",
+		Lines: []string{
+			"Use %%% between choices to let Sukoon pick one reply at send time.",
+			"",
+			"Supported in notes, filters, welcome text, goodbye text, and rules text.",
+			"",
+			"Examples:",
+			"Hello {first} %%% Welcome back {first}",
+			"/filter ping Pong %%% Still here %%% Online",
+			"/setwelcome on Welcome {first} %%% Glad you're here {first}",
+		},
+	},
+	helpFormattingButtons: {
+		Title: "Buttons",
+		Lines: []string{
+			"Supported button syntax in stored content:",
+			"",
+			"[Website](buttonurl:https://misssukoon.vercel.app/)",
+			"[Docs](buttonurl:https://example.com) [Status](buttonurl:https://example.org)",
+			"",
+			"Buttons on the same line stay in the same row. Start a new line for a new row.",
+			"Callback-style note buttons and Rose-style button styling are still deferred.",
+			"",
+			"Website: https://misssukoon.vercel.app/",
 		},
 	},
 	helpLocks: {
@@ -275,6 +458,10 @@ func startLandingMarkup(username string) *telegram.InlineKeyboardMarkup {
 			{Text: "Bans", CallbackData: helpCallback(helpBans)},
 		},
 		[]telegram.InlineKeyboardButton{
+			{Text: "Filters", CallbackData: helpCallback(helpFilters)},
+			{Text: "Federations", CallbackData: helpCallback(helpFederations)},
+		},
+		[]telegram.InlineKeyboardButton{
 			{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
 			{Text: "Privacy", CallbackData: callbackPrivacy},
 		},
@@ -304,6 +491,14 @@ func helpLandingMarkup(username string) *telegram.InlineKeyboardMarkup {
 		},
 		[]telegram.InlineKeyboardButton{
 			{Text: "Log Channels", CallbackData: helpCallback(helpLogChannels)},
+			{Text: "Disabling", CallbackData: helpCallback(helpDisabling)},
+		},
+		[]telegram.InlineKeyboardButton{
+			{Text: "Federations", CallbackData: helpCallback(helpFederations)},
+			{Text: "Filters", CallbackData: helpCallback(helpFilters)},
+		},
+		[]telegram.InlineKeyboardButton{
+			{Text: "Formatting", CallbackData: helpCallback(helpFormatting)},
 		},
 		[]telegram.InlineKeyboardButton{
 			{Text: "Website", URL: serviceutil.WebsiteURL},
@@ -322,6 +517,69 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
 				{Text: "Examples", CallbackData: helpCallback(helpBlocklistExamples)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: callbackHelpMain},
+				{Text: "Home", CallbackData: callbackStartHome},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Website", URL: serviceutil.WebsiteURL},
+				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Close", CallbackData: callbackClose},
+			},
+		)
+	case helpFederations:
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Fed Admin Commands", CallbackData: helpCallback(helpFederationsAdmin)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Federation Owner Commands", CallbackData: helpCallback(helpFederationsOwner)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "User Commands", CallbackData: helpCallback(helpFederationsUser)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: callbackHelpMain},
+				{Text: "Home", CallbackData: callbackStartHome},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Website", URL: serviceutil.WebsiteURL},
+				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Close", CallbackData: callbackClose},
+			},
+		)
+	case helpFilters:
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Example Usage", CallbackData: helpCallback(helpFilterExamples)},
+				{Text: "Formatting", CallbackData: helpCallback(helpFormatting)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: callbackHelpMain},
+				{Text: "Home", CallbackData: callbackStartHome},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Website", URL: serviceutil.WebsiteURL},
+				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Close", CallbackData: callbackClose},
+			},
+		)
+	case helpFormatting:
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Markdown Formatting", CallbackData: helpCallback(helpFormattingMarkdown)},
+				{Text: "Buttons", CallbackData: helpCallback(helpFormattingButtons)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Fillings", CallbackData: helpCallback(helpFormattingFillings)},
+				{Text: "Random Content", CallbackData: helpCallback(helpFormattingRandom)},
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},
@@ -355,6 +613,29 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 		)
 	case helpBlocklistExamples:
 		return helpSubsectionMarkup(username, helpBlocklists)
+	case helpFederationsAdmin, helpFederationsOwner, helpFederationsUser:
+		return helpSubsectionMarkup(username, helpFederations)
+	case helpFilterExamples:
+		return helpSubsectionMarkup(username, helpFilters)
+	case helpFormattingMarkdown:
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Buttons", CallbackData: helpCallback(helpFormattingButtons)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: helpCallback(helpFormatting)},
+				{Text: "Home", CallbackData: callbackStartHome},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Website", URL: serviceutil.WebsiteURL},
+				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Close", CallbackData: callbackClose},
+			},
+		)
+	case helpFormattingFillings, helpFormattingRandom, helpFormattingButtons:
+		return helpSubsectionMarkup(username, helpFormatting)
 	case helpLockDescriptions, helpLockExamples:
 		return helpSubsectionMarkup(username, helpLocks)
 	default:
@@ -471,8 +752,6 @@ func normalizeHelpSection(value string) string {
 		return helpApproval
 	case "bans", "ban", "moderation", "mute", "kick", "kickme", "warn", "warnings":
 		return helpBans
-	case "protection", "security", "spam":
-		return helpRoot
 	case "blocklist", "blocklists", "rmblocklist", "rmbl", "unblocklistall":
 		return helpBlocklists
 	case "blocklists_examples", "blocklistexamples", "blocklist_examples":
@@ -481,6 +760,30 @@ func normalizeHelpSection(value string) string {
 		return helpCaptcha
 	case "clean", "cleanup", "cleancommands", "cleancommand", "keepcommand", "cleancommandtypes":
 		return helpCleanCommands
+	case "disable", "enable", "disabled", "disableable", "disabledel", "disableadmin", "disabling":
+		return helpDisabling
+	case "federation", "federations", "fed", "newfed", "renamefed", "delfed", "fedtransfer":
+		return helpFederations
+	case "fedadmincommands", "federations_admin", "federation_admin", "fed_admin", "fban", "unfban", "feddemoteme", "myfeds":
+		return helpFederationsAdmin
+	case "fedownercommands", "federations_owner", "federation_owner", "fed_owner", "fedpromote", "feddemote":
+		return helpFederationsOwner
+	case "fedusercommands", "federations_user", "federation_user", "fed_user", "fedinfo", "fedadmins", "joinfed", "leavefed", "chatfed":
+		return helpFederationsUser
+	case "filters", "filter", "stop", "stopall":
+		return helpFilters
+	case "filters_examples", "filterexamples", "filter_examples", "exampleusage":
+		return helpFilterExamples
+	case "formatting":
+		return helpFormatting
+	case "formatting_markdown", "markdown", "markdownformatting":
+		return helpFormattingMarkdown
+	case "formatting_fillings", "fillings", "filling":
+		return helpFormattingFillings
+	case "formatting_random", "randomcontent", "random":
+		return helpFormattingRandom
+	case "formatting_buttons", "buttons", "button":
+		return helpFormattingButtons
 	case "locks", "lock", "unlock", "locktypes":
 		return helpLocks
 	case "locks_descriptions", "lockdescriptions", "lock_descriptions":
@@ -489,7 +792,9 @@ func normalizeHelpSection(value string) string {
 		return helpLockExamples
 	case "log", "logs", "logchannel", "logchannels", "setlog", "unsetlog", "nolog", "logcategories":
 		return helpLogChannels
-	case "notesfilters", "notes", "filters", "ruleswelcome", "rules", "utility", "privacy", "owner", "federation", "clones":
+	case "connections", "connect", "disconnect", "reconnect", "connection":
+		return ""
+	case "notesfilters", "notes", "ruleswelcome", "rules", "utility", "privacy", "owner", "clones", "protection", "security", "spam":
 		return helpRoot
 	default:
 		return ""

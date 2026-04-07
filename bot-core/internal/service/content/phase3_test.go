@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"sukoon/bot-core/internal/telegram"
@@ -167,5 +168,107 @@ func TestNotesAndFiltersListingAndRulesAliases(t *testing.T) {
 	}
 	if bundle.Settings.RulesText != "" {
 		t.Fatalf("expected resetrules to clear rules, got %q", bundle.Settings.RulesText)
+	}
+}
+
+func TestFiltersSupportQuotedTriggersStopAllAndContentFillings(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100733, Type: "supergroup", Title: "Formatting"}
+
+	for idx, cmd := range []string{
+		"/setrules No spam here",
+		"/filter \"buy now\" Hello {fullname} from {chatname}",
+		"/filter ping Pong %%% Still here %%% Online",
+	} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(idx + 1),
+			Message: &telegram.Message{
+				MessageID: int64(idx + 50),
+				From:      &telegram.User{ID: 1, FirstName: "Owner"},
+				Chat:      chat,
+				Text:      cmd,
+			},
+		}); err != nil {
+			t.Fatalf("setup command %q failed: %v", cmd, err)
+		}
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 10,
+		Message: &telegram.Message{
+			MessageID: 60,
+			From:      &telegram.User{ID: 20, FirstName: "Filter", LastName: "User"},
+			Chat:      chat,
+			Text:      "please BUY NOW",
+		},
+	}); err != nil {
+		t.Fatalf("quoted filter trigger failed: %v", err)
+	}
+	quoted := h.Client.Messages[len(h.Client.Messages)-1]
+	if quoted.Text != "Hello Filter User from Formatting" {
+		t.Fatalf("expected fillings in quoted filter response, got %q", quoted.Text)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 11,
+		Message: &telegram.Message{
+			MessageID: 61,
+			From:      &telegram.User{ID: 20, FirstName: "Filter", LastName: "User"},
+			Chat:      chat,
+			Text:      "ping",
+		},
+	}); err != nil {
+		t.Fatalf("random filter trigger failed: %v", err)
+	}
+	randomReply := h.Client.Messages[len(h.Client.Messages)-1].Text
+	if randomReply != "Pong" && randomReply != "Still here" && randomReply != "Online" {
+		t.Fatalf("expected one configured random reply, got %q", randomReply)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 12,
+		Message: &telegram.Message{
+			MessageID: 62,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/stopall",
+		},
+	}); err != nil {
+		t.Fatalf("stopall failed: %v", err)
+	}
+
+	filters, err := h.Store.ListFilters(context.Background(), h.Bot.ID, chat.ID)
+	if err != nil {
+		t.Fatalf("list filters failed: %v", err)
+	}
+	if len(filters) != 0 {
+		t.Fatalf("expected stopall to remove all filters, got %+v", filters)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 13,
+		Message: &telegram.Message{
+			MessageID: 63,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/save greet Welcome {mention} %%% Read {rules}",
+		},
+	}); err != nil {
+		t.Fatalf("save note with fillings failed: %v", err)
+	}
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 14,
+		Message: &telegram.Message{
+			MessageID: 64,
+			From:      &telegram.User{ID: 20, FirstName: "Filter", Username: "filteruser"},
+			Chat:      chat,
+			Text:      "/get greet",
+		},
+	}); err != nil {
+		t.Fatalf("get filled note failed: %v", err)
+	}
+	noteText := h.Client.Messages[len(h.Client.Messages)-1].Text
+	if !strings.Contains(noteText, "@filteruser") && !strings.Contains(noteText, "Read No spam here") {
+		t.Fatalf("expected note fillings or random content to resolve, got %q", noteText)
 	}
 }

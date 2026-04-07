@@ -117,9 +117,11 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	assertButton(t, startMarkup, 0, 1, "Website", "", serviceutil.WebsiteURL)
 	assertButton(t, startMarkup, 1, 0, "Admin", "ux:help:admin", "")
 	assertButton(t, startMarkup, 1, 1, "Bans", "ux:help:bans", "")
-	assertButton(t, startMarkup, 2, 0, "Add to Group", "", serviceutil.BotAddGroupLink(h.Bot.Username))
-	assertButton(t, startMarkup, 2, 1, "Privacy", "ux:privacy", "")
-	assertButton(t, startMarkup, 3, 0, "Close", "ux:close", "")
+	assertButton(t, startMarkup, 2, 0, "Filters", "ux:help:filters", "")
+	assertButton(t, startMarkup, 2, 1, "Federations", "ux:help:federations", "")
+	assertButton(t, startMarkup, 3, 0, "Add to Group", "", serviceutil.BotAddGroupLink(h.Bot.Username))
+	assertButton(t, startMarkup, 3, 1, "Privacy", "ux:privacy", "")
+	assertButton(t, startMarkup, 4, 0, "Close", "ux:close", "")
 
 	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
 		UpdateID: 2,
@@ -159,9 +161,14 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	assertButton(t, helpMarkup, 3, 0, "Clean Commands", "ux:help:cleancommands", "")
 	assertButton(t, helpMarkup, 3, 1, "Locks", "ux:help:locks", "")
 	assertButton(t, helpMarkup, 4, 0, "Log Channels", "ux:help:logchannels", "")
-	assertButton(t, helpMarkup, 6, 0, "Home", "ux:start:home", "")
-	assertButton(t, helpMarkup, 6, 1, "Close", "ux:close", "")
+	assertButton(t, helpMarkup, 4, 1, "Disabling", "ux:help:disabling", "")
+	assertButton(t, helpMarkup, 5, 0, "Federations", "ux:help:federations", "")
+	assertButton(t, helpMarkup, 5, 1, "Filters", "ux:help:filters", "")
+	assertButton(t, helpMarkup, 6, 0, "Formatting", "ux:help:formatting", "")
+	assertButton(t, helpMarkup, 8, 0, "Home", "ux:start:home", "")
+	assertButton(t, helpMarkup, 8, 1, "Close", "ux:close", "")
 	assertNoButtonText(t, helpMarkup, "AntiRaid")
+	assertNoButtonText(t, helpMarkup, "Connections")
 
 	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
 		UpdateID: 3,
@@ -258,6 +265,81 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	}
 	if len(h.Client.CallbackAnswers) != 5 {
 		t.Fatalf("expected callback answers for menu navigation, got %+v", h.Client.CallbackAnswers)
+	}
+}
+
+func TestHelpNavigationSupportsNestedRoseBatchPages(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: 51, Type: "private"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 20,
+			From:      &telegram.User{ID: 51, FirstName: "User"},
+			Chat:      chat,
+			Text:      "/help",
+		},
+	}); err != nil {
+		t.Fatalf("help failed: %v", err)
+	}
+
+	root := h.Client.Messages[len(h.Client.Messages)-1]
+	sequence := []struct {
+		updateID int64
+		data     string
+		want     string
+	}{
+		{2, "ux:help:federations", "Federations"},
+		{3, "ux:help:federations_owner", "Federation Owner Commands"},
+		{4, "ux:help:federations", "Federations"},
+		{5, "ux:help:filters", "Filters"},
+		{6, "ux:help:filters_examples", "Filter Example Usage"},
+		{7, "ux:help:filters", "Filters"},
+		{8, "ux:help:formatting", "Formatting"},
+		{9, "ux:help:formatting_markdown", "Markdown Formatting"},
+		{10, "ux:help:formatting_buttons", "Buttons"},
+		{11, "ux:help:formatting", "Formatting"},
+		{12, "ux:help:disabling", "Disabling"},
+	}
+	for _, step := range sequence {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: step.updateID,
+			CallbackQuery: &telegram.CallbackQuery{
+				ID:   step.data,
+				From: telegram.User{ID: 51, FirstName: "User"},
+				Message: &telegram.Message{
+					MessageID: root.MessageID,
+					Chat:      chat,
+				},
+				Data: step.data,
+			},
+		}); err != nil {
+			t.Fatalf("callback %q failed: %v", step.data, err)
+		}
+		last := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+		if last.MessageID != root.MessageID {
+			t.Fatalf("expected in-place edit for %q, got %+v", step.data, last)
+		}
+		if !strings.Contains(last.Text, step.want) {
+			t.Fatalf("expected page %q to contain %q, got %q", step.data, step.want, last.Text)
+		}
+	}
+
+	if !strings.Contains(h.Client.EditedMessages[1].Text, "/renamefed") || !strings.Contains(h.Client.EditedMessages[1].Text, "/fedtransfer") {
+		t.Fatalf("expected federation owner page to list live owner commands, got %q", h.Client.EditedMessages[1].Text)
+	}
+	if !strings.Contains(h.Client.EditedMessages[4].Text, "/filter \"buy now\"") || !strings.Contains(h.Client.EditedMessages[4].Text, "/stop hello | buy now") {
+		t.Fatalf("expected filter examples page, got %q", h.Client.EditedMessages[4].Text)
+	}
+	if !strings.Contains(h.Client.EditedMessages[7].Text, "Rose-style markdown helper set") {
+		t.Fatalf("expected truthful markdown page, got %q", h.Client.EditedMessages[7].Text)
+	}
+	if !strings.Contains(h.Client.EditedMessages[8].Text, "buttonurl:https://misssukoon.vercel.app/") {
+		t.Fatalf("expected buttons page to show live syntax, got %q", h.Client.EditedMessages[8].Text)
+	}
+	if !strings.Contains(h.Client.EditedMessages[len(h.Client.EditedMessages)-1].Text, "/disabledel [on|off]") {
+		t.Fatalf("expected disabling page, got %q", h.Client.EditedMessages[len(h.Client.EditedMessages)-1].Text)
 	}
 }
 

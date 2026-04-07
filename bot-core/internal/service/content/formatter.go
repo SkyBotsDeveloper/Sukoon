@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"sukoon/bot-core/internal/serviceutil"
 	"sukoon/bot-core/internal/telegram"
 )
 
@@ -45,6 +46,10 @@ func buttonsFromJSON(raw string) (*telegram.InlineKeyboardMarkup, error) {
 	return &telegram.InlineKeyboardMarkup{InlineKeyboard: buttons}, nil
 }
 
+func renderStoredText(raw string, user telegram.User, chat telegram.Chat, rules string) string {
+	return serviceutil.RenderStoredMessage(raw, user, chat, rules)
+}
+
 func splitNameAndBody(raw string) (string, string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -61,6 +66,26 @@ func splitNameAndBody(raw string) (string, string, error) {
 		}
 	}
 	return "", "", fmt.Errorf("content is required")
+}
+
+func splitTriggerAndBody(raw string) (string, string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", "", fmt.Errorf("trigger is required")
+	}
+	if strings.HasPrefix(raw, "\"") {
+		end := strings.Index(raw[1:], "\"")
+		if end < 0 {
+			return "", "", fmt.Errorf("quoted trigger is missing a closing quote")
+		}
+		trigger := strings.TrimSpace(raw[1 : end+1])
+		body := strings.TrimSpace(raw[end+2:])
+		if trigger == "" || body == "" {
+			return "", "", fmt.Errorf("usage: /filter <trigger> <response>")
+		}
+		return trigger, body, nil
+	}
+	return splitNameAndBody(raw)
 }
 
 func parseButtonRow(line string) ([]telegram.InlineKeyboardButton, bool, error) {

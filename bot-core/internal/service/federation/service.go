@@ -27,6 +27,8 @@ func (s *Service) Handle(ctx context.Context, rt *runtime.Context) (bool, error)
 	switch rt.Command.Name {
 	case "newfed":
 		return true, s.newFed(ctx, rt)
+	case "renamefed":
+		return true, s.renameFed(ctx, rt)
 	case "delfed":
 		return true, s.delFed(ctx, rt)
 	case "joinfed":
@@ -35,6 +37,8 @@ func (s *Service) Handle(ctx context.Context, rt *runtime.Context) (bool, error)
 		return true, s.leaveFed(ctx, rt)
 	case "fedinfo":
 		return true, s.fedInfo(ctx, rt)
+	case "chatfed":
+		return true, s.chatFed(ctx, rt)
 	case "fedadmins":
 		return true, s.fedAdmins(ctx, rt)
 	case "myfeds":
@@ -43,6 +47,8 @@ func (s *Service) Handle(ctx context.Context, rt *runtime.Context) (bool, error)
 		return true, s.fedPromote(ctx, rt, true)
 	case "feddemote":
 		return true, s.fedPromote(ctx, rt, false)
+	case "feddemoteme":
+		return true, s.fedDemoteMe(ctx, rt)
 	case "fban":
 		return true, s.fban(ctx, rt, true)
 	case "unfban":
@@ -112,6 +118,29 @@ func (s *Service) newFed(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Federation created: %s (%s)", federation.DisplayName, federation.ShortName), telegram.SendMessageOptions{})
+	return err
+}
+
+func (s *Service) renameFed(ctx context.Context, rt *runtime.Context) error {
+	if len(rt.Command.Args) == 0 {
+		return fmt.Errorf("usage: /renamefed <short_name> [display name]")
+	}
+	federation, err := s.resolveFederation(ctx, rt, "")
+	if err != nil {
+		return err
+	}
+	if err := s.ensureFedOwner(ctx, rt, federation); err != nil {
+		return err
+	}
+	shortName := strings.ToLower(strings.TrimSpace(rt.Command.Args[0]))
+	displayName := shortName
+	if len(rt.Command.Args) > 1 {
+		displayName = strings.TrimSpace(strings.Join(rt.Command.Args[1:], " "))
+	}
+	if err := rt.Store.RenameFederation(ctx, federation.ID, shortName, displayName); err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Federation renamed to %s (%s).", displayName, shortName), telegram.SendMessageOptions{})
 	return err
 }
 
@@ -195,6 +224,19 @@ func (s *Service) fedInfo(ctx context.Context, rt *runtime.Context) error {
 	return err
 }
 
+func (s *Service) chatFed(ctx context.Context, rt *runtime.Context) error {
+	federation, err := rt.Store.GetFederationByChat(ctx, rt.Bot.ID, rt.ChatID())
+	if err == pgx.ErrNoRows {
+		_, sendErr := rt.Client.SendMessage(ctx, rt.ChatID(), "This chat is not linked to a federation.", telegram.SendMessageOptions{})
+		return sendErr
+	}
+	if err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("This chat is linked to federation %s (%s).", federation.DisplayName, federation.ShortName), telegram.SendMessageOptions{})
+	return err
+}
+
 func (s *Service) fedAdmins(ctx context.Context, rt *runtime.Context) error {
 	federation, err := s.resolveFederation(ctx, rt, "")
 	if err != nil {
@@ -253,6 +295,25 @@ func (s *Service) fedPromote(ctx context.Context, rt *runtime.Context, enabled b
 		text = "Federation admin removed: " + target.Name
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), text, telegram.SendMessageOptions{})
+	return err
+}
+
+func (s *Service) fedDemoteMe(ctx context.Context, rt *runtime.Context) error {
+	explicit := ""
+	if len(rt.Command.Args) > 0 {
+		explicit = rt.Command.Args[0]
+	}
+	federation, err := s.resolveFederation(ctx, rt, explicit)
+	if err != nil {
+		return err
+	}
+	if federation.OwnerUserID == rt.ActorID() {
+		return fmt.Errorf("federation owner cannot demote themselves")
+	}
+	if err := rt.Store.SetFederationAdmin(ctx, federation.ID, rt.ActorID(), "admin", false); err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "You were removed from the federation admin list.", telegram.SendMessageOptions{})
 	return err
 }
 

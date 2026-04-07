@@ -27,12 +27,12 @@ Behavior and product references used during the rebuild:
 - Fast webhook ack plus async worker execution
 - Durable update idempotency by bot and `update_id`
 - Reliable moderation primitives: bans, mutes, kicks, warns, approvals, locks, blocklists, antiflood, captcha
-- Rose-style help surfaces for admin, approval, bans, antiflood, blocklists, captcha, clean commands, locks, and log channels
+- Rose-style help surfaces for admin, approval, bans, antiflood, blocklists, captcha, clean commands, disabling, locks, log channels, federations, filters, and formatting
 - Owner/global tooling with job-backed broadcast and global blacklist controls
-- Federation support with canonical V2 storage
+- Federation support with canonical V2 storage, owner/admin/user help pages, and safe rename/chat-status helpers
 - Safe clone lifecycle with explicit per-bot webhook routing
-- Structured note and filter buttons without legacy regex parsing
-- Button-driven help and rules flows with PM-first guidance, in-place menu editing, and scoped help subpages for blocklists and locks
+- Structured note and filter buttons without legacy regex parsing, plus random-content separators and contextual fillings
+- Button-driven help and rules flows with PM-first guidance, in-place menu editing, and scoped help subpages for blocklists, locks, federations, filters, and formatting
 - Privacy export and delete flows against the canonical schema
 - VPS, Railway, and Heroku deployment artifacts
 

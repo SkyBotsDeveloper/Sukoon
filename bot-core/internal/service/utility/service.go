@@ -9,6 +9,7 @@ import (
 
 	"sukoon/bot-core/internal/i18n"
 	"sukoon/bot-core/internal/runtime"
+	"sukoon/bot-core/internal/serviceutil"
 	"sukoon/bot-core/internal/telegram"
 )
 
@@ -56,10 +57,12 @@ func (s *Service) HandleCallback(ctx context.Context, rt *runtime.Context) (bool
 			break
 		}
 		chatTitle := ""
+		chat := telegram.Chat{}
 		if rt.CallbackQuery.Message != nil {
 			chatTitle = rt.CallbackQuery.Message.Chat.Title
+			chat = rt.CallbackQuery.Message.Chat
 		}
-		err = s.sendCallbackPage(ctx, rt, rulesText(chatTitle, rt.RuntimeBundle.Settings.RulesText), rulesShownHereMarkup(rt.Bot.Username, rt.ChatID()))
+		err = s.sendCallbackPage(ctx, rt, rulesText(chatTitle, serviceutil.RenderStoredMessage(rt.RuntimeBundle.Settings.RulesText, rt.CallbackQuery.From, chat, rt.RuntimeBundle.Settings.RulesText)), rulesShownHereMarkup(rt.Bot.Username, rt.ChatID()))
 	case callbackClose:
 		err = s.closeCallbackMessage(ctx, rt)
 	default:
@@ -262,7 +265,11 @@ func (s *Service) startRules(ctx context.Context, rt *runtime.Context, rawChatID
 	if chat, err := rt.Client.GetChat(ctx, chatID); err == nil && strings.TrimSpace(chat.Title) != "" {
 		chatTitle = chat.Title
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rulesText(chatTitle, bundle.Settings.RulesText), rt.ReplyOptions(telegram.SendMessageOptions{
+	requester := telegram.User{}
+	if rt.Message != nil && rt.Message.From != nil {
+		requester = *rt.Message.From
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rulesText(chatTitle, serviceutil.RenderStoredMessage(bundle.Settings.RulesText, requester, telegram.Chat{ID: chatID, Title: chatTitle}, bundle.Settings.RulesText)), rt.ReplyOptions(telegram.SendMessageOptions{
 		ReplyMarkup: rulesPMMarkup(rt.Bot.Username),
 	}))
 	return err

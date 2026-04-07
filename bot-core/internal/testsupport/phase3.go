@@ -386,6 +386,19 @@ func (m *MemoryStore) DeleteFederation(_ context.Context, federationID string) e
 	return nil
 }
 
+func (m *MemoryStore) RenameFederation(_ context.Context, federationID string, shortName string, displayName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	federation, ok := m.federations[federationID]
+	if !ok {
+		return pgx.ErrNoRows
+	}
+	federation.ShortName = strings.ToLower(strings.TrimSpace(shortName))
+	federation.DisplayName = strings.TrimSpace(displayName)
+	m.federations[federationID] = federation
+	return nil
+}
+
 func (m *MemoryStore) GetFederationByID(_ context.Context, federationID string) (domain.Federation, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

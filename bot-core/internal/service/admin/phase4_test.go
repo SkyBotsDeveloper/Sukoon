@@ -291,3 +291,101 @@ func TestCleanCommandAliases(t *testing.T) {
 		t.Fatalf("expected cleancommandtypes response, got %q", got)
 	}
 }
+
+func TestDisableControlsAffectNonAdminsFirstThenAdmins(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100718, Type: "supergroup", Title: "Disable"}
+	h.Client.AdminsByChat[chat.ID] = []telegram.ChatAdministrator{
+		{
+			User:   telegram.User{ID: 40, FirstName: "Admin"},
+			Status: "administrator",
+		},
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 100,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/disable report",
+		},
+	}); err != nil {
+		t.Fatalf("disable report failed: %v", err)
+	}
+
+	err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		Message: &telegram.Message{
+			MessageID: 101,
+			From:      &telegram.User{ID: 40, FirstName: "Admin"},
+			Chat:      chat,
+			Text:      "/report",
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "reports are disabled") {
+		t.Fatalf("expected admin to bypass disabled command before /disableadmin, got %v", err)
+	}
+
+	for idx, text := range []string{"/disableadmin on", "/disabledel on", "/disableable"} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(idx + 3),
+			Message: &telegram.Message{
+				MessageID: int64(102 + idx),
+				From:      &telegram.User{ID: 1, FirstName: "Owner"},
+				Chat:      chat,
+				Text:      text,
+			},
+		}); err != nil {
+			t.Fatalf("owner command %q failed: %v", text, err)
+		}
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 10,
+		Message: &telegram.Message{
+			MessageID: 110,
+			From:      &telegram.User{ID: 20, FirstName: "User"},
+			Chat:      chat,
+			Text:      "/report",
+		},
+	}); err != nil {
+		t.Fatalf("disabled report for member failed: %v", err)
+	}
+	if len(h.Client.DeletedMessages) == 0 || h.Client.DeletedMessages[len(h.Client.DeletedMessages)-1].MessageID != 110 {
+		t.Fatalf("expected disabledel to remove member command message, got %+v", h.Client.DeletedMessages)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 11,
+		Message: &telegram.Message{
+			MessageID: 111,
+			From:      &telegram.User{ID: 40, FirstName: "Admin"},
+			Chat:      chat,
+			Text:      "/report",
+		},
+	}); err != nil {
+		t.Fatalf("disabled report for admin failed: %v", err)
+	}
+	if h.Client.DeletedMessages[len(h.Client.DeletedMessages)-1].MessageID != 111 {
+		t.Fatalf("expected /disableadmin to affect admins too, got %+v", h.Client.DeletedMessages)
+	}
+
+	last := h.Client.Messages[len(h.Client.Messages)-1]
+	if !strings.Contains(last.Text, "/stopall") || !strings.Contains(last.Text, "/renamefed") {
+		t.Fatalf("expected disableable list to include new truthful commands, got %q", last.Text)
+	}
+
+	err = h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 12,
+		Message: &telegram.Message{
+			MessageID: 112,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/disable help",
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "cannot be disabled") {
+		t.Fatalf("expected protected command disable attempt to fail, got %v", err)
+	}
+}

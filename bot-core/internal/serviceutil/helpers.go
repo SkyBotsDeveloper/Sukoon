@@ -3,8 +3,10 @@ package serviceutil
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
+	"time"
 
 	"sukoon/bot-core/internal/domain"
 	"sukoon/bot-core/internal/runtime"
@@ -70,14 +72,61 @@ func DisplayName(user telegram.User) string {
 }
 
 func RenderTemplate(template string, user telegram.User, chat telegram.Chat) string {
+	return RenderChatTemplate(template, user, chat, "")
+}
+
+func RenderChatTemplate(template string, user telegram.User, chat telegram.Chat, rules string) string {
+	fullName := strings.TrimSpace(strings.TrimSpace(user.FirstName + " " + user.LastName))
+	if fullName == "" {
+		fullName = DisplayName(user)
+	}
+	username := user.Username
+	if username != "" {
+		username = "@" + strings.TrimPrefix(username, "@")
+	}
+	mention := username
+	if mention == "" {
+		mention = fullName
+	}
 	replacer := strings.NewReplacer(
 		"{first}", user.FirstName,
 		"{last}", user.LastName,
-		"{username}", user.Username,
+		"{fullname}", fullName,
+		"{mention}", mention,
+		"{username}", username,
 		"{id}", strconv.FormatInt(user.ID, 10),
 		"{chat}", chat.Title,
+		"{chatname}", chat.Title,
+		"{rules}", rules,
+		"{rules:same}", rules,
 	)
 	return replacer.Replace(template)
+}
+
+func RenderStoredMessage(template string, user telegram.User, chat telegram.Chat, rules string) string {
+	return RenderChatTemplate(pickRandomContent(template), user, chat, rules)
+}
+
+func pickRandomContent(raw string) string {
+	parts := strings.Split(raw, "%%%")
+	if len(parts) == 1 {
+		return strings.TrimSpace(raw)
+	}
+	options := make([]string, 0, len(parts))
+	for _, part := range parts {
+		option := strings.TrimSpace(part)
+		if option != "" {
+			options = append(options, option)
+		}
+	}
+	if len(options) == 0 {
+		return strings.TrimSpace(raw)
+	}
+	if len(options) == 1 {
+		return options[0]
+	}
+	picker := rand.New(rand.NewSource(time.Now().UnixNano()))
+	return options[picker.Intn(len(options))]
 }
 
 func DisplayNameFromProfile(user domain.UserProfile) string {

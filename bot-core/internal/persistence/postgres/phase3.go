@@ -384,6 +384,15 @@ func (s *Store) DeleteFederation(ctx context.Context, federationID string) error
 	return err
 }
 
+func (s *Store) RenameFederation(ctx context.Context, federationID string, shortName string, displayName string) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE federations
+		SET short_name=$2, display_name=$3
+		WHERE id=$1
+	`, federationID, shortName, displayName)
+	return err
+}
+
 func (s *Store) GetFederationByID(ctx context.Context, federationID string) (domain.Federation, error) {
 	var federation domain.Federation
 	err := s.pool.QueryRow(ctx, `

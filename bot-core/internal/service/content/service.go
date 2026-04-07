@@ -36,6 +36,8 @@ func (s *Service) HandleCommand(ctx context.Context, rt *runtime.Context) (bool,
 		return true, s.filters(ctx, rt)
 	case "stop":
 		return true, s.stop(ctx, rt)
+	case "stopall":
+		return true, s.stopAll(ctx, rt)
 	case "welcome", "setwelcome":
 		return true, s.welcome(ctx, rt)
 	case "goodbye", "setgoodbye":
@@ -52,6 +54,7 @@ func (s *Service) HandleCommand(ctx context.Context, rt *runtime.Context) (bool,
 }
 
 func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool, error) {
+	message := rt.Message
 	text := strings.TrimSpace(rt.Text())
 	if text == "" {
 		return false, nil
@@ -66,7 +69,11 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 				if err != nil {
 					return false, err
 				}
-				_, err = rt.Client.SendMessage(ctx, rt.ChatID(), note.Text, telegram.SendMessageOptions{ParseMode: note.ParseMode, ReplyMarkup: replyMarkup})
+				user := telegram.User{}
+				if message.From != nil {
+					user = *message.From
+				}
+				_, err = rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(note.Text, user, message.Chat, rt.RuntimeBundle.Settings.RulesText), telegram.SendMessageOptions{ParseMode: note.ParseMode, ReplyMarkup: replyMarkup})
 				return true, err
 			}
 			if err != pgx.ErrNoRows {
@@ -87,7 +94,11 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 			if err != nil {
 				return false, err
 			}
-			_, err = rt.Client.SendMessage(ctx, rt.ChatID(), filter.ResponseText, telegram.SendMessageOptions{ParseMode: filter.ParseMode, ReplyMarkup: replyMarkup})
+			user := telegram.User{}
+			if message.From != nil {
+				user = *message.From
+			}
+			_, err = rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(filter.ResponseText, user, message.Chat, rt.RuntimeBundle.Settings.RulesText), telegram.SendMessageOptions{ParseMode: filter.ParseMode, ReplyMarkup: replyMarkup})
 			return true, err
 		}
 	}
@@ -99,7 +110,7 @@ func (s *Service) HandleJoin(ctx context.Context, rt *runtime.Context, user tele
 	if !rt.RuntimeBundle.Settings.WelcomeEnabled || strings.TrimSpace(rt.RuntimeBundle.Settings.WelcomeText) == "" {
 		return nil
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), serviceutil.RenderTemplate(rt.RuntimeBundle.Settings.WelcomeText, user, rt.Message.Chat), telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(rt.RuntimeBundle.Settings.WelcomeText, user, rt.Message.Chat, rt.RuntimeBundle.Settings.RulesText), telegram.SendMessageOptions{})
 	return err
 }
 
@@ -107,7 +118,7 @@ func (s *Service) HandleLeave(ctx context.Context, rt *runtime.Context, user tel
 	if !rt.RuntimeBundle.Settings.GoodbyeEnabled || strings.TrimSpace(rt.RuntimeBundle.Settings.GoodbyeText) == "" {
 		return nil
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), serviceutil.RenderTemplate(rt.RuntimeBundle.Settings.GoodbyeText, user, rt.Message.Chat), telegram.SendMessageOptions{})
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(rt.RuntimeBundle.Settings.GoodbyeText, user, rt.Message.Chat, rt.RuntimeBundle.Settings.RulesText), telegram.SendMessageOptions{})
 	return err
 }
 
@@ -170,7 +181,11 @@ func (s *Service) get(ctx context.Context, rt *runtime.Context) error {
 	if err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), note.Text, rt.ReplyOptions(telegram.SendMessageOptions{ParseMode: note.ParseMode, ReplyMarkup: replyMarkup}))
+	user := telegram.User{}
+	if rt.Message != nil && rt.Message.From != nil {
+		user = *rt.Message.From
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(note.Text, user, rt.Message.Chat, rt.RuntimeBundle.Settings.RulesText), rt.ReplyOptions(telegram.SendMessageOptions{ParseMode: note.ParseMode, ReplyMarkup: replyMarkup}))
 	return err
 }
 
@@ -192,7 +207,7 @@ func (s *Service) filter(ctx context.Context, rt *runtime.Context) error {
 	if !rt.ActorPermissions.IsChatAdmin {
 		return fmt.Errorf("admin rights required")
 	}
-	trigger, body, err := splitNameAndBody(rt.Command.RawArgs)
+	trigger, body, err := splitTriggerAndBody(rt.Command.RawArgs)
 	if err != nil {
 		return fmt.Errorf("usage: /filter <trigger> <response>")
 	}
@@ -230,6 +245,27 @@ func (s *Service) stop(ctx context.Context, rt *runtime.Context) error {
 		}
 	}
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Removed %d filter(s).", len(items)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) stopAll(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	filters, err := rt.Store.ListFilters(ctx, rt.Bot.ID, rt.ChatID())
+	if err != nil {
+		return err
+	}
+	if len(filters) == 0 {
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No saved filters to remove.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	for _, filter := range filters {
+		if err := rt.Store.DeleteFilter(ctx, rt.Bot.ID, rt.ChatID(), strings.ToLower(filter.Trigger)); err != nil {
+			return err
+		}
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Removed %d filter(s).", len(filters)), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -356,7 +392,11 @@ func (s *Service) rules(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), rt.RuntimeBundle.Settings.RulesText, rt.ReplyOptions(telegram.SendMessageOptions{
+	user := telegram.User{}
+	if rt.Message != nil && rt.Message.From != nil {
+		user = *rt.Message.From
+	}
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(rt.RuntimeBundle.Settings.RulesText, user, rt.Message.Chat, rt.RuntimeBundle.Settings.RulesText), rt.ReplyOptions(telegram.SendMessageOptions{
 		ReplyMarkup: serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
 				{Text: "Help", CallbackData: "ux:help:root"},

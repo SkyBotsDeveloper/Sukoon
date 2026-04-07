@@ -37,6 +37,8 @@ type Store interface {
 	SetApproval(ctx context.Context, botID string, chatID int64, userID int64, approvedBy int64, approved bool) error
 	ListApprovedUsers(ctx context.Context, botID string, chatID int64) ([]int64, error)
 	SetDisabledCommand(ctx context.Context, botID string, chatID int64, command string, disabled bool, changedBy int64) error
+	SetDisabledDelete(ctx context.Context, botID string, chatID int64, enabled bool) error
+	SetDisableAdmins(ctx context.Context, botID string, chatID int64, enabled bool) error
 	SetWarnConfig(ctx context.Context, botID string, chatID int64, limit int, mode string) error
 	IncrementWarnings(ctx context.Context, botID string, chatID int64, userID int64, reason string) (int, error)
 	ResetWarnings(ctx context.Context, botID string, chatID int64, userID int64) error
@@ -95,6 +97,7 @@ type Store interface {
 	ListGlobalBlacklistChats(ctx context.Context, botID string) ([]domain.GlobalBlacklistChat, error)
 	CreateFederation(ctx context.Context, federation domain.Federation) (domain.Federation, error)
 	DeleteFederation(ctx context.Context, federationID string) error
+	RenameFederation(ctx context.Context, federationID string, shortName string, displayName string) error
 	GetFederationByID(ctx context.Context, federationID string) (domain.Federation, error)
 	GetFederationByShortName(ctx context.Context, botID string, shortName string) (domain.Federation, error)
 	GetFederationByChat(ctx context.Context, botID string, chatID int64) (domain.Federation, error)

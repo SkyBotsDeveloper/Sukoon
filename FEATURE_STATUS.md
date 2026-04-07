@@ -15,7 +15,7 @@
 
 - `/approval`, `/approve`, `/unapprove`, `/approved`, `/unapproveall`
 - `/admins`, `/adminlist`
-- `/disable`, `/enable`, `/disabled`
+- `/disable`, `/enable`, `/disableable`, `/disabledel`, `/disableadmin`, `/disabled`
 - `/logchannel`, `/setlog`, `/unsetlog`, `/log`, `/nolog`, `/logcategories`
 - `/reports`, `/report`
 - `/cleancommands`, `/cleancommand`, `/keepcommand`, `/cleancommandtypes`
@@ -41,11 +41,15 @@
 ### Content And Presence
 
 - `/save`, `/notes`, `/saved`, `/get`, `/clear`
-- `/filter`, `/filters`, `/stop`
+- `/filter`, `/filters`, `/stop`, `/stopall`
 - `/setwelcome`, `/welcome`
 - `/setgoodbye`, `/goodbye`
 - `/setrules`, `/resetrules`, `/rules`
 - `/afk`
+- quoted multi-word filter triggers
+- contextual fillings for stored content:
+  `{first}`, `{last}`, `{fullname}`, `{username}`, `{mention}`, `{id}`, `{chat}`, `{chatname}`, `{rules}`, `{rules:same}`
+- random-content separators with `%%%` in notes, filters, welcome, goodbye, and rules text
 
 ### Utility And Help
 
@@ -54,9 +58,9 @@
 - `/setlang`, `/language`
 - `/privacy`, `/mydata`, `/forgetme`
 - callback-driven Rose-style help pages for:
-  admin, approval, bans, antiflood, blocklists, captcha, clean commands, locks, and log channels
+  admin, approval, bans, antiflood, blocklists, captcha, clean commands, disabling, locks, log channels, federations, filters, and formatting
 - help subpages for:
-  blocklist command examples, lock descriptions, and lock examples
+  blocklist command examples, federation admin/owner/user commands, filter examples, markdown formatting truth, fillings, random content, buttons, lock descriptions, and lock examples
 
 ### Owner, Federation, And Clones
 
@@ -66,10 +70,11 @@
 - `/bluser`, `/unbluser`
 - `/blchat`, `/unblchat`
 - `/addsudo`, `/rmsudo`
-- `/newfed`, `/delfed`
+- `/newfed`, `/renamefed`, `/delfed`
 - `/joinfed`, `/leavefed`
-- `/fedinfo`, `/fedadmins`, `/myfeds`
+- `/fedinfo`, `/fedadmins`, `/myfeds`, `/chatfed`
 - `/fedpromote`, `/feddemote`
+- `/feddemoteme`
 - `/fban`, `/unfban`
 - `/fedtransfer`
 - `/clone`, `/clone sync`, `/clones`, `/rmclone`
@@ -87,11 +92,11 @@
 - language support:
   shared translation layer exists, but not every response string has localized variants yet
 - rich note and filter formatting:
-  implemented structured buttons and rows, but not every historical legacy syntax variant
+  implemented structured buttons and rows, quoted multi-word filter triggers, contextual fillings, and random content, but not every historical legacy syntax variant
 - metrics:
   observability seam exists, but no external metrics backend is wired by default
 - Rose/Group Help parity:
-  core moderation, rules, saved content, approvals, and PM-guidance UX are strong, and the Rose-style help batch through clean commands / locks / log channels is now live, but several long-tail utility families are still intentionally deferred
+  core moderation, rules, saved content, approvals, PM-guidance UX, and the Rose-style help batches through disabling / federations / filters / formatting are now live, but several long-tail utility families are still intentionally deferred
 
 ## Deferred Or Intentionally Not Claimed
 
@@ -107,6 +112,7 @@
 - warn-mode locks and allowlist-based lock exemptions
 - separate admin web panel
 - full Rose-style help or informational command surface beyond the current scoped live sections
+- Rose-style markdown helper parsing for bold/italics/spoilers/code blocks and note-button syntax in stored content
 - advanced federation policy toggles that were unsafe or unclear in the legacy runtime
 
 ## Final Truth

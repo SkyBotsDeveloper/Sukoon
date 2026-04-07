@@ -37,6 +37,12 @@ func (s *Service) Handle(ctx context.Context, rt *runtime.Context) (bool, error)
 		return true, s.disable(ctx, rt, true)
 	case "enable":
 		return true, s.disable(ctx, rt, false)
+	case "disableable":
+		return true, s.disableable(ctx, rt)
+	case "disabledel":
+		return true, s.disabledDelete(ctx, rt)
+	case "disableadmin":
+		return true, s.disableAdmins(ctx, rt)
 	case "disabled":
 		return true, s.listDisabled(ctx, rt)
 	case "logchannel", "setlog", "unsetlog", "log", "nolog":
@@ -203,6 +209,9 @@ func (s *Service) disable(ctx context.Context, rt *runtime.Context, disabled boo
 		return fmt.Errorf("usage: /disable <command>")
 	}
 	command := strings.TrimPrefix(strings.ToLower(rt.Command.Args[0]), "/")
+	if isProtectedDisabledCommand(command) {
+		return fmt.Errorf("/%s cannot be disabled", command)
+	}
 	if err := rt.Store.SetDisabledCommand(ctx, rt.Bot.ID, rt.ChatID(), command, disabled, rt.ActorID()); err != nil {
 		return err
 	}
@@ -214,17 +223,109 @@ func (s *Service) disable(ctx context.Context, rt *runtime.Context, disabled boo
 	return err
 }
 
+func (s *Service) disableable(ctx context.Context, rt *runtime.Context) error {
+	text := strings.Join([]string{
+		"Disableable Commands",
+		"",
+		"Sukoon disables the exact command name you pass. Admins bypass disabled commands by default unless /disableadmin is enabled.",
+		"",
+		"/approve, /unapprove, /approved, /unapproveall, /approval",
+		"/ban, /dban, /sban, /tban, /unban",
+		"/mute, /dmute, /smute, /tmute, /unmute",
+		"/kick, /dkick, /skick, /kickme",
+		"/warn, /warns, /resetwarns, /setwarnlimit, /setwarnmode",
+		"/lock, /unlock, /locks, /locktypes",
+		"/addblocklist, /rmbl, /rmblocklist, /unblocklistall, /blocklist",
+		"/setflood, /flood, /setfloodtimer, /floodmode, /clearflood",
+		"/captcha, /captchamode, /captchakick, /captchakicktime",
+		"/cleancommands, /cleancommand, /keepcommand, /cleancommandtypes",
+		"/cleanservice, /nocleanservice, /cleanservicetypes",
+		"/logchannel, /setlog, /unsetlog, /log, /nolog, /logcategories",
+		"/report, /reports",
+		"/save, /notes, /saved, /get, /clear",
+		"/filter, /filters, /stop, /stopall",
+		"/welcome, /setwelcome, /goodbye, /setgoodbye",
+		"/setrules, /resetrules, /rules",
+		"/antiabuse, /antibio, /free, /unfree, /freelist",
+		"/newfed, /renamefed, /delfed, /joinfed, /leavefed, /fedinfo, /fedadmins, /myfeds, /fedpromote, /feddemote, /feddemoteme, /fban, /unfban, /fedtransfer, /chatfed",
+	}, "\n")
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) disabledDelete(ctx context.Context, rt *runtime.Context) error {
+	if err := s.ensureChatAdmin(rt); err != nil {
+		return err
+	}
+	if len(rt.Command.Args) == 0 {
+		status := "off"
+		if rt.RuntimeBundle.Settings.DisabledDelete {
+			status = "on"
+		}
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Disabled command deletion is "+status+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	enabled, err := ParseToggle(rt.Command.Args[0])
+	if err != nil {
+		return err
+	}
+	if err := rt.Store.SetDisabledDelete(ctx, rt.Bot.ID, rt.ChatID(), enabled); err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Disabled command deletion %s.", toggleWord(enabled)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) disableAdmins(ctx context.Context, rt *runtime.Context) error {
+	if err := s.ensureChatAdmin(rt); err != nil {
+		return err
+	}
+	if len(rt.Command.Args) == 0 {
+		status := "off"
+		if rt.RuntimeBundle.Settings.DisableAdmins {
+			status = "on"
+		}
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Disable-admin mode is "+status+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	enabled, err := ParseToggle(rt.Command.Args[0])
+	if err != nil {
+		return err
+	}
+	if err := rt.Store.SetDisableAdmins(ctx, rt.Bot.ID, rt.ChatID(), enabled); err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Disable-admin mode %s.", toggleWord(enabled)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
 func (s *Service) listDisabled(ctx context.Context, rt *runtime.Context) error {
 	if len(rt.RuntimeBundle.DisabledCommands) == 0 {
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No disabled commands.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("No disabled commands.\n/delete on disabled commands: %s\n/disableadmin: %s", onOff(rt.RuntimeBundle.Settings.DisabledDelete), onOff(rt.RuntimeBundle.Settings.DisableAdmins)), rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 	commands := make([]string, 0, len(rt.RuntimeBundle.DisabledCommands))
 	for command := range rt.RuntimeBundle.DisabledCommands {
 		commands = append(commands, "/"+command)
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Disabled: "+strings.Join(commands, ", "), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Disabled: "+strings.Join(commands, ", ")+fmt.Sprintf("\n/delete on disabled commands: %s\n/disableadmin: %s", onOff(rt.RuntimeBundle.Settings.DisabledDelete), onOff(rt.RuntimeBundle.Settings.DisableAdmins)), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
+}
+
+func isProtectedDisabledCommand(command string) bool {
+	switch strings.TrimSpace(strings.ToLower(command)) {
+	case "", "disable", "enable", "disabled", "disableable", "disabledel", "disableadmin", "start", "help":
+		return true
+	default:
+		return false
+	}
+}
+
+func onOff(enabled bool) string {
+	if enabled {
+		return "on"
+	}
+	return "off"
 }
 
 func (s *Service) logChannel(ctx context.Context, rt *runtime.Context) error {

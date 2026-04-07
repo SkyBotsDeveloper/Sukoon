@@ -33,6 +33,8 @@ type ChatSettings struct {
 	ReportsEnabled        bool
 	LogChannelID          *int64
 	CleanCommands         bool
+	DisabledDelete        bool
+	DisableAdmins         bool
 	CleanServiceJoin      bool
 	CleanServiceLeave     bool
 	CleanServicePin       bool

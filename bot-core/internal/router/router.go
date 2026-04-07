@@ -231,10 +231,18 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 
 	if rt.CommandOK {
 		if _, disabled := rt.RuntimeBundle.DisabledCommands[rt.Command.Name]; disabled && !rt.ActorPermissions.IsOwner && !rt.ActorPermissions.IsSudo {
-			_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("/%s is disabled in this chat.", rt.Command.Name), telegram.SendMessageOptions{})
+			if rt.ActorPermissions.IsChatAdmin && !rt.RuntimeBundle.Settings.DisableAdmins {
+				goto dispatchCommand
+			}
+			if rt.RuntimeBundle.Settings.DisabledDelete && rt.Message != nil {
+				_ = rt.Client.DeleteMessage(ctx, rt.ChatID(), rt.Message.MessageID)
+				return nil
+			}
+			_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("/%s is disabled in this chat.", rt.Command.Name), rt.ReplyOptions(telegram.SendMessageOptions{}))
 			return err
 		}
 
+	dispatchCommand:
 		for _, handler := range []func(context.Context, *runtime.Context) (bool, error){
 			r.moderation.Handle,
 			r.admin.Handle,

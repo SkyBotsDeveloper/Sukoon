@@ -415,6 +415,26 @@ func (m *MemoryStore) SetDisabledCommand(_ context.Context, botID string, chatID
 	return nil
 }
 
+func (m *MemoryStore) SetDisabledDelete(_ context.Context, botID string, chatID int64, enabled bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := chatKey(botID, chatID)
+	settings := m.settings[key]
+	settings.DisabledDelete = enabled
+	m.settings[key] = settings
+	return nil
+}
+
+func (m *MemoryStore) SetDisableAdmins(_ context.Context, botID string, chatID int64, enabled bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := chatKey(botID, chatID)
+	settings := m.settings[key]
+	settings.DisableAdmins = enabled
+	m.settings[key] = settings
+	return nil
+}
+
 func (m *MemoryStore) SetWarnConfig(_ context.Context, botID string, chatID int64, limit int, mode string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
