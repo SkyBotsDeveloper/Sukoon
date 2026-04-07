@@ -13,6 +13,7 @@ import (
 type FakeTelegramClient struct {
 	mu               sync.Mutex
 	Messages         []SentMessage
+	Photos           []SentPhoto
 	EditedMessages   []EditedMessage
 	DeletedMessages  []DeletedMessage
 	PinnedMessages   []PinnedMessage
@@ -54,6 +55,13 @@ type EditedMessage struct {
 	MessageID int64
 	Text      string
 	Options   telegram.EditMessageTextOptions
+}
+
+type SentPhoto struct {
+	MessageID int64
+	ChatID    int64
+	Photo     string
+	Options   telegram.SendPhotoOptions
 }
 
 type DeletedMessage struct {
@@ -126,6 +134,21 @@ func (f *FakeTelegramClient) SendMessage(_ context.Context, chatID int64, text s
 		MessageID: f.nextMessageID,
 		Chat:      telegram.Chat{ID: chatID},
 		Text:      text,
+	}, nil
+}
+
+func (f *FakeTelegramClient) SendPhoto(_ context.Context, chatID int64, photo string, options telegram.SendPhotoOptions) (telegram.Message, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err, ok := f.SendErrors[chatID]; ok {
+		return telegram.Message{}, err
+	}
+	f.nextMessageID++
+	f.Photos = append(f.Photos, SentPhoto{MessageID: f.nextMessageID, ChatID: chatID, Photo: photo, Options: options})
+	return telegram.Message{
+		MessageID: f.nextMessageID,
+		Chat:      telegram.Chat{ID: chatID},
+		Caption:   options.Caption,
 	}, nil
 }
 

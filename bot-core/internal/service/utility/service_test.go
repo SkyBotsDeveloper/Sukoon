@@ -153,6 +153,9 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	if !strings.Contains(helpMessage.Text, "Sukoon Help") {
 		t.Fatalf("expected help landing page, got %q", helpMessage.Text)
 	}
+	if !strings.Contains(helpMessage.Text, "/donate: Gives you info on how to support me and my creator.") {
+		t.Fatalf("expected updated helpful commands copy, got %q", helpMessage.Text)
+	}
 	if !strings.Contains(helpMessage.Text, "https://t.me/VivaanUpdates") || !strings.Contains(helpMessage.Text, serviceutil.WebsiteURL) {
 		t.Fatalf("expected help landing page to link support and website, got %q", helpMessage.Text)
 	}
@@ -301,6 +304,37 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 
 	if len(h.Client.CallbackAnswers) != 4 {
 		t.Fatalf("expected callback answers for menu navigation, got %+v", h.Client.CallbackAnswers)
+	}
+}
+
+func TestDonateCommandSendsSupportImage(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: 53, Type: "private"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 40,
+			From:      &telegram.User{ID: 53, FirstName: "User"},
+			Chat:      chat,
+			Text:      "/donate",
+		},
+	}); err != nil {
+		t.Fatalf("donate failed: %v", err)
+	}
+
+	if len(h.Client.Photos) != 1 {
+		t.Fatalf("expected one donate photo, got %+v", h.Client.Photos)
+	}
+	photo := h.Client.Photos[0]
+	if photo.ChatID != chat.ID {
+		t.Fatalf("expected donate photo in chat %d, got %+v", chat.ID, photo)
+	}
+	if photo.Photo != "https://files.catbox.moe/25hv2j.jpg" {
+		t.Fatalf("expected donate photo URL, got %+v", photo)
+	}
+	if photo.Options.ReplyToMessageID != 40 {
+		t.Fatalf("expected donate photo to reply to the command message, got %+v", photo.Options)
 	}
 }
 

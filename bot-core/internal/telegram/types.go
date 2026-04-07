@@ -133,10 +133,17 @@ type MessageEntityMention struct {
 }
 
 type SendMessageOptions struct {
-	ReplyToMessageID       int64
-	ParseMode              string
-	DisableWebPagePreview  bool
-	ReplyMarkup            *InlineKeyboardMarkup
+	ReplyToMessageID      int64
+	ParseMode             string
+	DisableWebPagePreview bool
+	ReplyMarkup           *InlineKeyboardMarkup
+}
+
+type SendPhotoOptions struct {
+	ReplyToMessageID int64
+	Caption          string
+	ParseMode        string
+	ReplyMarkup      *InlineKeyboardMarkup
 }
 
 type EditMessageTextOptions struct {

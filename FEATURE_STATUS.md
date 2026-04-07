@@ -55,6 +55,7 @@
 
 - `/start`
 - `/help`
+- `/donate`
 - `/setlang`, `/language`
 - `/privacy`, `/mydata`, `/forgetme`
 - callback-driven help pages for:

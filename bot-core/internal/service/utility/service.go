@@ -15,6 +15,8 @@ import (
 
 type Service struct{}
 
+const donateImageURL = "https://files.catbox.moe/25hv2j.jpg"
+
 func New() *Service {
 	return &Service{}
 }
@@ -25,6 +27,8 @@ func (s *Service) Handle(ctx context.Context, rt *runtime.Context) (bool, error)
 		return true, s.start(ctx, rt)
 	case "help":
 		return true, s.help(ctx, rt)
+	case "donate":
+		return true, s.donate(ctx, rt)
 	case "setlang", "language":
 		return true, s.language(ctx, rt)
 	case "privacy":
@@ -145,6 +149,15 @@ func (s *Service) help(ctx context.Context, rt *runtime.Context) error {
 	}
 
 	return s.sendHelpMessage(ctx, rt, helpRoot)
+}
+
+func (s *Service) donate(ctx context.Context, rt *runtime.Context) error {
+	options := telegram.SendPhotoOptions{}
+	if rt.Message != nil {
+		options.ReplyToMessageID = rt.Message.MessageID
+	}
+	_, err := rt.Client.SendPhoto(ctx, rt.ChatID(), donateImageURL, options)
+	return err
 }
 
 func (s *Service) language(ctx context.Context, rt *runtime.Context) error {

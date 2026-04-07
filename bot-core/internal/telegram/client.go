@@ -15,6 +15,7 @@ import (
 
 type Client interface {
 	SendMessage(ctx context.Context, chatID int64, text string, options SendMessageOptions) (Message, error)
+	SendPhoto(ctx context.Context, chatID int64, photo string, options SendPhotoOptions) (Message, error)
 	EditMessageText(ctx context.Context, chatID int64, messageID int64, text string, options EditMessageTextOptions) error
 	DeleteMessage(ctx context.Context, chatID int64, messageID int64) error
 	PinChatMessage(ctx context.Context, chatID int64, messageID int64, disableNotification bool) error
@@ -104,6 +105,26 @@ func (c *HTTPClient) SendMessage(ctx context.Context, chatID int64, text string,
 		payload["reply_markup"] = options.ReplyMarkup
 	}
 	return request[Message](ctx, c, "sendMessage", payload)
+}
+
+func (c *HTTPClient) SendPhoto(ctx context.Context, chatID int64, photo string, options SendPhotoOptions) (Message, error) {
+	payload := map[string]any{
+		"chat_id": chatID,
+		"photo":   photo,
+	}
+	if options.ReplyToMessageID != 0 {
+		payload["reply_to_message_id"] = options.ReplyToMessageID
+	}
+	if options.Caption != "" {
+		payload["caption"] = options.Caption
+	}
+	if options.ParseMode != "" {
+		payload["parse_mode"] = options.ParseMode
+	}
+	if options.ReplyMarkup != nil {
+		payload["reply_markup"] = options.ReplyMarkup
+	}
+	return request[Message](ctx, c, "sendPhoto", payload)
 }
 
 func (c *HTTPClient) EditMessageText(ctx context.Context, chatID int64, messageID int64, text string, options EditMessageTextOptions) error {
