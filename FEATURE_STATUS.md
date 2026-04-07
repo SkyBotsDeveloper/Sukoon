@@ -77,7 +77,7 @@
 - `/feddemoteme`
 - `/fban`, `/unfban`
 - `/fedtransfer`
-- `/clone`, `/clone sync`, `/clones`, `/rmclone`
+- `/clone`, `/clone sync`, `/clones`, `/mybot`, `/rmclone`
 
 ### Policy Features
 

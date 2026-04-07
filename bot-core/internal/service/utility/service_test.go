@@ -344,6 +344,9 @@ func TestStartCloneGuideUsesInPlaceCallbackUX(t *testing.T) {
 	if !strings.Contains(cloneGuide.Text, "@BotFather") || strings.Contains(cloneGuide.Text, "PUBLIC_WEBHOOK_BASE_URL") {
 		t.Fatalf("expected BotFather mention without server-internal webhook note, got %q", cloneGuide.Text)
 	}
+	if strings.Contains(cloneGuide.Text, "/clone sync <clone>") || strings.Contains(cloneGuide.Text, "/clones") {
+		t.Fatalf("expected clone guide to avoid operator-heavy commands, got %q", cloneGuide.Text)
+	}
 	cloneMarkup := requireEditedMarkup(t, cloneGuide)
 	assertButton(t, cloneMarkup, 0, 0, "Back", "ux:start:home", "")
 	assertButton(t, cloneMarkup, 0, 1, "Close", "ux:close", "")
