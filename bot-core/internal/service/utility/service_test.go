@@ -197,10 +197,12 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	assertButton(t, helpMarkup, 8, 1, "Rules", "ux:help:rules", "")
 	assertButton(t, helpMarkup, 8, 2, "Topics", "ux:help:topics", "")
 	assertButton(t, helpMarkup, 9, 0, "Warnings", "ux:help:warnings", "")
-	assertButton(t, helpMarkup, 9, 1, "AntiAbuse", "ux:help:antiabuse", "")
-	assertButton(t, helpMarkup, 9, 2, "Bio Links", "ux:help:biolinks", "")
-	assertButton(t, helpMarkup, 10, 0, "⭐ Custom Instances", "ux:help:custominstances", "")
-	assertButton(t, helpMarkup, 10, 1, "🔎 Docs Website", "", serviceutil.WebsiteURL)
+	assertButton(t, helpMarkup, 9, 1, "Silent Power", "ux:help:silentpower", "")
+	assertButton(t, helpMarkup, 9, 2, "Extra", "ux:help:extra", "")
+	assertButton(t, helpMarkup, 10, 0, "Bio Check", "ux:help:biocheck", "")
+	assertButton(t, helpMarkup, 11, 0, "AntiAbuse", "ux:help:antiabuse", "")
+	assertButton(t, helpMarkup, 12, 0, "⭐ Custom Instances", "ux:help:custominstances", "")
+	assertButton(t, helpMarkup, 13, 0, "📚 Docs Website", "", serviceutil.WebsiteURL)
 	assertNoButtonText(t, helpMarkup, "Home")
 	assertNoButtonText(t, helpMarkup, "Close")
 
@@ -456,9 +458,11 @@ func TestHelpNavigationSupportsNestedHelpBatchPages(t *testing.T) {
 		{12, "ux:help:disabling", "Disabling"},
 		{13, "ux:help:connections", "Connections"},
 		{14, "ux:help:antiraid", "AntiRaid"},
-		{15, "ux:help:antiabuse", "AntiAbuse"},
-		{16, "ux:help:biolinks", "Bio Links"},
-		{17, "ux:help:custominstances", "Custom Instances"},
+		{15, "ux:help:silentpower", "Silent Power"},
+		{16, "ux:help:extra", "Extra"},
+		{17, "ux:help:antiabuse", "AntiAbuse"},
+		{18, "ux:help:biocheck", "Bio Check"},
+		{19, "ux:help:custominstances", "Custom Instances"},
 	}
 	for _, step := range sequence {
 		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
@@ -505,14 +509,20 @@ func TestHelpNavigationSupportsNestedHelpBatchPages(t *testing.T) {
 	if !strings.Contains(h.Client.EditedMessages[12].Text, "does not expose dedicated antiraid commands yet") {
 		t.Fatalf("expected truthful antiraid placeholder, got %q", h.Client.EditedMessages[12].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[13].Text, "/antiabuse <on|off>") {
-		t.Fatalf("expected antiabuse page, got %q", h.Client.EditedMessages[13].Text)
+	if !strings.Contains(h.Client.EditedMessages[13].Text, "/mods") || !strings.Contains(h.Client.EditedMessages[13].Text, "/muter") {
+		t.Fatalf("expected silent power page, got %q", h.Client.EditedMessages[13].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[14].Text, "/freelist") || !strings.Contains(h.Client.EditedMessages[14].Text, "Approved users and freed users bypass") {
-		t.Fatalf("expected bio links page, got %q", h.Client.EditedMessages[14].Text)
+	if !strings.Contains(h.Client.EditedMessages[14].Text, "/donate") || !strings.Contains(h.Client.EditedMessages[14].Text, "/mybot") {
+		t.Fatalf("expected extra page, got %q", h.Client.EditedMessages[14].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[15].Text, "/mybot") || !strings.Contains(h.Client.EditedMessages[15].Text, "one active clone") {
-		t.Fatalf("expected custom instances page, got %q", h.Client.EditedMessages[15].Text)
+	if !strings.Contains(h.Client.EditedMessages[15].Text, "/antiabuse <on|off>") {
+		t.Fatalf("expected antiabuse page, got %q", h.Client.EditedMessages[15].Text)
+	}
+	if !strings.Contains(h.Client.EditedMessages[16].Text, "/freelist") || !strings.Contains(h.Client.EditedMessages[16].Text, "Approved users and freed users bypass") {
+		t.Fatalf("expected bio check page, got %q", h.Client.EditedMessages[16].Text)
+	}
+	if !strings.Contains(h.Client.EditedMessages[17].Text, "/mybot") || !strings.Contains(h.Client.EditedMessages[17].Text, "one active clone") {
+		t.Fatalf("expected custom instances page, got %q", h.Client.EditedMessages[17].Text)
 	}
 }
 

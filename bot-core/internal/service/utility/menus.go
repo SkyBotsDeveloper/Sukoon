@@ -56,9 +56,11 @@ const (
 	helpRules              = "rules"
 	helpTopics             = "topics"
 	helpWarnings           = "warnings"
+	helpSilentPower        = "silentpower"
+	helpExtra              = "extra"
 	helpAntiRaid           = "antiraid"
 	helpAntiAbuse          = "antiabuse"
-	helpBioLinks           = "biolinks"
+	helpBioCheck           = "biocheck"
 	helpCustomInstances    = "custominstances"
 )
 
@@ -586,6 +588,35 @@ var helpPages = map[string]helpPage{
 			"/setwarnmode mute",
 		},
 	},
+	helpSilentPower: {
+		Title: "Silent Power",
+		Lines: []string{
+			"Silent power lets trusted helpers act quietly without giving them full Telegram admin rights.",
+			"",
+			"/mods",
+			"/mod <reply|user>",
+			"/unmod <reply|user>",
+			"/muter <reply|user>",
+			"/unmuter <reply|user>",
+			"/sban, /smute, /skick",
+			"",
+			"Only a group admin with promote-members permission can grant or remove mod power.",
+			"Use /mods to review the current silent-power list.",
+		},
+	},
+	helpExtra: {
+		Title: "Extra",
+		Lines: []string{
+			"Extra collects smaller helper surfaces that do not need a full category tree of their own.",
+			"",
+			"/donate",
+			"/afk [reason]",
+			"/mybot",
+			"/language",
+			"",
+			"Use Misc, Privacy, and Custom Instances for the deeper command details.",
+		},
+	},
 	helpAntiRaid: {
 		Title: "AntiRaid",
 		Lines: []string{
@@ -607,10 +638,10 @@ var helpPages = map[string]helpPage{
 			"Admins, owners, sudo users, and approved users are not hit by the matcher.",
 		},
 	},
-	helpBioLinks: {
-		Title: "Bio Links",
+	helpBioCheck: {
+		Title: "Bio Check",
 		Lines: []string{
-			"Bio Links checks user bios for invite-style handles and link spam without punishing normal messages.",
+			"Bio Check scans user bios for invite-style handles and link spam without punishing normal messages.",
 			"",
 			"/antibio",
 			"/antibio <on|off> [kick|ban|mute]",
@@ -656,7 +687,7 @@ func helpLandingText() string {
 		"",
 		"Hey! I'm Sukoon, a fast moderation bot for groups and private communities.",
 		"",
-		"Browse the moderation, protection, AntiAbuse, and Bio Links sections below.",
+		"Browse the moderation, protection, AntiAbuse, and Bio Check sections below.",
 		"",
 		"Helpful commands:",
 		"- /start: Starts me! You've probably already used this.",
@@ -791,12 +822,20 @@ func helpLandingMarkup(username string) *telegram.InlineKeyboardMarkup {
 		},
 		[]telegram.InlineKeyboardButton{
 			{Text: "Warnings", CallbackData: helpCallback(helpWarnings)},
+			{Text: "Silent Power", CallbackData: helpCallback(helpSilentPower)},
+			{Text: "Extra", CallbackData: helpCallback(helpExtra)},
+		},
+		[]telegram.InlineKeyboardButton{
+			{Text: "Bio Check", CallbackData: helpCallback(helpBioCheck)},
+		},
+		[]telegram.InlineKeyboardButton{
 			{Text: "AntiAbuse", CallbackData: helpCallback(helpAntiAbuse)},
-			{Text: "Bio Links", CallbackData: helpCallback(helpBioLinks)},
 		},
 		[]telegram.InlineKeyboardButton{
 			{Text: "⭐ Custom Instances", CallbackData: helpCallback(helpCustomInstances)},
-			{Text: "🔎 Docs Website", URL: serviceutil.WebsiteURL},
+		},
+		[]telegram.InlineKeyboardButton{
+			{Text: "📚 Docs Website", URL: serviceutil.WebsiteURL},
 		},
 	)
 }
@@ -1002,7 +1041,7 @@ func normalizeHelpSection(value string) string {
 	switch value {
 	case "", "main", "home", "root":
 		return helpRoot
-	case "admin", "admins", "adminlist", "mods", "mod", "silent", "staff", "promote", "demote", "admincache", "anonadmin", "adminerror":
+	case "admin", "admins", "adminlist", "mods", "mod", "staff", "promote", "demote", "admincache", "anonadmin", "adminerror":
 		return helpAdmin
 	case "antiflood", "flood", "setflood", "setfloodtimer", "floodmode", "clearflood":
 		return helpAntiflood
@@ -1080,10 +1119,14 @@ func normalizeHelpSection(value string) string {
 		return helpRules
 	case "topics", "topic":
 		return helpTopics
+	case "silentpower", "silent", "muter", "unmuter", "sban", "smute", "skick":
+		return helpSilentPower
+	case "extra":
+		return helpExtra
 	case "antiabuse", "abuse":
 		return helpAntiAbuse
-	case "antibio", "bio", "biolinks", "free", "unfree", "freelist":
-		return helpBioLinks
+	case "antibio", "bio", "biocheck", "biolinks", "free", "unfree", "freelist":
+		return helpBioCheck
 	case "clones", "clone", "mybot", "mybots", "custominstances", "custom":
 		return helpCustomInstances
 	case "owner", "protection", "security", "spam":
