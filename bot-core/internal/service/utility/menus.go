@@ -791,13 +791,13 @@ func helpLandingMarkup(username string) *telegram.InlineKeyboardMarkup {
 		},
 		[]telegram.InlineKeyboardButton{
 			{Text: "Warnings", CallbackData: helpCallback(helpWarnings)},
-			{Text: "⭐ Custom Instances", CallbackData: helpCallback(helpCustomInstances)},
 		},
 		[]telegram.InlineKeyboardButton{
 			{Text: "AntiAbuse", CallbackData: helpCallback(helpAntiAbuse)},
 			{Text: "Bio Links", CallbackData: helpCallback(helpBioLinks)},
 		},
 		[]telegram.InlineKeyboardButton{
+			{Text: "⭐ Custom Instances", CallbackData: helpCallback(helpCustomInstances)},
 			{Text: "🔎 Docs Website", URL: serviceutil.WebsiteURL},
 		},
 	)
