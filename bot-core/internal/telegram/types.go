@@ -127,6 +127,14 @@ type InlineKeyboardMarkup struct {
 	InlineKeyboard [][]InlineKeyboardButton `json:"inline_keyboard"`
 }
 
+type PromotePermissions struct {
+	CanDeleteMessages  bool `json:"can_delete_messages,omitempty"`
+	CanRestrictMembers bool `json:"can_restrict_members,omitempty"`
+	CanChangeInfo      bool `json:"can_change_info,omitempty"`
+	CanPinMessages     bool `json:"can_pin_messages,omitempty"`
+	CanPromoteMembers  bool `json:"can_promote_members,omitempty"`
+}
+
 type MessageEntityMention struct {
 	UserID   int64
 	Username string

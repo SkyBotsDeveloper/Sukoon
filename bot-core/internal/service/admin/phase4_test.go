@@ -201,8 +201,126 @@ func TestAdminsListsVisibleChatAdmins(t *testing.T) {
 		t.Fatalf("expected admins response")
 	}
 	last := h.Client.Messages[len(h.Client.Messages)-1]
-	if !strings.Contains(last.Text, "@owner [owner]") || !strings.Contains(last.Text, "@mod") || !strings.Contains(last.Text, "Anonymous admin") {
+	if !strings.Contains(last.Text, "@owner [owner]") || !strings.Contains(last.Text, "@mod") || strings.Contains(last.Text, "Anonymous admin") {
 		t.Fatalf("expected admin list in response, got %q", last.Text)
+	}
+}
+
+func TestPromoteDemoteAdminCacheAdminErrorAndAnonAdmin(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100719, Type: "supergroup", Title: "Admin Controls"}
+	h.Client.AdminsByChat[chat.ID] = []telegram.ChatAdministrator{
+		{
+			User:               telegram.User{ID: 1, FirstName: "Owner", Username: "owner"},
+			Status:             "creator",
+			CanDeleteMessages:  true,
+			CanRestrictMembers: true,
+			CanChangeInfo:      true,
+			CanPinMessages:     true,
+			CanPromoteMembers:  true,
+		},
+	}
+	if err := h.Store.EnsureUser(context.Background(), telegram.User{ID: 55, Username: "target", FirstName: "Target"}); err != nil {
+		t.Fatalf("ensure target failed: %v", err)
+	}
+
+	for idx, text := range []string{"/promote @target", "/admincache", "/demote @target", "/adminerror off"} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(idx + 1),
+			Message: &telegram.Message{
+				MessageID: int64(200 + idx),
+				From:      &telegram.User{ID: 1, FirstName: "Owner", Username: "owner"},
+				Chat:      chat,
+				Text:      text,
+			},
+		}); err != nil {
+			t.Fatalf("owner command %q failed: %v", text, err)
+		}
+	}
+
+	if len(h.Client.Promotions) != 2 {
+		t.Fatalf("expected promote and demote API calls, got %+v", h.Client.Promotions)
+	}
+	if !h.Client.Promotions[0].Permissions.CanDeleteMessages || h.Client.Promotions[0].Permissions.CanPromoteMembers {
+		t.Fatalf("expected promote permissions to mirror caller without add-admins, got %+v", h.Client.Promotions[0])
+	}
+	if h.Client.Promotions[1].Permissions.CanDeleteMessages || h.Client.Promotions[1].Permissions.CanRestrictMembers {
+		t.Fatalf("expected demote call to clear permissions, got %+v", h.Client.Promotions[1])
+	}
+	if got := h.Client.Messages[1].Text; !strings.Contains(got, "Admin cache refreshed") {
+		t.Fatalf("expected admincache response, got %q", got)
+	}
+
+	beforeSilent := len(h.Client.Messages)
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 10,
+		Message: &telegram.Message{
+			MessageID: 250,
+			From:      &telegram.User{ID: 90, FirstName: "Member"},
+			Chat:      chat,
+			Text:      "/promote @target",
+		},
+	}); err != nil {
+		t.Fatalf("member promote with adminerror off failed unexpectedly: %v", err)
+	}
+	if len(h.Client.Messages) != beforeSilent {
+		t.Fatalf("expected adminerror off to suppress member warning, got %+v", h.Client.Messages[beforeSilent:])
+	}
+
+	for idx, text := range []string{"/adminerror on", "/anonadmin on"} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(20 + idx),
+			Message: &telegram.Message{
+				MessageID: int64(260 + idx),
+				From:      &telegram.User{ID: 1, FirstName: "Owner", Username: "owner"},
+				Chat:      chat,
+				Text:      text,
+			},
+		}); err != nil {
+			t.Fatalf("owner command %q failed: %v", text, err)
+		}
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 30,
+		Message: &telegram.Message{
+			MessageID: 270,
+			From:      &telegram.User{ID: 90, FirstName: "Member"},
+			Chat:      chat,
+			Text:      "/promote @target",
+		},
+	}); err != nil {
+		t.Fatalf("member promote with adminerror on failed unexpectedly: %v", err)
+	}
+	if got := h.Client.Messages[len(h.Client.Messages)-1].Text; !strings.Contains(got, "You need to be admin to do this.") {
+		t.Fatalf("expected adminerror warning, got %q", got)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 40,
+		Message: &telegram.Message{
+			MessageID: 280,
+			SenderChat: &telegram.Chat{
+				ID:    chat.ID,
+				Type:  chat.Type,
+				Title: chat.Title,
+			},
+			Chat: chat,
+			Text: "/admincache",
+		},
+	}); err != nil {
+		t.Fatalf("anonymous admin admincache failed: %v", err)
+	}
+	if got := h.Client.Messages[len(h.Client.Messages)-1].Text; !strings.Contains(got, "Admin cache refreshed") {
+		t.Fatalf("expected anonymous admin to use admincache when anonadmin is on, got %q", got)
+	}
+
+	bundle, err := h.Store.LoadRuntimeBundle(context.Background(), h.Bot.ID, chat.ID)
+	if err != nil {
+		t.Fatalf("load runtime bundle failed: %v", err)
+	}
+	if !bundle.Settings.AdminErrors || !bundle.Settings.AnonAdmins {
+		t.Fatalf("expected adminerror and anonadmin settings to persist, got %+v", bundle.Settings)
 	}
 }
 

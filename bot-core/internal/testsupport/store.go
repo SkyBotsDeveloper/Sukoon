@@ -293,7 +293,7 @@ func (m *MemoryStore) EnsureChat(_ context.Context, botID string, chat telegram.
 	key := chatKey(botID, chat.ID)
 	m.chats[key] = chat
 	if _, ok := m.settings[key]; !ok {
-		m.settings[key] = domain.ChatSettings{BotID: botID, ChatID: chat.ID, Language: "en"}
+		m.settings[key] = domain.ChatSettings{BotID: botID, ChatID: chat.ID, Language: "en", AdminErrors: true}
 	}
 	if _, ok := m.moderation[key]; !ok {
 		m.moderation[key] = domain.ModerationSettings{BotID: botID, ChatID: chat.ID, WarnLimit: 3, WarnMode: "mute"}
@@ -443,6 +443,26 @@ func (m *MemoryStore) SetDisableAdmins(_ context.Context, botID string, chatID i
 	key := chatKey(botID, chatID)
 	settings := m.settings[key]
 	settings.DisableAdmins = enabled
+	m.settings[key] = settings
+	return nil
+}
+
+func (m *MemoryStore) SetAdminErrors(_ context.Context, botID string, chatID int64, enabled bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := chatKey(botID, chatID)
+	settings := m.settings[key]
+	settings.AdminErrors = enabled
+	m.settings[key] = settings
+	return nil
+}
+
+func (m *MemoryStore) SetAnonAdmins(_ context.Context, botID string, chatID int64, enabled bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := chatKey(botID, chatID)
+	settings := m.settings[key]
+	settings.AnonAdmins = enabled
 	m.settings[key] = settings
 	return nil
 }

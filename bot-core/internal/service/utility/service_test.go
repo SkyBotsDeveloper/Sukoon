@@ -526,6 +526,48 @@ func TestHelpNavigationSupportsNestedHelpBatchPages(t *testing.T) {
 	}
 }
 
+func TestAdminHelpPageUsesBackOnlyMarkup(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: 54, Type: "private"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 60,
+			From:      &telegram.User{ID: 54, FirstName: "User"},
+			Chat:      chat,
+			Text:      "/help",
+		},
+	}); err != nil {
+		t.Fatalf("help failed: %v", err)
+	}
+
+	root := h.Client.Messages[len(h.Client.Messages)-1]
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-help-admin",
+			From: telegram.User{ID: 54, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: root.MessageID,
+				Chat:      chat,
+			},
+			Data: "ux:help:admin",
+		},
+	}); err != nil {
+		t.Fatalf("admin help callback failed: %v", err)
+	}
+
+	adminPage := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	if !strings.Contains(adminPage.Text, "/promote <reply/username/userid>") || !strings.Contains(adminPage.Text, "/anonadmin <yes/no/on/off>") || !strings.Contains(adminPage.Text, "/adminerror <yes/no/on/off>") {
+		t.Fatalf("expected admin help page copy, got %q", adminPage.Text)
+	}
+	adminMarkup := requireEditedMarkup(t, adminPage)
+	assertButton(t, adminMarkup, 0, 0, "Back", "ux:help:root", "")
+	assertNoButtonText(t, adminMarkup, "Website")
+	assertNoButtonText(t, adminMarkup, "Add to Group")
+}
+
 func TestGroupPMGuidanceUsesButtonsForHelpAndPrivacy(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	group := telegram.Chat{ID: -100990, Type: "supergroup", Title: "Help"}

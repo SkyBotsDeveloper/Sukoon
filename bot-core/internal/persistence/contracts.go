@@ -39,6 +39,8 @@ type Store interface {
 	SetDisabledCommand(ctx context.Context, botID string, chatID int64, command string, disabled bool, changedBy int64) error
 	SetDisabledDelete(ctx context.Context, botID string, chatID int64, enabled bool) error
 	SetDisableAdmins(ctx context.Context, botID string, chatID int64, enabled bool) error
+	SetAdminErrors(ctx context.Context, botID string, chatID int64, enabled bool) error
+	SetAnonAdmins(ctx context.Context, botID string, chatID int64, enabled bool) error
 	SetWarnConfig(ctx context.Context, botID string, chatID int64, limit int, mode string) error
 	IncrementWarnings(ctx context.Context, botID string, chatID int64, userID int64, reason string) (int, error)
 	ResetWarnings(ctx context.Context, botID string, chatID int64, userID int64) error

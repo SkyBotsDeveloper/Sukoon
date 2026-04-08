@@ -17,7 +17,7 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 	err := s.pool.QueryRow(ctx, `
 		SELECT
 			cs.bot_id, cs.chat_id, cs.language, cs.reports_enabled, cs.log_channel_id,
-			cs.clean_commands, cs.disabled_delete, cs.disable_admins, cs.clean_service_join, cs.clean_service_leave, cs.clean_service_pin, cs.clean_service_title, cs.clean_service_photo, cs.clean_service_other, cs.clean_service_videochat,
+			cs.clean_commands, cs.disabled_delete, cs.disable_admins, cs.admin_errors, cs.anon_admins, cs.clean_service_join, cs.clean_service_leave, cs.clean_service_pin, cs.clean_service_title, cs.clean_service_photo, cs.clean_service_other, cs.clean_service_videochat,
 			cs.welcome_enabled, cs.welcome_text, cs.goodbye_enabled, cs.goodbye_text, cs.rules_text,
 			ms.warn_limit, ms.warn_mode,
 			afs.enabled, afs.flood_limit, afs.window_seconds, afs.action,
@@ -40,6 +40,8 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 		&bundle.Settings.CleanCommands,
 		&bundle.Settings.DisabledDelete,
 		&bundle.Settings.DisableAdmins,
+		&bundle.Settings.AdminErrors,
+		&bundle.Settings.AnonAdmins,
 		&bundle.Settings.CleanServiceJoin,
 		&bundle.Settings.CleanServiceLeave,
 		&bundle.Settings.CleanServicePin,
@@ -160,6 +162,24 @@ func (s *Store) SetDisableAdmins(ctx context.Context, botID string, chatID int64
 	_, err := s.pool.Exec(ctx, `
 		UPDATE chat_settings
 		SET disable_admins=$3, updated_at=NOW()
+		WHERE bot_id=$1 AND chat_id=$2
+	`, botID, chatID, enabled)
+	return err
+}
+
+func (s *Store) SetAdminErrors(ctx context.Context, botID string, chatID int64, enabled bool) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE chat_settings
+		SET admin_errors=$3, updated_at=NOW()
+		WHERE bot_id=$1 AND chat_id=$2
+	`, botID, chatID, enabled)
+	return err
+}
+
+func (s *Store) SetAnonAdmins(ctx context.Context, botID string, chatID int64, enabled bool) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE chat_settings
+		SET anon_admins=$3, updated_at=NOW()
 		WHERE bot_id=$1 AND chat_id=$2
 	`, botID, chatID, enabled)
 	return err

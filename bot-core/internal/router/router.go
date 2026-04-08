@@ -160,6 +160,15 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 		}
 		rt.ActorPermissions = perms
 	}
+	if message != nil && message.SenderChat != nil && message.SenderChat.ID == chat.ID && rt.RuntimeBundle.Settings.AnonAdmins {
+		rt.ActorPermissions.IsChatAdmin = true
+		rt.ActorPermissions.CanDeleteMessages = true
+		rt.ActorPermissions.CanMuteMembers = true
+		rt.ActorPermissions.CanRestrictMembers = true
+		rt.ActorPermissions.CanChangeInfo = true
+		rt.ActorPermissions.CanPinMessages = true
+		rt.ActorPermissions.CanPromoteMembers = true
+	}
 
 	if callback != nil {
 		handled, err := r.captcha.HandleCallback(ctx, rt)

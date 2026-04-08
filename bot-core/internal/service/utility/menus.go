@@ -73,13 +73,20 @@ var helpPages = map[string]helpPage{
 	helpAdmin: {
 		Title: "Admin",
 		Lines: []string{
-			"Admin visibility and Sukoon staff workflows.",
+			"Make it easy to promote and demote users with the admin module!",
 			"",
-			"/admins, /adminlist",
-			"/mods, /mod, /unmod, /muter, /unmuter",
+			"Admin commands:",
+			"- /promote <reply/username/userid>: Promote a user.",
+			"- /demote <reply/username/userid>: Demote a user.",
+			"- /adminlist: List the admins in the current chat. (/admins also works.)",
+			"- /admincache: Refresh Sukoon's admin lookup for this chat.",
+			"- /anonadmin <yes/no/on/off>: Allow anonymous admins to use admin commands without permission verification. Not recommended.",
+			"- /adminerror <yes/no/on/off>: Send error messages when normal users use admin commands. Default: on.",
 			"",
-			"Sukoon loads Telegram admin permissions live on each update, so there is no separate /admincache refresh command in the current build.",
-			"Telegram promote/demote and anonymous-admin controls are still deferred.",
+			"Sukoon maps Telegram admin permissions to bot actions so admins cannot escalate beyond what Telegram already allows.",
+			"Promoted users receive the overlap of the caller's Telegram admin rights, minus add-admins permission.",
+			"Anonymous admins stay hidden from /adminlist to preserve anonymity.",
+			"/admincache forces a fresh Telegram admin lookup if permissions were changed recently.",
 		},
 	},
 	helpAntiflood: {
@@ -838,6 +845,12 @@ func helpLandingMarkup(username string) *telegram.InlineKeyboardMarkup {
 
 func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMarkup {
 	switch page {
+	case helpAdmin:
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: callbackHelpMain},
+			},
+		)
 	case helpBlocklists:
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{

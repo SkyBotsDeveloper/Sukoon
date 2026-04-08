@@ -35,6 +35,8 @@ type ChatSettings struct {
 	CleanCommands         bool
 	DisabledDelete        bool
 	DisableAdmins         bool
+	AdminErrors           bool
+	AnonAdmins            bool
 	CleanServiceJoin      bool
 	CleanServiceLeave     bool
 	CleanServicePin       bool

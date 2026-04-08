@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"sukoon/bot-core/internal/telegram"
@@ -57,7 +58,7 @@ func TestModGrantRequiresPromotePermission(t *testing.T) {
 		},
 	}
 
-	err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
 		UpdateID: 1,
 		Message: &telegram.Message{
 			MessageID: 10,
@@ -70,9 +71,11 @@ func TestModGrantRequiresPromotePermission(t *testing.T) {
 				Chat:      chat,
 			},
 		},
-	})
-	if err == nil {
-		t.Fatalf("expected mod grant without promote permission to fail")
+	}); err != nil {
+		t.Fatalf("expected mod grant denial to be handled without router error, got %v", err)
+	}
+	if len(h.Client.Messages) == 0 || !strings.Contains(h.Client.Messages[len(h.Client.Messages)-1].Text, "Add admins permission required") {
+		t.Fatalf("expected promote permission warning, got %+v", h.Client.Messages)
 	}
 
 	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{

@@ -21,6 +21,7 @@ type Client interface {
 	PinChatMessage(ctx context.Context, chatID int64, messageID int64, disableNotification bool) error
 	UnpinChatMessage(ctx context.Context, chatID int64, messageID *int64) error
 	UnpinAllChatMessages(ctx context.Context, chatID int64) error
+	PromoteChatMember(ctx context.Context, chatID int64, userID int64, permissions PromotePermissions) error
 	BanChatMember(ctx context.Context, chatID int64, userID int64, untilDate *time.Time, revokeMessages bool) error
 	UnbanChatMember(ctx context.Context, chatID int64, userID int64, onlyIfBanned bool) error
 	RestrictChatMember(ctx context.Context, chatID int64, userID int64, permissions RestrictPermissions, untilDate *time.Time) error
@@ -175,6 +176,19 @@ func (c *HTTPClient) UnpinChatMessage(ctx context.Context, chatID int64, message
 func (c *HTTPClient) UnpinAllChatMessages(ctx context.Context, chatID int64) error {
 	_, err := request[bool](ctx, c, "unpinAllChatMessages", map[string]any{
 		"chat_id": chatID,
+	})
+	return err
+}
+
+func (c *HTTPClient) PromoteChatMember(ctx context.Context, chatID int64, userID int64, permissions PromotePermissions) error {
+	_, err := request[bool](ctx, c, "promoteChatMember", map[string]any{
+		"chat_id":              chatID,
+		"user_id":              userID,
+		"can_delete_messages":  permissions.CanDeleteMessages,
+		"can_restrict_members": permissions.CanRestrictMembers,
+		"can_change_info":      permissions.CanChangeInfo,
+		"can_pin_messages":     permissions.CanPinMessages,
+		"can_promote_members":  permissions.CanPromoteMembers,
 	})
 	return err
 }

@@ -53,8 +53,18 @@ func (s *Service) Handle(ctx context.Context, rt *runtime.Context) (bool, error)
 		return true, s.reports(ctx, rt)
 	case "report":
 		return true, s.report(ctx, rt)
+	case "promote":
+		return true, s.promote(ctx, rt, true)
+	case "demote":
+		return true, s.promote(ctx, rt, false)
 	case "admins", "adminlist":
 		return true, s.admins(ctx, rt)
+	case "admincache":
+		return true, s.adminCache(ctx, rt)
+	case "anonadmin":
+		return true, s.anonAdmin(ctx, rt)
+	case "adminerror":
+		return true, s.adminError(ctx, rt)
 	case "cleancommands", "cleancommand", "keepcommand":
 		return true, s.cleanCommands(ctx, rt)
 	case "cleancommandtypes":
@@ -90,42 +100,63 @@ func (s *Service) Handle(ctx context.Context, rt *runtime.Context) (bool, error)
 	}
 }
 
-func (s *Service) ensureChatAdmin(rt *runtime.Context) error {
+func (s *Service) ensureChatAdmin(ctx context.Context, rt *runtime.Context) (bool, error) {
 	if !rt.ActorPermissions.IsChatAdmin {
-		return fmt.Errorf("admin rights required")
+		if isAnonymousAdminMessage(rt) {
+			return false, s.sendPermissionNotice(ctx, rt, "Anonymous admins need /anonadmin on before they can use admin commands.", true)
+		}
+		return false, s.sendPermissionNotice(ctx, rt, "You need to be admin to do this.", true)
 	}
-	return nil
+	return true, nil
 }
 
-func (s *Service) ensureDeletePerm(rt *runtime.Context) error {
+func (s *Service) ensureDeletePerm(ctx context.Context, rt *runtime.Context) (bool, error) {
+	ok, err := s.ensureChatAdmin(ctx, rt)
+	if !ok || err != nil {
+		return ok, err
+	}
 	if !rt.ActorPermissions.CanDeleteMessages {
-		return fmt.Errorf("delete messages permission required")
+		return false, s.sendPermissionNotice(ctx, rt, "Delete messages permission required.", false)
 	}
-	return nil
+	return true, nil
 }
 
-func (s *Service) ensurePromotePerm(rt *runtime.Context) error {
-	if err := s.ensureChatAdmin(rt); err != nil {
-		return err
+func (s *Service) ensurePromotePerm(ctx context.Context, rt *runtime.Context) (bool, error) {
+	ok, err := s.ensureChatAdmin(ctx, rt)
+	if !ok || err != nil {
+		return ok, err
 	}
 	if !rt.ActorPermissions.CanPromoteMembers {
-		return fmt.Errorf("add admins permission required")
+		return false, s.sendPermissionNotice(ctx, rt, "Add admins permission required.", false)
 	}
-	return nil
+	return true, nil
 }
 
-func (s *Service) ensurePinPerm(rt *runtime.Context) error {
-	if err := s.ensureChatAdmin(rt); err != nil {
-		return err
+func (s *Service) ensurePinPerm(ctx context.Context, rt *runtime.Context) (bool, error) {
+	ok, err := s.ensureChatAdmin(ctx, rt)
+	if !ok || err != nil {
+		return ok, err
 	}
 	if !rt.ActorPermissions.CanPinMessages {
-		return fmt.Errorf("pin messages permission required")
+		return false, s.sendPermissionNotice(ctx, rt, "Pin messages permission required.", false)
 	}
-	return nil
+	return true, nil
+}
+
+func (s *Service) sendPermissionNotice(ctx context.Context, rt *runtime.Context, text string, respectAdminErrors bool) error {
+	if respectAdminErrors && !rt.RuntimeBundle.Settings.AdminErrors {
+		return nil
+	}
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func isAnonymousAdminMessage(rt *runtime.Context) bool {
+	return rt.Message != nil && rt.Message.SenderChat != nil && rt.Message.SenderChat.ID == rt.ChatID()
 }
 
 func (s *Service) approve(ctx context.Context, rt *runtime.Context, approved bool) error {
-	if err := s.ensureChatAdmin(rt); err != nil {
+	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
 		return err
 	}
 	target, _, err := moderationTarget(ctx, rt)
@@ -144,7 +175,7 @@ func (s *Service) approve(ctx context.Context, rt *runtime.Context, approved boo
 }
 
 func (s *Service) approvalStatus(ctx context.Context, rt *runtime.Context) error {
-	if err := s.ensureChatAdmin(rt); err != nil {
+	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
 		return err
 	}
 	target, _, err := moderationTarget(ctx, rt)
@@ -181,7 +212,7 @@ func (s *Service) listApproved(ctx context.Context, rt *runtime.Context) error {
 }
 
 func (s *Service) unapproveAll(ctx context.Context, rt *runtime.Context) error {
-	if err := s.ensureChatAdmin(rt); err != nil {
+	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
 		return err
 	}
 	approvedUsers, err := rt.Store.ListApprovedUsers(ctx, rt.Bot.ID, rt.ChatID())
@@ -202,7 +233,7 @@ func (s *Service) unapproveAll(ctx context.Context, rt *runtime.Context) error {
 }
 
 func (s *Service) disable(ctx context.Context, rt *runtime.Context, disabled bool) error {
-	if err := s.ensureChatAdmin(rt); err != nil {
+	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
 		return err
 	}
 	if len(rt.Command.Args) == 0 {
@@ -254,7 +285,7 @@ func (s *Service) disableable(ctx context.Context, rt *runtime.Context) error {
 }
 
 func (s *Service) disabledDelete(ctx context.Context, rt *runtime.Context) error {
-	if err := s.ensureChatAdmin(rt); err != nil {
+	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
 		return err
 	}
 	if len(rt.Command.Args) == 0 {
@@ -277,7 +308,7 @@ func (s *Service) disabledDelete(ctx context.Context, rt *runtime.Context) error
 }
 
 func (s *Service) disableAdmins(ctx context.Context, rt *runtime.Context) error {
-	if err := s.ensureChatAdmin(rt); err != nil {
+	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
 		return err
 	}
 	if len(rt.Command.Args) == 0 {
@@ -329,7 +360,7 @@ func onOff(enabled bool) string {
 }
 
 func (s *Service) logChannel(ctx context.Context, rt *runtime.Context) error {
-	if err := s.ensureChatAdmin(rt); err != nil {
+	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
 		return err
 	}
 	switch rt.Command.Name {
@@ -380,7 +411,7 @@ func (s *Service) logCategories(ctx context.Context, rt *runtime.Context) error 
 }
 
 func (s *Service) reports(ctx context.Context, rt *runtime.Context) error {
-	if err := s.ensureChatAdmin(rt); err != nil {
+	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
 		return err
 	}
 	if len(rt.Command.Args) == 0 {
@@ -427,14 +458,9 @@ func (s *Service) admins(ctx context.Context, rt *runtime.Context) error {
 	if err != nil {
 		return err
 	}
-	if len(admins) == 0 {
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No visible chat admins.", rt.ReplyOptions(telegram.SendMessageOptions{}))
-		return err
-	}
 	parts := make([]string, 0, len(admins))
 	for _, admin := range admins {
 		if admin.IsAnonymous {
-			parts = append(parts, "Anonymous admin")
 			continue
 		}
 		label := serviceutil.DisplayName(admin.User)
@@ -443,12 +469,114 @@ func (s *Service) admins(ctx context.Context, rt *runtime.Context) error {
 		}
 		parts = append(parts, label)
 	}
+	if len(parts) == 0 {
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No visible chat admins.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Chat admins: "+strings.Join(parts, ", "), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
+func (s *Service) promote(ctx context.Context, rt *runtime.Context, enabled bool) error {
+	if ok, err := s.ensurePromotePerm(ctx, rt); err != nil || !ok {
+		return err
+	}
+	target, _, err := moderationTarget(ctx, rt)
+	if err != nil {
+		if enabled {
+			return fmt.Errorf("usage: /promote <reply|user>")
+		}
+		return fmt.Errorf("usage: /demote <reply|user>")
+	}
+
+	perms := telegram.PromotePermissions{}
+	if enabled {
+		perms = telegram.PromotePermissions{
+			CanDeleteMessages:  rt.ActorPermissions.CanDeleteMessages,
+			CanRestrictMembers: rt.ActorPermissions.CanRestrictMembers,
+			CanChangeInfo:      rt.ActorPermissions.CanChangeInfo,
+			CanPinMessages:     rt.ActorPermissions.CanPinMessages,
+			CanPromoteMembers:  false,
+		}
+	}
+	if err := rt.Client.PromoteChatMember(ctx, rt.ChatID(), target.UserID, perms); err != nil {
+		return err
+	}
+	text := "Promoted " + target.Name + "."
+	if !enabled {
+		text = "Demoted " + target.Name + "."
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) adminCache(ctx context.Context, rt *runtime.Context) error {
+	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
+		return err
+	}
+	admins, err := rt.Client.GetChatAdministrators(ctx, rt.ChatID())
+	if err != nil {
+		return err
+	}
+	visible := 0
+	for _, admin := range admins {
+		if admin.IsAnonymous {
+			continue
+		}
+		visible++
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Admin cache refreshed. Visible admins: %d.", visible), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) anonAdmin(ctx context.Context, rt *runtime.Context) error {
+	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
+		return err
+	}
+	if len(rt.Command.Args) == 0 {
+		status := "off"
+		if rt.RuntimeBundle.Settings.AnonAdmins {
+			status = "on"
+		}
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Anonymous admin mode is "+status+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	enabled, err := ParseToggle(rt.Command.Args[0])
+	if err != nil {
+		return err
+	}
+	if err := rt.Store.SetAnonAdmins(ctx, rt.Bot.ID, rt.ChatID(), enabled); err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Anonymous admin mode %s.", toggleWord(enabled)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) adminError(ctx context.Context, rt *runtime.Context) error {
+	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
+		return err
+	}
+	if len(rt.Command.Args) == 0 {
+		status := "on"
+		if !rt.RuntimeBundle.Settings.AdminErrors {
+			status = "off"
+		}
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Admin errors are "+status+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	enabled, err := ParseToggle(rt.Command.Args[0])
+	if err != nil {
+		return err
+	}
+	if err := rt.Store.SetAdminErrors(ctx, rt.Bot.ID, rt.ChatID(), enabled); err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Admin errors %s.", toggleWord(enabled)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
 func (s *Service) cleanCommands(ctx context.Context, rt *runtime.Context) error {
-	if err := s.ensureChatAdmin(rt); err != nil {
+	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
 		return err
 	}
 	if rt.Command.Name == "keepcommand" {
@@ -484,7 +612,7 @@ func (s *Service) cleanCommandTypes(ctx context.Context, rt *runtime.Context) er
 }
 
 func (s *Service) cleanService(ctx context.Context, rt *runtime.Context) error {
-	if err := s.ensureChatAdmin(rt); err != nil {
+	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
 		return err
 	}
 	if len(rt.Command.Args) == 0 {
@@ -521,7 +649,7 @@ func (s *Service) cleanService(ctx context.Context, rt *runtime.Context) error {
 }
 
 func (s *Service) noCleanService(ctx context.Context, rt *runtime.Context) error {
-	if err := s.ensureChatAdmin(rt); err != nil {
+	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
 		return err
 	}
 	if len(rt.Command.Args) == 0 {
@@ -542,7 +670,7 @@ func (s *Service) cleanServiceTypes(ctx context.Context, rt *runtime.Context) er
 }
 
 func (s *Service) purge(ctx context.Context, rt *runtime.Context) error {
-	if err := s.ensureDeletePerm(rt); err != nil {
+	if ok, err := s.ensureDeletePerm(ctx, rt); err != nil || !ok {
 		return err
 	}
 	if s.jobs == nil {
@@ -586,7 +714,7 @@ func (s *Service) purge(ctx context.Context, rt *runtime.Context) error {
 }
 
 func (s *Service) del(ctx context.Context, rt *runtime.Context) error {
-	if err := s.ensureDeletePerm(rt); err != nil {
+	if ok, err := s.ensureDeletePerm(ctx, rt); err != nil || !ok {
 		return err
 	}
 	if rt.Message == nil || rt.Message.ReplyToMessage == nil {
@@ -600,7 +728,7 @@ func (s *Service) del(ctx context.Context, rt *runtime.Context) error {
 }
 
 func (s *Service) pin(ctx context.Context, rt *runtime.Context) error {
-	if err := s.ensurePinPerm(rt); err != nil {
+	if ok, err := s.ensurePinPerm(ctx, rt); err != nil || !ok {
 		return err
 	}
 	if rt.Message == nil || rt.Message.ReplyToMessage == nil {
@@ -615,7 +743,7 @@ func (s *Service) pin(ctx context.Context, rt *runtime.Context) error {
 }
 
 func (s *Service) unpin(ctx context.Context, rt *runtime.Context) error {
-	if err := s.ensurePinPerm(rt); err != nil {
+	if ok, err := s.ensurePinPerm(ctx, rt); err != nil || !ok {
 		return err
 	}
 	var messageID *int64
@@ -630,7 +758,7 @@ func (s *Service) unpin(ctx context.Context, rt *runtime.Context) error {
 }
 
 func (s *Service) unpinAll(ctx context.Context, rt *runtime.Context) error {
-	if err := s.ensurePinPerm(rt); err != nil {
+	if ok, err := s.ensurePinPerm(ctx, rt); err != nil || !ok {
 		return err
 	}
 	if err := rt.Client.UnpinAllChatMessages(ctx, rt.ChatID()); err != nil {
@@ -649,7 +777,7 @@ func (s *Service) muter(ctx context.Context, rt *runtime.Context, enabled bool) 
 }
 
 func (s *Service) setSilentRole(ctx context.Context, rt *runtime.Context, enabled bool, role string, label string) error {
-	if err := s.ensurePromotePerm(rt); err != nil {
+	if ok, err := s.ensurePromotePerm(ctx, rt); err != nil || !ok {
 		return err
 	}
 	target, _, err := moderationTarget(ctx, rt)

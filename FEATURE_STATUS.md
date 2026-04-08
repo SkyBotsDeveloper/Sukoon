@@ -14,7 +14,9 @@
 ### Admin And Cleanup
 
 - `/approval`, `/approve`, `/unapprove`, `/approved`, `/unapproveall`
-- `/admins`, `/adminlist`
+- `/promote`, `/demote`
+- `/admins`, `/adminlist`, `/admincache`
+- `/anonadmin`, `/adminerror`
 - `/disable`, `/enable`, `/disableable`, `/disabledel`, `/disableadmin`, `/disabled`
 - `/logchannel`, `/setlog`, `/unsetlog`, `/log`, `/nolog`, `/logcategories`
 - `/reports`, `/report`

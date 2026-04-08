@@ -19,6 +19,7 @@ type FakeTelegramClient struct {
 	PinnedMessages   []PinnedMessage
 	UnpinnedMessages []UnpinnedMessage
 	UnpinAllChats    []int64
+	Promotions       []PromotionCall
 	Bans             []BanCall
 	Unbans           []UnbanCall
 	Restrictions     []RestrictionCall
@@ -78,6 +79,12 @@ type PinnedMessage struct {
 type UnpinnedMessage struct {
 	ChatID    int64
 	MessageID *int64
+}
+
+type PromotionCall struct {
+	ChatID      int64
+	UserID      int64
+	Permissions telegram.PromotePermissions
 }
 
 type BanCall struct {
@@ -192,6 +199,53 @@ func (f *FakeTelegramClient) UnpinAllChatMessages(_ context.Context, chatID int6
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.UnpinAllChats = append(f.UnpinAllChats, chatID)
+	return nil
+}
+
+func (f *FakeTelegramClient) PromoteChatMember(_ context.Context, chatID int64, userID int64, permissions telegram.PromotePermissions) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Promotions = append(f.Promotions, PromotionCall{ChatID: chatID, UserID: userID, Permissions: permissions})
+
+	admins := append([]telegram.ChatAdministrator{}, f.AdminsByChat[chatID]...)
+	allOff := !permissions.CanDeleteMessages && !permissions.CanRestrictMembers && !permissions.CanChangeInfo && !permissions.CanPinMessages && !permissions.CanPromoteMembers
+	if allOff {
+		filtered := admins[:0]
+		for _, admin := range admins {
+			if admin.User.ID == userID && admin.Status != "creator" {
+				continue
+			}
+			filtered = append(filtered, admin)
+		}
+		f.AdminsByChat[chatID] = append([]telegram.ChatAdministrator{}, filtered...)
+		return nil
+	}
+
+	updated := false
+	for idx := range admins {
+		if admins[idx].User.ID != userID {
+			continue
+		}
+		admins[idx].Status = "administrator"
+		admins[idx].CanDeleteMessages = permissions.CanDeleteMessages
+		admins[idx].CanRestrictMembers = permissions.CanRestrictMembers
+		admins[idx].CanChangeInfo = permissions.CanChangeInfo
+		admins[idx].CanPinMessages = permissions.CanPinMessages
+		admins[idx].CanPromoteMembers = permissions.CanPromoteMembers
+		updated = true
+	}
+	if !updated {
+		admins = append(admins, telegram.ChatAdministrator{
+			User:               telegram.User{ID: userID},
+			Status:             "administrator",
+			CanDeleteMessages:  permissions.CanDeleteMessages,
+			CanRestrictMembers: permissions.CanRestrictMembers,
+			CanChangeInfo:      permissions.CanChangeInfo,
+			CanPinMessages:     permissions.CanPinMessages,
+			CanPromoteMembers:  permissions.CanPromoteMembers,
+		})
+	}
+	f.AdminsByChat[chatID] = admins
 	return nil
 }
 
