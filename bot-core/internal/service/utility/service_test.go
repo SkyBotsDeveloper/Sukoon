@@ -200,9 +200,9 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	assertButton(t, helpMarkup, 9, 1, "Silent Power", "ux:help:silentpower", "")
 	assertButton(t, helpMarkup, 9, 2, "Extra", "ux:help:extra", "")
 	assertButton(t, helpMarkup, 10, 0, "Bio Check", "ux:help:biocheck", "")
-	assertButton(t, helpMarkup, 11, 0, "AntiAbuse", "ux:help:antiabuse", "")
-	assertButton(t, helpMarkup, 12, 0, "⭐ Custom Instances", "ux:help:custominstances", "")
-	assertButton(t, helpMarkup, 13, 0, "📚 Docs Website", "", serviceutil.WebsiteURL)
+	assertButton(t, helpMarkup, 10, 1, "AntiAbuse", "ux:help:antiabuse", "")
+	assertButton(t, helpMarkup, 11, 0, "⭐ Custom Instances", "ux:help:custominstances", "")
+	assertButton(t, helpMarkup, 11, 1, "📚 Docs Website", "", serviceutil.WebsiteURL)
 	assertNoButtonText(t, helpMarkup, "Home")
 	assertNoButtonText(t, helpMarkup, "Close")
 
