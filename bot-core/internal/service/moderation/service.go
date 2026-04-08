@@ -81,6 +81,9 @@ func (s *Service) ban(ctx context.Context, rt *runtime.Context, silent bool, del
 	if err := s.ensureRestrictPerm(rt); err != nil {
 		return err
 	}
+	if deleteCommand && !isReplyTarget(rt) {
+		return fmt.Errorf("reply to a user's message to use /%s", rt.Command.Name)
+	}
 	target, reason, err := parseTargetAndReason(ctx, rt, rt.Command.Args)
 	if err != nil {
 		return err
@@ -89,9 +92,7 @@ func (s *Service) ban(ctx context.Context, rt *runtime.Context, silent bool, del
 	if err := rt.Client.BanChatMember(ctx, rt.ChatID(), target.UserID, nil, true); err != nil {
 		return err
 	}
-	if deleteCommand {
-		_ = rt.Client.DeleteMessage(ctx, rt.ChatID(), rt.Message.MessageID)
-	}
+	deleteModerationMessages(ctx, rt, silent, deleteCommand)
 	if !silent {
 		_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Banned %s. %s", target.Name, suffixReason(reason)), rt.ReplyOptions(telegram.SendMessageOptions{}))
 		if err != nil {
@@ -122,14 +123,14 @@ func (s *Service) tban(ctx context.Context, rt *runtime.Context) error {
 	if err := s.ensureRestrictPerm(rt); err != nil {
 		return err
 	}
-	target, until, reason, err := parseTimedTarget(ctx, rt, rt.Command.Args)
+	target, duration, until, reason, err := parseTimedTarget(ctx, rt, rt.Command.Args)
 	if err != nil {
 		return err
 	}
 	if err := rt.Client.BanChatMember(ctx, rt.ChatID(), target.UserID, &until, true); err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Temp-banned %s until %s. %s", target.Name, until.Format(time.RFC3339), suffixReason(reason)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Temp-banned %s for %s. %s", target.Name, humanizeModerationDuration(duration), suffixReason(reason)), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("tban: actor=%d target=%d until=%s reason=%s", rt.ActorID(), target.UserID, until.Format(time.RFC3339), reason))
 	return err
 }
@@ -138,6 +139,9 @@ func (s *Service) mute(ctx context.Context, rt *runtime.Context, until *time.Tim
 	if err := s.ensureMutePerm(rt); err != nil {
 		return err
 	}
+	if deleteCommand && !isReplyTarget(rt) {
+		return fmt.Errorf("reply to a user's message to use /%s", rt.Command.Name)
+	}
 	target, reason, err := parseTargetAndReason(ctx, rt, rt.Command.Args)
 	if err != nil {
 		return err
@@ -145,9 +149,7 @@ func (s *Service) mute(ctx context.Context, rt *runtime.Context, until *time.Tim
 	if err := rt.Client.RestrictChatMember(ctx, rt.ChatID(), target.UserID, telegram.RestrictPermissions{CanSendMessages: false}, until); err != nil {
 		return err
 	}
-	if deleteCommand {
-		_ = rt.Client.DeleteMessage(ctx, rt.ChatID(), rt.Message.MessageID)
-	}
+	deleteModerationMessages(ctx, rt, silent, deleteCommand)
 	if !silent {
 		text := fmt.Sprintf("Muted %s. %s", target.Name, suffixReason(reason))
 		if until != nil {
@@ -166,14 +168,14 @@ func (s *Service) tmute(ctx context.Context, rt *runtime.Context) error {
 	if err := s.ensureMutePerm(rt); err != nil {
 		return err
 	}
-	target, until, reason, err := parseTimedTarget(ctx, rt, rt.Command.Args)
+	target, duration, until, reason, err := parseTimedTarget(ctx, rt, rt.Command.Args)
 	if err != nil {
 		return err
 	}
 	if err := rt.Client.RestrictChatMember(ctx, rt.ChatID(), target.UserID, telegram.RestrictPermissions{CanSendMessages: false}, &until); err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Temp-muted %s until %s. %s", target.Name, until.Format(time.RFC3339), suffixReason(reason)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Temp-muted %s for %s. %s", target.Name, humanizeModerationDuration(duration), suffixReason(reason)), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("tmute: actor=%d target=%d until=%s reason=%s", rt.ActorID(), target.UserID, until.Format(time.RFC3339), reason))
 	return err
 }
@@ -198,6 +200,9 @@ func (s *Service) kick(ctx context.Context, rt *runtime.Context, silent bool, de
 	if err := s.ensureRestrictPerm(rt); err != nil {
 		return err
 	}
+	if deleteCommand && !isReplyTarget(rt) {
+		return fmt.Errorf("reply to a user's message to use /%s", rt.Command.Name)
+	}
 	target, reason, err := parseTargetAndReason(ctx, rt, rt.Command.Args)
 	if err != nil {
 		return err
@@ -209,9 +214,7 @@ func (s *Service) kick(ctx context.Context, rt *runtime.Context, silent bool, de
 	if err := rt.Client.UnbanChatMember(ctx, rt.ChatID(), target.UserID, true); err != nil {
 		return err
 	}
-	if deleteCommand {
-		_ = rt.Client.DeleteMessage(ctx, rt.ChatID(), rt.Message.MessageID)
-	}
+	deleteModerationMessages(ctx, rt, silent, deleteCommand)
 	if !silent {
 		_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Kicked %s. %s", target.Name, suffixReason(reason)), rt.ReplyOptions(telegram.SendMessageOptions{}))
 		if err != nil {
@@ -360,34 +363,34 @@ func parseTargetAndReason(ctx context.Context, rt *runtime.Context, args []strin
 	return target, strings.TrimSpace(strings.Join(args[1:], " ")), nil
 }
 
-func parseTimedTarget(ctx context.Context, rt *runtime.Context, args []string) (serviceutil.Target, time.Time, string, error) {
+func parseTimedTarget(ctx context.Context, rt *runtime.Context, args []string) (serviceutil.Target, time.Duration, time.Time, string, error) {
 	if rt.Message != nil && rt.Message.ReplyToMessage != nil {
 		if len(args) == 0 {
-			return serviceutil.Target{}, time.Time{}, "", fmt.Errorf("usage: reply and pass a duration")
+			return serviceutil.Target{}, 0, time.Time{}, "", fmt.Errorf("usage: reply and pass a duration")
 		}
-		duration, err := time.ParseDuration(args[0])
+		duration, err := parseModerationDuration(args[0])
 		if err != nil {
-			return serviceutil.Target{}, time.Time{}, "", fmt.Errorf("invalid duration")
+			return serviceutil.Target{}, 0, time.Time{}, "", fmt.Errorf("invalid duration")
 		}
 		target, err := serviceutil.ResolveTarget(ctx, rt, args)
 		if err != nil {
-			return serviceutil.Target{}, time.Time{}, "", err
+			return serviceutil.Target{}, 0, time.Time{}, "", err
 		}
-		return target, time.Now().Add(duration), strings.TrimSpace(strings.Join(args[1:], " ")), nil
+		return target, duration, time.Now().Add(duration), strings.TrimSpace(strings.Join(args[1:], " ")), nil
 	}
 
 	if len(args) < 2 {
-		return serviceutil.Target{}, time.Time{}, "", fmt.Errorf("usage: /command <user_id> <duration> [reason]")
+		return serviceutil.Target{}, 0, time.Time{}, "", fmt.Errorf("usage: /command <user_id> <duration> [reason]")
 	}
 	target, err := serviceutil.ResolveTarget(ctx, rt, args[:1])
 	if err != nil {
-		return serviceutil.Target{}, time.Time{}, "", err
+		return serviceutil.Target{}, 0, time.Time{}, "", err
 	}
-	duration, err := time.ParseDuration(args[1])
+	duration, err := parseModerationDuration(args[1])
 	if err != nil {
-		return serviceutil.Target{}, time.Time{}, "", fmt.Errorf("invalid duration")
+		return serviceutil.Target{}, 0, time.Time{}, "", fmt.Errorf("invalid duration")
 	}
-	return target, time.Now().Add(duration), strings.TrimSpace(strings.Join(args[2:], " ")), nil
+	return target, duration, time.Now().Add(duration), strings.TrimSpace(strings.Join(args[2:], " ")), nil
 }
 
 func suffixReason(reason string) string {
@@ -395,4 +398,65 @@ func suffixReason(reason string) string {
 		return ""
 	}
 	return "Reason: " + reason
+}
+
+func isReplyTarget(rt *runtime.Context) bool {
+	return rt.Message != nil && rt.Message.ReplyToMessage != nil
+}
+
+func deleteModerationMessages(ctx context.Context, rt *runtime.Context, silent bool, deleteReplyOnly bool) {
+	if rt.Message == nil {
+		return
+	}
+	if deleteReplyOnly || silent {
+		if rt.Message.ReplyToMessage != nil {
+			_ = rt.Client.DeleteMessage(ctx, rt.ChatID(), rt.Message.ReplyToMessage.MessageID)
+		}
+	}
+	if silent {
+		_ = rt.Client.DeleteMessage(ctx, rt.ChatID(), rt.Message.MessageID)
+	}
+}
+
+func parseModerationDuration(value string) (time.Duration, error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return 0, fmt.Errorf("duration is required")
+	}
+	if duration, err := time.ParseDuration(value); err == nil {
+		return duration, nil
+	}
+	if len(value) < 2 {
+		return 0, fmt.Errorf("invalid duration")
+	}
+	amount, err := strconv.Atoi(value[:len(value)-1])
+	if err != nil || amount <= 0 {
+		return 0, fmt.Errorf("invalid duration")
+	}
+	switch value[len(value)-1] {
+	case 'd':
+		return time.Duration(amount) * 24 * time.Hour, nil
+	case 'w':
+		return time.Duration(amount) * 7 * 24 * time.Hour, nil
+	default:
+		return 0, fmt.Errorf("invalid duration")
+	}
+}
+
+func humanizeModerationDuration(duration time.Duration) string {
+	if duration <= 0 {
+		return "0s"
+	}
+	switch {
+	case duration%(7*24*time.Hour) == 0:
+		return fmt.Sprintf("%dw", int(duration/(7*24*time.Hour)))
+	case duration%(24*time.Hour) == 0:
+		return fmt.Sprintf("%dd", int(duration/(24*time.Hour)))
+	case duration%time.Hour == 0:
+		return fmt.Sprintf("%dh", int(duration/time.Hour))
+	case duration%time.Minute == 0:
+		return fmt.Sprintf("%dm", int(duration/time.Minute))
+	default:
+		return fmt.Sprintf("%ds", int(duration/time.Second))
+	}
 }

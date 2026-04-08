@@ -131,19 +131,36 @@ var helpPages = map[string]helpPage{
 		},
 	},
 	helpBans: {
-		Title: "Bans And Mutes",
+		Title: "Bans",
 		Lines: []string{
-			"Direct moderation actions. Reply to the target user's message whenever possible.",
+			"Some people need to be publicly banned; spammers, annoyances, or just trolls.",
 			"",
-			"/kickme",
-			"/ban, /dban, /sban, /tban, /unban",
-			"/mute, /dmute, /smute, /tmute, /unmute",
-			"/kick, /dkick, /skick",
+			"This module allows you to do that easily, by exposing some common actions, so everyone will see!",
+			"",
+			"User commands:",
+			"- /kickme: Users that use this, kick themselves.",
+			"",
+			"Admin commands:",
+			"- /ban: Ban a user.",
+			"- /dban: Ban a user by reply, and delete their message.",
+			"- /sban: Silently ban a user, and delete your command message.",
+			"- /tban: Temporarily ban a user. Example time values: 4m = 4 minutes, 3h = 3 hours, 6d = 6 days, 5w = 5 weeks.",
+			"- /unban: Unban a user.",
+			"- /mute: Mute a user.",
+			"- /dmute: Mute a user by reply, and delete their message.",
+			"- /smute: Silently mute a user, and delete your command message.",
+			"- /tmute: Temporarily mute a user. Example time values: 4m = 4 minutes, 3h = 3 hours, 6d = 6 days, 5w = 5 weeks.",
+			"- /unmute: Unmute a user.",
+			"- /kick: Kick a user.",
+			"- /dkick: Kick a user by reply, and delete their message.",
+			"- /skick: Silently kick a user, and delete your command message.",
 			"",
 			"Examples:",
-			"/ban spam links",
-			"/tban @user 24h repeated abuse",
-			"/tmute @user 30m cooldown",
+			"- Mute the user with username '@username' for two hours.",
+			"-> /tmute @username 2h",
+			"",
+			"- Silently ban the replied user for spamming.",
+			"-> /sban spam links",
 		},
 	},
 	helpBlocklists: {
@@ -886,6 +903,12 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 			},
 		)
 	case helpApproval:
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: callbackHelpMain},
+			},
+		)
+	case helpBans:
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},
