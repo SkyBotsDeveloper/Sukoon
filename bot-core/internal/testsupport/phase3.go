@@ -55,6 +55,7 @@ func (m *MemoryStore) ListBotRoleUsers(_ context.Context, botID string, role str
 func (m *MemoryStore) GetChatRoles(_ context.Context, botID string, chatID int64, userID int64) ([]string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.GetChatRolesCalls++
 	return append([]string{}, m.chatRoles[chatKey(botID, chatID)][userID]...), nil
 }
 

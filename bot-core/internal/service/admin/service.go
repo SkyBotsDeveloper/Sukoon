@@ -10,17 +10,19 @@ import (
 
 	"sukoon/bot-core/internal/domain"
 	"sukoon/bot-core/internal/jobs"
+	"sukoon/bot-core/internal/permissions"
 	"sukoon/bot-core/internal/runtime"
 	"sukoon/bot-core/internal/serviceutil"
 	"sukoon/bot-core/internal/telegram"
 )
 
 type Service struct {
-	jobs *jobs.Service
+	jobs        *jobs.Service
+	permissions *permissions.Service
 }
 
-func New(jobService *jobs.Service) *Service {
-	return &Service{jobs: jobService}
+func New(jobService *jobs.Service, permissionsService *permissions.Service) *Service {
+	return &Service{jobs: jobService, permissions: permissionsService}
 }
 
 func (s *Service) Handle(ctx context.Context, rt *runtime.Context) (bool, error) {
@@ -141,7 +143,7 @@ func (s *Service) ensureChatOwner(ctx context.Context, rt *runtime.Context) (boo
 	if !rt.ActorPermissions.IsChatAdmin {
 		return false, s.sendPermissionNotice(ctx, rt, "Only the chat owner can do this.", true)
 	}
-	admins, err := rt.Client.GetChatAdministrators(ctx, rt.ChatID())
+	admins, err := s.chatAdministrators(ctx, rt, false)
 	if err != nil {
 		return false, err
 	}
@@ -494,7 +496,7 @@ func (s *Service) report(ctx context.Context, rt *runtime.Context) error {
 }
 
 func (s *Service) admins(ctx context.Context, rt *runtime.Context) error {
-	admins, err := rt.Client.GetChatAdministrators(ctx, rt.ChatID())
+	admins, err := s.chatAdministrators(ctx, rt, false)
 	if err != nil {
 		return err
 	}
@@ -542,6 +544,9 @@ func (s *Service) promote(ctx context.Context, rt *runtime.Context, enabled bool
 	if err := rt.Client.PromoteChatMember(ctx, rt.ChatID(), target.UserID, perms); err != nil {
 		return err
 	}
+	if _, err := s.chatAdministrators(ctx, rt, true); err != nil {
+		rt.Logger.Warn("admin cache refresh failed", "error", err)
+	}
 	text := "Promoted " + target.Name + "."
 	if !enabled {
 		text = "Demoted " + target.Name + "."
@@ -554,7 +559,7 @@ func (s *Service) adminCache(ctx context.Context, rt *runtime.Context) error {
 	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
 		return err
 	}
-	admins, err := rt.Client.GetChatAdministrators(ctx, rt.ChatID())
+	admins, err := s.chatAdministrators(ctx, rt, true)
 	if err != nil {
 		return err
 	}
@@ -567,6 +572,16 @@ func (s *Service) adminCache(ctx context.Context, rt *runtime.Context) error {
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Admin cache refreshed. Visible admins: %d.", visible), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
+}
+
+func (s *Service) chatAdministrators(ctx context.Context, rt *runtime.Context, refresh bool) ([]telegram.ChatAdministrator, error) {
+	if s.permissions == nil {
+		return rt.Client.GetChatAdministrators(ctx, rt.ChatID())
+	}
+	if refresh {
+		return s.permissions.RefreshChatAdministrators(ctx, rt.Bot.ID, rt.ChatID(), rt.Client)
+	}
+	return s.permissions.ChatAdministrators(ctx, rt.Bot.ID, rt.ChatID(), rt.Client)
 }
 
 func (s *Service) anonAdmin(ctx context.Context, rt *runtime.Context) error {

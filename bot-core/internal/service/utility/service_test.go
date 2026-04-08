@@ -316,6 +316,52 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	}
 }
 
+func TestStartHelpCallbacksUseFastPathWithoutHeavyRuntimeLoads(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: 501, Type: "private"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 100,
+			From:      &telegram.User{ID: 501, FirstName: "User"},
+			Chat:      chat,
+			Text:      "/help",
+		},
+	}); err != nil {
+		t.Fatalf("help failed: %v", err)
+	}
+
+	if h.Store.LoadBundleCalls != 0 || h.Store.EnsureChatCalls != 0 || h.Store.EnsureUserCalls != 0 || h.Store.GetBotRolesCalls != 0 {
+		t.Fatalf("expected /help fast path to skip heavy runtime work, got bundle=%d ensureChat=%d ensureUser=%d botRoles=%d",
+			h.Store.LoadBundleCalls, h.Store.EnsureChatCalls, h.Store.EnsureUserCalls, h.Store.GetBotRolesCalls)
+	}
+
+	root := h.Client.Messages[len(h.Client.Messages)-1]
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-fast-help-admin",
+			From: telegram.User{ID: 501, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: root.MessageID,
+				Chat:      chat,
+			},
+			Data: "ux:help:admin",
+		},
+	}); err != nil {
+		t.Fatalf("help callback failed: %v", err)
+	}
+
+	if h.Store.LoadBundleCalls != 0 || h.Store.EnsureChatCalls != 0 || h.Store.EnsureUserCalls != 0 || h.Store.GetBotRolesCalls != 0 {
+		t.Fatalf("expected help callback fast path to skip heavy runtime work, got bundle=%d ensureChat=%d ensureUser=%d botRoles=%d",
+			h.Store.LoadBundleCalls, h.Store.EnsureChatCalls, h.Store.EnsureUserCalls, h.Store.GetBotRolesCalls)
+	}
+	if len(h.Client.CallbackAnswers) != 1 || h.Client.CallbackAnswers[0].ID != "cb-fast-help-admin" {
+		t.Fatalf("expected immediate callback ack, got %+v", h.Client.CallbackAnswers)
+	}
+}
+
 func TestDonateCommandSendsSupportImage(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	chat := telegram.Chat{ID: 53, Type: "private"}

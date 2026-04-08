@@ -50,6 +50,35 @@ func TestChatAdminPermissionsUseTelegramAdmins(t *testing.T) {
 	}
 }
 
+func TestChatAdminPermissionsReuseCachedAdminList(t *testing.T) {
+	store := testsupport.NewMemoryStore()
+	client := testsupport.NewFakeTelegramClient()
+	bot := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil))).Bot
+	_, _ = store.UpsertPrimaryBot(context.Background(), bot, nil)
+	client.AdminsByChat[-100123] = []telegram.ChatAdministrator{
+		{
+			User:               telegram.User{ID: 99},
+			Status:             "administrator",
+			CanRestrictMembers: true,
+			CanDeleteMessages:  true,
+		},
+	}
+
+	service := permissions.New(store)
+	for i := 0; i < 2; i++ {
+		perms, err := service.Load(context.Background(), bot.ID, 99, -100123, "supergroup", client)
+		if err != nil {
+			t.Fatalf("load permissions %d: %v", i, err)
+		}
+		if !perms.IsChatAdmin {
+			t.Fatalf("expected admin permissions on iteration %d, got %+v", i, perms)
+		}
+	}
+	if len(client.AdminLookups) != 1 {
+		t.Fatalf("expected one admin lookup with cache reuse, got %+v", client.AdminLookups)
+	}
+}
+
 func TestPrivateChatsSkipTelegramAdminLookup(t *testing.T) {
 	store := testsupport.NewMemoryStore()
 	client := testsupport.NewFakeTelegramClient()

@@ -79,7 +79,7 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Runtime,
 	jobService := jobs.New(store, factory, logger)
 	permissionService := permissions.New(store)
 	moderation := moderationservice.New()
-	admin := adminservice.New(jobService)
+	admin := adminservice.New(jobService, permissionService)
 	antispam := antispamservice.New()
 	content := contentservice.New()
 	captcha := captchaservice.New(store, factory, logger)

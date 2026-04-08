@@ -17,41 +17,46 @@ import (
 )
 
 type MemoryStore struct {
-	mu               sync.Mutex
-	botsByID         map[string]domain.BotInstance
-	botsByWebhookKey map[string]string
-	updateStates     map[int64]*updateState
-	nextUpdateID     int64
-	chats            map[string]telegram.Chat
-	users            map[int64]domain.UserProfile
-	settings         map[string]domain.ChatSettings
-	moderation       map[string]domain.ModerationSettings
-	antiflood        map[string]domain.AntifloodSettings
-	antiraid         map[string]domain.AntiRaidSettings
-	captchaSettings  map[string]domain.CaptchaSettings
-	antiabuse        map[string]domain.AntiAbuseSettings
-	antibio          map[string]domain.AntiBioSettings
-	roles            map[string]map[int64][]string
-	chatRoles        map[string]map[int64][]string
-	approvals        map[string]map[int64]domain.Approval
-	disabled         map[string]map[string]struct{}
-	warnings         map[string]int
-	notes            map[string]map[string]domain.Note
-	filters          map[string]map[string]domain.FilterRule
-	locks            map[string]map[string]domain.LockRule
-	blocklist        map[string][]domain.BlocklistRule
-	antibioExempt    map[string]map[int64]bool
-	globalUsers      map[string]domain.GlobalBlacklistUser
-	globalChats      map[string]domain.GlobalBlacklistChat
-	federations      map[string]domain.Federation
-	federationChats  map[string][]string
-	federationAdmins map[string]map[int64]domain.FederationAdmin
-	federationBans   map[string]map[int64]domain.FederationBan
-	nextBlocklistID  int64
-	nextFilterID     int64
-	challenges       map[string]domain.CaptchaChallenge
-	afk              map[string]domain.AFKState
-	jobs             map[string]domain.Job
+	mu                sync.Mutex
+	botsByID          map[string]domain.BotInstance
+	botsByWebhookKey  map[string]string
+	updateStates      map[int64]*updateState
+	nextUpdateID      int64
+	chats             map[string]telegram.Chat
+	users             map[int64]domain.UserProfile
+	settings          map[string]domain.ChatSettings
+	moderation        map[string]domain.ModerationSettings
+	antiflood         map[string]domain.AntifloodSettings
+	antiraid          map[string]domain.AntiRaidSettings
+	captchaSettings   map[string]domain.CaptchaSettings
+	antiabuse         map[string]domain.AntiAbuseSettings
+	antibio           map[string]domain.AntiBioSettings
+	roles             map[string]map[int64][]string
+	chatRoles         map[string]map[int64][]string
+	approvals         map[string]map[int64]domain.Approval
+	disabled          map[string]map[string]struct{}
+	warnings          map[string]int
+	notes             map[string]map[string]domain.Note
+	filters           map[string]map[string]domain.FilterRule
+	locks             map[string]map[string]domain.LockRule
+	blocklist         map[string][]domain.BlocklistRule
+	antibioExempt     map[string]map[int64]bool
+	globalUsers       map[string]domain.GlobalBlacklistUser
+	globalChats       map[string]domain.GlobalBlacklistChat
+	federations       map[string]domain.Federation
+	federationChats   map[string][]string
+	federationAdmins  map[string]map[int64]domain.FederationAdmin
+	federationBans    map[string]map[int64]domain.FederationBan
+	nextBlocklistID   int64
+	nextFilterID      int64
+	challenges        map[string]domain.CaptchaChallenge
+	afk               map[string]domain.AFKState
+	jobs              map[string]domain.Job
+	EnsureChatCalls   int
+	EnsureUserCalls   int
+	LoadBundleCalls   int
+	GetBotRolesCalls  int
+	GetChatRolesCalls int
 }
 
 type updateState struct {
@@ -292,6 +297,7 @@ func (m *MemoryStore) MarkUpdateDead(_ context.Context, id int64, lastError stri
 func (m *MemoryStore) EnsureChat(_ context.Context, botID string, chat telegram.Chat) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.EnsureChatCalls++
 	key := chatKey(botID, chat.ID)
 	m.chats[key] = chat
 	if _, ok := m.settings[key]; !ok {
@@ -321,6 +327,7 @@ func (m *MemoryStore) EnsureChat(_ context.Context, botID string, chat telegram.
 func (m *MemoryStore) EnsureUser(_ context.Context, user telegram.User) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.EnsureUserCalls++
 	m.users[user.ID] = domain.UserProfile{
 		ID:        user.ID,
 		Username:  user.Username,
@@ -356,6 +363,7 @@ func (m *MemoryStore) GetUserByUsername(_ context.Context, username string) (dom
 func (m *MemoryStore) LoadRuntimeBundle(_ context.Context, botID string, chatID int64) (domain.RuntimeBundle, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.LoadBundleCalls++
 	key := chatKey(botID, chatID)
 	bundle := domain.RuntimeBundle{
 		Settings:         m.settings[key],
@@ -381,6 +389,7 @@ func (m *MemoryStore) LoadRuntimeBundle(_ context.Context, botID string, chatID 
 func (m *MemoryStore) GetBotRoles(_ context.Context, botID string, userID int64) ([]string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.GetBotRolesCalls++
 	return append([]string{}, m.roles[botID][userID]...), nil
 }
 

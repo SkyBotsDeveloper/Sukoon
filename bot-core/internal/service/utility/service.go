@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"sukoon/bot-core/internal/commands"
 	"sukoon/bot-core/internal/i18n"
 	"sukoon/bot-core/internal/runtime"
 	"sukoon/bot-core/internal/serviceutil"
@@ -48,6 +49,13 @@ func (s *Service) HandleCallback(ctx context.Context, rt *runtime.Context) (bool
 		return false, nil
 	}
 
+	fastAck := s.ShouldFastPathCallback(rt.CallbackQuery.Data)
+	if fastAck {
+		if err := rt.Client.AnswerCallbackQuery(ctx, rt.CallbackQuery.ID, "", false); err != nil {
+			return true, err
+		}
+	}
+
 	var err error
 	switch rt.CallbackQuery.Data {
 	case callbackStartHome:
@@ -80,8 +88,10 @@ func (s *Service) HandleCallback(ctx context.Context, rt *runtime.Context) (bool
 		err = s.sendHelpCallbackPage(ctx, rt, section)
 	}
 
-	if ackErr := rt.Client.AnswerCallbackQuery(ctx, rt.CallbackQuery.ID, "", false); ackErr != nil && err == nil {
-		err = ackErr
+	if !fastAck {
+		if ackErr := rt.Client.AnswerCallbackQuery(ctx, rt.CallbackQuery.ID, "", false); ackErr != nil && err == nil {
+			err = ackErr
+		}
 	}
 	return true, err
 }
@@ -313,6 +323,24 @@ func isPrivateChat(rt *runtime.Context) bool {
 		return rt.CallbackQuery.Message.Chat.Type == "private"
 	}
 	return false
+}
+
+func (s *Service) ShouldFastPathCommand(command commands.Parsed) bool {
+	switch command.Name {
+	case "start", "help", "donate", "privacy":
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Service) ShouldFastPathCallback(data string) bool {
+	switch data {
+	case callbackStartHome, callbackStartClone, callbackHelpMain, callbackPrivacy, callbackClose:
+		return true
+	default:
+		return strings.HasPrefix(data, callbackHelpPrefix)
+	}
 }
 
 func helpSectionFromCallback(data string) (string, bool) {

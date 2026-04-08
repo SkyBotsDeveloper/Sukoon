@@ -65,13 +65,14 @@ func TestProcessorUsesCorrectBotClientForCloneIsolation(t *testing.T) {
 	antiabuseService := antiabuseservice.New()
 	antibioService := antibioservice.New()
 	utilityService := utilityservice.New()
+	permissionService := permissions.New(store)
 
 	router := router.New(
 		store,
 		state,
-		permissions.New(store),
+		permissionService,
 		moderationservice.New(),
-		adminservice.New(jobService),
+		adminservice.New(jobService, permissionService),
 		antispamservice.New(),
 		contentservice.New(),
 		captchaservice.New(store, factory, logger),

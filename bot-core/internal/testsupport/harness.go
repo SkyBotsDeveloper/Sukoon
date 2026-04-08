@@ -42,6 +42,7 @@ func NewHarness(logger *slog.Logger) *Harness {
 	antiabuseService := antiabuseservice.New()
 	antibioService := antibioservice.New()
 	utilityService := utilityservice.New()
+	permissionService := permissions.New(store)
 
 	bot := domain.BotInstance{
 		ID:            "bot-1",
@@ -58,9 +59,9 @@ func NewHarness(logger *slog.Logger) *Harness {
 	router := router.New(
 		store,
 		state,
-		permissions.New(store),
+		permissionService,
 		moderationservice.New(),
-		adminservice.New(jobService),
+		adminservice.New(jobService, permissionService),
 		antispamservice.New(),
 		contentservice.New(),
 		captchaservice.New(store, factory, logger),

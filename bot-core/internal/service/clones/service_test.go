@@ -68,12 +68,13 @@ func TestCloneLifecycleCreateListAndRemove(t *testing.T) {
 	_, _ = store.UpsertPrimaryBot(context.Background(), bot, []int64{1})
 
 	jobService := jobs.New(store, factory, logger)
+	permissionService := permissions.New(store)
 	router := router.New(
 		store,
 		state,
-		permissions.New(store),
+		permissionService,
 		moderationservice.New(),
-		adminservice.New(jobService),
+		adminservice.New(jobService, permissionService),
 		antispamservice.New(),
 		contentservice.New(),
 		captchaservice.New(store, factory, logger),
@@ -183,12 +184,13 @@ func TestCloneCreationIsLimitedToOneClonePerOwner(t *testing.T) {
 	_, _ = store.UpsertPrimaryBot(context.Background(), bot, []int64{1})
 
 	jobService := jobs.New(store, factory, logger)
+	permissionService := permissions.New(store)
 	router := router.New(
 		store,
 		state,
-		permissions.New(store),
+		permissionService,
 		moderationservice.New(),
-		adminservice.New(jobService),
+		adminservice.New(jobService, permissionService),
 		antispamservice.New(),
 		contentservice.New(),
 		captchaservice.New(store, factory, logger),
@@ -277,12 +279,13 @@ func TestRevokedCloneIsAutoRemovedBeforeReplacement(t *testing.T) {
 	_, _ = store.UpsertPrimaryBot(context.Background(), bot, []int64{1})
 
 	jobService := jobs.New(store, factory, logger)
+	permissionService := permissions.New(store)
 	router := router.New(
 		store,
 		state,
-		permissions.New(store),
+		permissionService,
 		moderationservice.New(),
-		adminservice.New(jobService),
+		adminservice.New(jobService, permissionService),
 		antispamservice.New(),
 		contentservice.New(),
 		captchaservice.New(store, factory, logger),
@@ -370,12 +373,13 @@ func TestMyBotListsOwnedCloneAndSupportsRestartAndDelete(t *testing.T) {
 	_, _ = store.UpsertPrimaryBot(context.Background(), bot, []int64{1})
 
 	jobService := jobs.New(store, factory, logger)
+	permissionService := permissions.New(store)
 	router := router.New(
 		store,
 		state,
-		permissions.New(store),
+		permissionService,
 		moderationservice.New(),
-		adminservice.New(jobService),
+		adminservice.New(jobService, permissionService),
 		antispamservice.New(),
 		contentservice.New(),
 		captchaservice.New(store, factory, logger),
@@ -548,12 +552,13 @@ func TestMyBotShowsEmptyStateWithoutClone(t *testing.T) {
 	_, _ = store.UpsertPrimaryBot(context.Background(), bot, []int64{1})
 
 	jobService := jobs.New(store, factory, logger)
+	permissionService := permissions.New(store)
 	router := router.New(
 		store,
 		state,
-		permissions.New(store),
+		permissionService,
 		moderationservice.New(),
-		adminservice.New(jobService),
+		adminservice.New(jobService, permissionService),
 		antispamservice.New(),
 		contentservice.New(),
 		captchaservice.New(store, factory, logger),

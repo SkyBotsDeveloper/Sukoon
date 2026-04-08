@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"sukoon/bot-core/internal/commands"
@@ -44,6 +45,9 @@ type Router struct {
 	antibio     *antibioservice.Service
 	utility     *utilityservice.Service
 	logger      *slog.Logger
+	cacheMu     sync.Mutex
+	seenChats   map[string]time.Time
+	seenUsers   map[int64]time.Time
 }
 
 func New(
@@ -81,6 +85,8 @@ func New(
 		antibio:     antiBioService,
 		utility:     utilityService,
 		logger:      logger,
+		seenChats:   map[string]time.Time{},
+		seenUsers:   map[int64]time.Time{},
 	}
 }
 
@@ -97,33 +103,75 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 		return nil
 	}
 
-	if err := r.store.EnsureChat(ctx, bot.ID, chat); err != nil {
+	var parsed commands.Parsed
+	var commandOK bool
+	if message != nil {
+		parsed, commandOK = commands.Parse(textFromMessage(message), bot.Username)
+	}
+
+	baseLogger := r.logger.With("bot_id", bot.ID, "chat_id", chat.ID, "update_id", update.UpdateID)
+	if callback != nil && r.utility != nil && r.utility.ShouldFastPathCallback(callback.Data) {
+		rt := &runtime.Context{
+			Base:          ctx,
+			Logger:        baseLogger,
+			Store:         r.store,
+			State:         r.state,
+			Bot:           bot,
+			Client:        client,
+			Update:        update,
+			CallbackQuery: callback,
+		}
+		handled, err := r.utility.HandleCallback(ctx, rt)
+		if handled || err != nil {
+			return err
+		}
+	}
+	if message != nil && commandOK && r.utility != nil && r.utility.ShouldFastPathCommand(parsed) {
+		rt := &runtime.Context{
+			Base:      ctx,
+			Logger:    baseLogger,
+			Store:     r.store,
+			State:     r.state,
+			Bot:       bot,
+			Client:    client,
+			Update:    update,
+			Message:   message,
+			Command:   parsed,
+			CommandOK: commandOK,
+		}
+		handled, err := r.utility.Handle(ctx, rt)
+		if handled || err != nil {
+			return err
+		}
+	}
+
+	if err := r.ensureChatIfNeeded(ctx, bot.ID, chat); err != nil {
 		return err
 	}
 	if message != nil {
 		if message.From != nil {
-			if err := r.store.EnsureUser(ctx, *message.From); err != nil {
+			if err := r.ensureUserIfNeeded(ctx, *message.From); err != nil {
 				return err
 			}
 		}
 		if message.ReplyToMessage != nil && message.ReplyToMessage.From != nil {
-			if err := r.store.EnsureUser(ctx, *message.ReplyToMessage.From); err != nil {
+			if err := r.ensureUserIfNeeded(ctx, *message.ReplyToMessage.From); err != nil {
 				return err
 			}
 		}
 		for _, member := range message.NewChatMembers {
-			if err := r.store.EnsureUser(ctx, member); err != nil {
+			if err := r.ensureUserIfNeeded(ctx, member); err != nil {
 				return err
 			}
 		}
 		if message.LeftChatMember != nil {
-			if err := r.store.EnsureUser(ctx, *message.LeftChatMember); err != nil {
+			if err := r.ensureUserIfNeeded(ctx, *message.LeftChatMember); err != nil {
 				return err
 			}
 		}
 	}
 	if callback != nil {
-		if err := r.store.EnsureUser(ctx, callback.From); err != nil {
+		if err := r.ensureUserIfNeeded(ctx, callback.From); err != nil {
 			return err
 		}
 	}
@@ -132,15 +180,9 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 		return err
 	}
 
-	var parsed commands.Parsed
-	var commandOK bool
-	if message != nil {
-		parsed, commandOK = commands.Parse(textFromMessage(message), bot.Username)
-	}
-
 	rt := &runtime.Context{
 		Base:            ctx,
-		Logger:          r.logger.With("bot_id", bot.ID, "chat_id", chat.ID, "update_id", update.UpdateID),
+		Logger:          baseLogger,
 		Store:           r.store,
 		State:           r.state,
 		Bot:             bot,
@@ -317,6 +359,55 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 	}
 
 	return nil
+}
+
+func (r *Router) ensureChatIfNeeded(ctx context.Context, botID string, chat telegram.Chat) error {
+	key := fmt.Sprintf("%s:%d", botID, chat.ID)
+	if !r.shouldRefreshChat(key) {
+		return nil
+	}
+	if err := r.store.EnsureChat(ctx, botID, chat); err != nil {
+		return err
+	}
+	r.markChatRefreshed(key)
+	return nil
+}
+
+func (r *Router) ensureUserIfNeeded(ctx context.Context, user telegram.User) error {
+	if !r.shouldRefreshUser(user.ID) {
+		return nil
+	}
+	if err := r.store.EnsureUser(ctx, user); err != nil {
+		return err
+	}
+	r.markUserRefreshed(user.ID)
+	return nil
+}
+
+func (r *Router) shouldRefreshChat(key string) bool {
+	r.cacheMu.Lock()
+	defer r.cacheMu.Unlock()
+	expiresAt, ok := r.seenChats[key]
+	return !ok || time.Now().After(expiresAt)
+}
+
+func (r *Router) markChatRefreshed(key string) {
+	r.cacheMu.Lock()
+	defer r.cacheMu.Unlock()
+	r.seenChats[key] = time.Now().Add(5 * time.Minute)
+}
+
+func (r *Router) shouldRefreshUser(userID int64) bool {
+	r.cacheMu.Lock()
+	defer r.cacheMu.Unlock()
+	expiresAt, ok := r.seenUsers[userID]
+	return !ok || time.Now().After(expiresAt)
+}
+
+func (r *Router) markUserRefreshed(userID int64) {
+	r.cacheMu.Lock()
+	defer r.cacheMu.Unlock()
+	r.seenUsers[userID] = time.Now().Add(10 * time.Minute)
 }
 
 func textFromMessage(message *telegram.Message) string {
