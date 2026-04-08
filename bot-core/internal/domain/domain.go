@@ -59,12 +59,22 @@ type ModerationSettings struct {
 }
 
 type AntifloodSettings struct {
-	BotID         string
-	ChatID        int64
-	Enabled       bool
-	Limit         int
-	WindowSeconds int
-	Action        string
+	BotID                 string
+	ChatID                int64
+	Enabled               bool
+	Limit                 int
+	TimedLimit            int
+	WindowSeconds         int
+	Action                string
+	ActionDurationSeconds int
+	ClearAll              bool
+}
+
+type FloodTrackResult struct {
+	ConsecutiveCount      int64
+	ConsecutiveMessageIDs []int64
+	TimedCount            int64
+	TimedMessageIDs       []int64
 }
 
 type CaptchaSettings struct {

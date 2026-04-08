@@ -92,18 +92,24 @@ var helpPages = map[string]helpPage{
 	helpAntiflood: {
 		Title: "Antiflood",
 		Lines: []string{
-			"Antiflood tracks bursty users and applies the configured action once they exceed the limit inside the active window.",
+			"You know how sometimes, people join, send 100 messages, and ruin your chat? With antiflood, that happens no more!",
 			"",
-			"/flood",
-			"/setflood <count|off>",
-			"/setfloodtimer <seconds>",
-			"/floodmode [mute|kick|ban]",
-			"/clearflood [reply|user]",
+			"Antiflood allows Sukoon to take action on users that send too many messages in a row or inside a timed window. Actions are: ban/mute/kick/tban/tmute.",
+			"",
+			"Admin commands:",
+			"- /flood: Get the current antiflood settings.",
+			"- /setflood <number/off/no>: Set the number of consecutive messages that trigger antiflood. Set to 0, off, or no to disable.",
+			"- /setfloodtimer <count> <duration>: Set timed antiflood. Set to off or no to disable.",
+			"- /floodmode <action type>: Choose which action to take on a flooder. Possible actions: ban/mute/kick/tban/tmute.",
+			"- /clearflood <yes/no/on/off>: Whether to delete the full triggered flood set instead of only the messages after the limit.",
 			"",
 			"Examples:",
-			"/setflood 6",
-			"/setfloodtimer 10",
-			"/floodmode mute",
+			"- /setflood 7",
+			"- /setflood off",
+			"- /setfloodtimer 10 30s",
+			"- /setfloodtimer off",
+			"- /floodmode mute",
+			"- /floodmode tban 3d",
 		},
 	},
 	helpApproval: {
@@ -851,6 +857,12 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 				{Text: "Back", CallbackData: callbackHelpMain},
 			},
 		)
+	case helpAntiflood:
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: callbackHelpMain},
+			},
+		)
 	case helpBlocklists:
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
@@ -1052,7 +1064,7 @@ func normalizeHelpSection(value string) string {
 		return helpRoot
 	case "admin", "admins", "adminlist", "mods", "mod", "staff", "promote", "demote", "admincache", "anonadmin", "adminerror":
 		return helpAdmin
-	case "antiflood", "flood", "setflood", "setfloodtimer", "floodmode", "clearflood":
+	case "antiflood", "flood", "setflood", "setfloodtimer", "setfloodmode", "floodmode", "clearflood":
 		return helpAntiflood
 	case "antiraid", "raid", "raidtime", "raidactiontime", "autoantiraid":
 		return helpAntiRaid

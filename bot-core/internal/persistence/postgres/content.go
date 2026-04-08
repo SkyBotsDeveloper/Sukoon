@@ -205,8 +205,8 @@ func (s *Store) ListBlocklistRules(ctx context.Context, botID string, chatID int
 func (s *Store) SetAntiflood(ctx context.Context, settings domain.AntifloodSettings) error {
 	_, err := s.pool.Exec(ctx, `
 		UPDATE antiflood_settings
-		SET enabled=$3, flood_limit=$4, window_seconds=$5, action=$6, updated_at=NOW()
+		SET enabled=$3, flood_limit=$4, timed_limit=$5, window_seconds=$6, action=$7, action_duration_seconds=$8, clear_all=$9, updated_at=NOW()
 		WHERE bot_id=$1 AND chat_id=$2
-	`, settings.BotID, settings.ChatID, settings.Enabled, settings.Limit, settings.WindowSeconds, settings.Action)
+	`, settings.BotID, settings.ChatID, settings.Enabled, settings.Limit, settings.TimedLimit, settings.WindowSeconds, settings.Action, settings.ActionDurationSeconds, settings.ClearAll)
 	return err
 }

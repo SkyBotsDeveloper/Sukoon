@@ -299,7 +299,7 @@ func (m *MemoryStore) EnsureChat(_ context.Context, botID string, chat telegram.
 		m.moderation[key] = domain.ModerationSettings{BotID: botID, ChatID: chat.ID, WarnLimit: 3, WarnMode: "mute"}
 	}
 	if _, ok := m.antiflood[key]; !ok {
-		m.antiflood[key] = domain.AntifloodSettings{BotID: botID, ChatID: chat.ID, Limit: 6, WindowSeconds: 10, Action: "mute"}
+		m.antiflood[key] = domain.AntifloodSettings{BotID: botID, ChatID: chat.ID, Limit: 0, TimedLimit: 0, WindowSeconds: 10, Action: "mute"}
 	}
 	if _, ok := m.captchaSettings[key]; !ok {
 		m.captchaSettings[key] = domain.CaptchaSettings{BotID: botID, ChatID: chat.ID, Mode: "button", TimeoutSeconds: 120, FailureAction: "kick", ChallengeDigits: 2}

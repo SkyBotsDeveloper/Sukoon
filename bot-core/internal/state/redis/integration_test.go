@@ -45,19 +45,19 @@ func TestStoreTracksFloodAndLeaseState(t *testing.T) {
 		t.Fatalf("GetCachedBot() = (%+v, %v), want cached bot", cached, ok)
 	}
 
-	count, err := store.TrackFlood(ctx, bot.ID, -100123, 2002, 1, time.Minute)
+	result, err := store.TrackFlood(ctx, bot.ID, -100123, 2002, 1, time.Minute)
 	if err != nil {
 		t.Fatalf("TrackFlood(first) error = %v", err)
 	}
-	if count != 1 {
-		t.Fatalf("TrackFlood(first) count = %d, want 1", count)
+	if result.TimedCount != 1 || result.ConsecutiveCount != 1 {
+		t.Fatalf("TrackFlood(first) = %+v, want timed=1 consecutive=1", result)
 	}
-	count, err = store.TrackFlood(ctx, bot.ID, -100123, 2002, 2, time.Minute)
+	result, err = store.TrackFlood(ctx, bot.ID, -100123, 2002, 2, time.Minute)
 	if err != nil {
 		t.Fatalf("TrackFlood(second) error = %v", err)
 	}
-	if count != 2 {
-		t.Fatalf("TrackFlood(second) count = %d, want 2", count)
+	if result.TimedCount != 2 || result.ConsecutiveCount != 2 {
+		t.Fatalf("TrackFlood(second) = %+v, want timed=2 consecutive=2", result)
 	}
 	if err := store.ClearFlood(ctx, bot.ID, -100123, 2002); err != nil {
 		t.Fatalf("ClearFlood() error = %v", err)

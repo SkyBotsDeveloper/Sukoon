@@ -568,6 +568,48 @@ func TestAdminHelpPageUsesBackOnlyMarkup(t *testing.T) {
 	assertNoButtonText(t, adminMarkup, "Add to Group")
 }
 
+func TestAntifloodHelpPageUsesBackOnlyMarkup(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: 55, Type: "private"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 61,
+			From:      &telegram.User{ID: 55, FirstName: "User"},
+			Chat:      chat,
+			Text:      "/help",
+		},
+	}); err != nil {
+		t.Fatalf("help failed: %v", err)
+	}
+
+	root := h.Client.Messages[len(h.Client.Messages)-1]
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-help-antiflood",
+			From: telegram.User{ID: 55, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: root.MessageID,
+				Chat:      chat,
+			},
+			Data: "ux:help:antiflood",
+		},
+	}); err != nil {
+		t.Fatalf("antiflood help callback failed: %v", err)
+	}
+
+	page := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	if !strings.Contains(page.Text, "/setfloodtimer <count> <duration>") || !strings.Contains(page.Text, "/clearflood <yes/no/on/off>") || !strings.Contains(page.Text, "/floodmode tban 3d") {
+		t.Fatalf("expected antiflood help copy, got %q", page.Text)
+	}
+	markup := requireEditedMarkup(t, page)
+	assertButton(t, markup, 0, 0, "Back", "ux:help:root", "")
+	assertNoButtonText(t, markup, "Website")
+	assertNoButtonText(t, markup, "Add to Group")
+}
+
 func TestGroupPMGuidanceUsesButtonsForHelpAndPrivacy(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	group := telegram.Chat{ID: -100990, Type: "supergroup", Title: "Help"}
