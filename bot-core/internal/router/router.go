@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -126,7 +127,7 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 			return err
 		}
 	}
-	if message != nil && commandOK && r.utility != nil && r.utility.ShouldFastPathCommand(parsed) {
+	if message != nil && commandOK && r.utility != nil && r.utility.ShouldFastPathCommand(parsed) && !shouldBypassUtilityFastPath(parsed) {
 		rt := &runtime.Context{
 			Base:      ctx,
 			Logger:    baseLogger,
@@ -294,8 +295,12 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 				continue
 			}
 		}
-		if err := r.captcha.HandleJoin(ctx, rt, member); err != nil {
+		captchaHandled, err := r.captcha.HandleJoin(ctx, rt, member)
+		if err != nil {
 			return err
+		}
+		if captchaHandled {
+			continue
 		}
 		if err := r.content.HandleJoin(ctx, rt, member); err != nil {
 			return err
@@ -415,6 +420,14 @@ func textFromMessage(message *telegram.Message) string {
 		return message.Text
 	}
 	return message.Caption
+}
+
+func shouldBypassUtilityFastPath(parsed commands.Parsed) bool {
+	if parsed.Name != "start" {
+		return false
+	}
+	raw := strings.TrimSpace(parsed.RawArgs)
+	return len(raw) >= len("captcha_") && strings.EqualFold(raw[:len("captcha_")], "captcha_")
 }
 
 func shouldCleanServiceMessage(message *telegram.Message, settings domain.ChatSettings) bool {

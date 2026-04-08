@@ -79,7 +79,9 @@ type Store interface {
 	ListAntiBioExemptions(ctx context.Context, botID string, chatID int64) ([]domain.UserProfile, error)
 	SetCaptchaSettings(ctx context.Context, settings domain.CaptchaSettings) error
 	CreateCaptchaChallenge(ctx context.Context, challenge domain.CaptchaChallenge) error
+	GetCaptchaChallengeByID(ctx context.Context, challengeID string) (domain.CaptchaChallenge, error)
 	GetPendingCaptchaChallenge(ctx context.Context, botID string, chatID int64, userID int64) (domain.CaptchaChallenge, error)
+	MarkCaptchaRulesAccepted(ctx context.Context, challengeID string) error
 	MarkCaptchaSolved(ctx context.Context, challengeID string) error
 	ListExpiredCaptchaChallenges(ctx context.Context, now time.Time, limit int) ([]domain.CaptchaChallenge, error)
 	MarkCaptchaExpired(ctx context.Context, challengeID string) error

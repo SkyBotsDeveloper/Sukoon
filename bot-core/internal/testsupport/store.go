@@ -313,7 +313,17 @@ func (m *MemoryStore) EnsureChat(_ context.Context, botID string, chat telegram.
 		m.antiraid[key] = domain.AntiRaidSettings{BotID: botID, ChatID: chat.ID, RaidDurationSeconds: 6 * 60 * 60, ActionDurationSeconds: 60 * 60}
 	}
 	if _, ok := m.captchaSettings[key]; !ok {
-		m.captchaSettings[key] = domain.CaptchaSettings{BotID: botID, ChatID: chat.ID, Mode: "button", TimeoutSeconds: 120, FailureAction: "kick", ChallengeDigits: 2}
+		m.captchaSettings[key] = domain.CaptchaSettings{
+			BotID:             botID,
+			ChatID:            chat.ID,
+			Mode:              "button",
+			TimeoutSeconds:    300,
+			KickOnTimeout:     false,
+			ButtonText:        "Click here to prove you're human",
+			FailureAction:     "kick",
+			ChallengeDigits:   2,
+			AutoUnmuteSeconds: 0,
+		}
 	}
 	if _, ok := m.antiabuse[key]; !ok {
 		m.antiabuse[key] = domain.AntiAbuseSettings{BotID: botID, ChatID: chat.ID, Enabled: false, Action: "delete_warn"}
@@ -815,8 +825,23 @@ func (m *MemoryStore) SetCaptchaSettings(_ context.Context, settings domain.Capt
 func (m *MemoryStore) CreateCaptchaChallenge(_ context.Context, challenge domain.CaptchaChallenge) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	for id, existing := range m.challenges {
+		if existing.BotID == challenge.BotID && existing.ChatID == challenge.ChatID && existing.UserID == challenge.UserID && existing.Status == "pending" {
+			delete(m.challenges, id)
+		}
+	}
 	m.challenges[challenge.ID] = challenge
 	return nil
+}
+
+func (m *MemoryStore) GetCaptchaChallengeByID(_ context.Context, challengeID string) (domain.CaptchaChallenge, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	challenge, ok := m.challenges[challengeID]
+	if !ok {
+		return domain.CaptchaChallenge{}, errors.New("captcha challenge not found")
+	}
+	return challenge, nil
 }
 
 func (m *MemoryStore) GetPendingCaptchaChallenge(_ context.Context, botID string, chatID int64, userID int64) (domain.CaptchaChallenge, error) {
@@ -828,6 +853,15 @@ func (m *MemoryStore) GetPendingCaptchaChallenge(_ context.Context, botID string
 		}
 	}
 	return domain.CaptchaChallenge{}, errors.New("captcha challenge not found")
+}
+
+func (m *MemoryStore) MarkCaptchaRulesAccepted(_ context.Context, challengeID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	challenge := m.challenges[challengeID]
+	challenge.RulesAccepted = true
+	m.challenges[challengeID] = challenge
+	return nil
 }
 
 func (m *MemoryStore) MarkCaptchaSolved(_ context.Context, challengeID string) error {

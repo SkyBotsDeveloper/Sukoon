@@ -22,7 +22,7 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 			ms.warn_limit, ms.warn_mode,
 			afs.enabled, afs.flood_limit, afs.timed_limit, afs.window_seconds, afs.action, afs.action_duration_seconds, afs.clear_all,
 			ars.enabled_until, ars.raid_duration_seconds, ars.action_duration_seconds, ars.auto_threshold,
-			cps.enabled, cps.mode, cps.timeout_seconds, cps.failure_action, cps.challenge_digits,
+			cps.enabled, cps.mode, cps.timeout_seconds, cps.rules_required, cps.auto_unmute_seconds, cps.kick_on_timeout, cps.button_text, cps.failure_action, cps.challenge_digits,
 			aas.enabled, aas.action,
 			abs.enabled, abs.action
 		FROM chat_settings cs
@@ -76,6 +76,10 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 		&bundle.Captcha.Enabled,
 		&bundle.Captcha.Mode,
 		&bundle.Captcha.TimeoutSeconds,
+		&bundle.Captcha.RulesRequired,
+		&bundle.Captcha.AutoUnmuteSeconds,
+		&bundle.Captcha.KickOnTimeout,
+		&bundle.Captcha.ButtonText,
 		&bundle.Captcha.FailureAction,
 		&bundle.Captcha.ChallengeDigits,
 		&bundle.AntiAbuse.Enabled,

@@ -251,14 +251,34 @@ var helpPages = map[string]helpPage{
 	helpCaptcha: {
 		Title: "CAPTCHA",
 		Lines: []string{
-			"New members can be challenge-restricted until they solve the current button-based captcha.",
+			"Some chats get a lot of users joining just to spam. This could be because they're trolls, or part of a spam network.",
 			"",
-			"/captcha [on|off]",
-			"/captchamode [button]",
-			"/captchakick [kick|mute|ban]",
-			"/captchakicktime [seconds]",
+			"To slow them down, you could try enabling CAPTCHAs. New users joining your chat will be required to complete a test to confirm that they're real people.",
 			"",
-			"Current captcha mode is button-only. Custom captcha text, extra rules text, and mute-duration variants are still deferred.",
+			"Admin commands:",
+			"- /captcha <yes/no/on/off>: Enable or disable CAPTCHAs. Welcome messages must be enabled first.",
+			"- /captchamode <button/math/text/text2>: Choose which CAPTCHA type to use for your chat.",
+			"- /captcharules <yes/no/on/off>: Require new users to accept the rules before they can speak.",
+			"- /captchamutetime <Xw/d/h/m>: Automatically unmute unsolved users after a delay. Use off to disable.",
+			"- /captchakick <yes/no/on/off>: Kick users that still have not solved the CAPTCHA.",
+			"- /captchakicktime <Xw/d/h/m>: Set the time after which unsolved users are kicked.",
+			"- /setcaptchatext <text>: Customise the CAPTCHA button text.",
+			"- /resetcaptchatext: Reset the CAPTCHA button text to the default value.",
+			"",
+			"Examples:",
+			"- Enable CAPTCHAs",
+			"-> /captcha on",
+			"",
+			"- Change the CAPTCHA mode to text.",
+			"-> /captchamode text",
+			"",
+			"- Enable CAPTCHA rules, forcing users to read the rules before being allowed to speak.",
+			"-> /captcharules on",
+			"",
+			"- Disable captcha mute time; users will stay muted until they solve the captcha.",
+			"-> /captchamutetime off",
+			"",
+			"Note: CAPTCHAs only run while welcome messages are enabled. PM solve modes are live; join-request-specific delivery is still deferred.",
 		},
 	},
 	helpCleanCommands: {
@@ -969,6 +989,12 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 				{Text: "Back", CallbackData: callbackHelpMain},
 			},
 		)
+	case helpCaptcha:
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: callbackHelpMain},
+			},
+		)
 	case helpBans:
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
@@ -1196,7 +1222,7 @@ func normalizeHelpSection(value string) string {
 		return helpBlocklists
 	case "blocklists_examples", "blocklistexamples", "blocklist_examples":
 		return helpBlocklistExamples
-	case "captcha", "captchas", "captchamode", "captchakick", "captchakicktime":
+	case "captcha", "captchas", "captchamode", "captcharules", "captchamutetime", "captchakick", "captchakicktime", "setcaptchatext", "resetcaptchatext":
 		return helpCaptcha
 	case "clean", "cleanup", "cleancommands", "cleancommand", "keepcommand", "cleancommandtypes":
 		return helpCleanCommands

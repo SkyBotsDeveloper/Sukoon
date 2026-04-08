@@ -39,7 +39,8 @@
 - `/addblocklist`, `/rmbl`, `/rmblocklist`, `/unblocklistall`, `/blocklist`
 - `/blocklistmode`, `/blocklistdelete`, `/setblocklistreason`, `/resetblocklistreason`
 - `/flood`, `/setflood`, `/setfloodtimer`, `/floodmode`, `/setfloodmode`, `/clearflood`
-- `/captcha`, `/captchamode`, `/captchakick`, `/captchakicktime`
+- `/captcha`, `/captchamode`, `/captcharules`, `/captchamutetime`, `/captchakick`, `/captchakicktime`
+- `/setcaptchatext`, `/resetcaptchatext`
 
 ### Content And Presence
 
@@ -110,7 +111,7 @@
 - recurring timed messages
 - channel-subscription enforcement
 - private-rules toggle commands
-- advanced captcha text/rules variants beyond the current button-mode controls
+- join-request-specific CAPTCHA delivery
 - warn-mode locks and allowlist-based lock exemptions
 - separate admin web panel
 - full help or informational command surface beyond the current scoped live sections

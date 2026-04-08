@@ -310,7 +310,7 @@ func (s *Service) disableable(ctx context.Context, rt *runtime.Context) error {
 		"/lock, /unlock, /locks, /locktypes",
 		"/addblocklist, /rmbl, /rmblocklist, /unblocklistall, /blocklist",
 		"/setflood, /flood, /setfloodtimer, /floodmode, /clearflood",
-		"/captcha, /captchamode, /captchakick, /captchakicktime",
+		"/captcha, /captchamode, /captcharules, /captchamutetime, /captchakick, /captchakicktime, /setcaptchatext, /resetcaptchatext",
 		"/cleancommands, /cleancommand, /keepcommand, /cleancommandtypes",
 		"/cleanservice, /nocleanservice, /cleanservicetypes",
 		"/logchannel, /setlog, /unsetlog, /log, /nolog, /logcategories",

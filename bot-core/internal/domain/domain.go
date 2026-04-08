@@ -82,13 +82,17 @@ type FloodTrackResult struct {
 }
 
 type CaptchaSettings struct {
-	BotID           string
-	ChatID          int64
-	Enabled         bool
-	Mode            string
-	TimeoutSeconds  int
-	FailureAction   string
-	ChallengeDigits int
+	BotID             string
+	ChatID            int64
+	Enabled           bool
+	Mode              string
+	TimeoutSeconds    int
+	RulesRequired     bool
+	AutoUnmuteSeconds int
+	KickOnTimeout     bool
+	ButtonText        string
+	FailureAction     string
+	ChallengeDigits   int
 }
 
 type LockRule struct {
@@ -148,6 +152,10 @@ type CaptchaChallenge struct {
 	MessageID     int64
 	ExpiresAt     time.Time
 	Status        string
+	Mode          string
+	RulesRequired bool
+	RulesAccepted bool
+	TimeoutAction string
 	FailureAction string
 }
 
