@@ -813,6 +813,10 @@ func helpSectionOptions(section string) (string, bool) {
 	if section == helpRoot {
 		return "HTML", true
 	}
+	switch section {
+	case helpBlocklistExamples:
+		return "", true
+	}
 	return "", false
 }
 

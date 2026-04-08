@@ -254,6 +254,9 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	}
 	examplesMarkup := requireEditedMarkup(t, examplesMessage)
 	assertButton(t, examplesMarkup, 0, 0, "Back", "ux:help:blocklists", "")
+	if !examplesMessage.Options.DisableWebPagePreview {
+		t.Fatalf("expected blocklist examples help page to disable web previews, got %+v", examplesMessage.Options)
+	}
 	assertNoButtonText(t, examplesMarkup, "Website")
 	assertNoButtonText(t, examplesMarkup, "Add to Group")
 	assertNoButtonText(t, examplesMarkup, "Home")
