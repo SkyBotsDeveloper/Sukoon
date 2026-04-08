@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
+
 	"sukoon/bot-core/internal/domain"
 	"sukoon/bot-core/internal/jobs"
 	"sukoon/bot-core/internal/runtime"
@@ -132,6 +134,25 @@ func (s *Service) ensurePromotePerm(ctx context.Context, rt *runtime.Context) (b
 	return true, nil
 }
 
+func (s *Service) ensureChatOwner(ctx context.Context, rt *runtime.Context) (bool, error) {
+	if rt.ActorPermissions.IsOwner || rt.ActorPermissions.IsSudo {
+		return true, nil
+	}
+	if !rt.ActorPermissions.IsChatAdmin {
+		return false, s.sendPermissionNotice(ctx, rt, "Only the chat owner can do this.", true)
+	}
+	admins, err := rt.Client.GetChatAdministrators(ctx, rt.ChatID())
+	if err != nil {
+		return false, err
+	}
+	for _, admin := range admins {
+		if admin.User.ID == rt.ActorID() && admin.Status == "creator" {
+			return true, nil
+		}
+	}
+	return false, s.sendPermissionNotice(ctx, rt, "Only the chat owner can do this.", true)
+}
+
 func (s *Service) ensurePinPerm(ctx context.Context, rt *runtime.Context) (bool, error) {
 	ok, err := s.ensureChatAdmin(ctx, rt)
 	if !ok || err != nil {
@@ -159,14 +180,17 @@ func (s *Service) approve(ctx context.Context, rt *runtime.Context, approved boo
 	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
 		return err
 	}
-	target, _, err := moderationTarget(ctx, rt)
+	target, reason, err := moderationTarget(ctx, rt)
 	if err != nil {
 		return err
 	}
-	if err := rt.Store.SetApproval(ctx, rt.Bot.ID, rt.ChatID(), target.UserID, rt.ActorID(), approved); err != nil {
+	if err := rt.Store.SetApproval(ctx, rt.Bot.ID, rt.ChatID(), target.UserID, rt.ActorID(), approved, reason); err != nil {
 		return err
 	}
 	text := "Approved " + target.Name + "."
+	if approved && strings.TrimSpace(reason) != "" {
+		text += " Reason: " + reason
+	}
 	if !approved {
 		text = "Removed approval for " + target.Name + "."
 	}
@@ -175,26 +199,30 @@ func (s *Service) approve(ctx context.Context, rt *runtime.Context, approved boo
 }
 
 func (s *Service) approvalStatus(ctx context.Context, rt *runtime.Context) error {
-	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
-		return err
-	}
 	target, _, err := moderationTarget(ctx, rt)
 	if err != nil {
 		return fmt.Errorf("usage: /approval <reply|user>")
 	}
-	approved, err := rt.Store.IsApproved(ctx, rt.Bot.ID, rt.ChatID(), target.UserID)
-	if err != nil {
+	approval, err := rt.Store.GetApproval(ctx, rt.Bot.ID, rt.ChatID(), target.UserID)
+	approved := err == nil
+	if err != nil && err != pgx.ErrNoRows {
 		return err
 	}
 	text := target.Name + " is not approved."
 	if approved {
 		text = target.Name + " is approved."
+		if strings.TrimSpace(approval.Reason) != "" {
+			text += " Reason: " + approval.Reason
+		}
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
 func (s *Service) listApproved(ctx context.Context, rt *runtime.Context) error {
+	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
+		return err
+	}
 	approvedUsers, err := rt.Store.ListApprovedUsers(ctx, rt.Bot.ID, rt.ChatID())
 	if err != nil {
 		return err
@@ -205,6 +233,18 @@ func (s *Service) listApproved(ctx context.Context, rt *runtime.Context) error {
 	}
 	parts := make([]string, 0, len(approvedUsers))
 	for _, userID := range approvedUsers {
+		profile, err := rt.Store.GetUserByID(ctx, userID)
+		if err == nil {
+			if profile.Username != "" {
+				parts = append(parts, "@"+profile.Username)
+				continue
+			}
+			name := strings.TrimSpace(strings.TrimSpace(profile.FirstName + " " + profile.LastName))
+			if name != "" {
+				parts = append(parts, fmt.Sprintf("%s (%d)", name, userID))
+				continue
+			}
+		}
 		parts = append(parts, strconv.FormatInt(userID, 10))
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Approved users: "+strings.Join(parts, ", "), rt.ReplyOptions(telegram.SendMessageOptions{}))
@@ -212,7 +252,7 @@ func (s *Service) listApproved(ctx context.Context, rt *runtime.Context) error {
 }
 
 func (s *Service) unapproveAll(ctx context.Context, rt *runtime.Context) error {
-	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
+	if ok, err := s.ensureChatOwner(ctx, rt); err != nil || !ok {
 		return err
 	}
 	approvedUsers, err := rt.Store.ListApprovedUsers(ctx, rt.Bot.ID, rt.ChatID())
@@ -224,7 +264,7 @@ func (s *Service) unapproveAll(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	for _, userID := range approvedUsers {
-		if err := rt.Store.SetApproval(ctx, rt.Bot.ID, rt.ChatID(), userID, rt.ActorID(), false); err != nil {
+		if err := rt.Store.SetApproval(ctx, rt.Bot.ID, rt.ChatID(), userID, rt.ActorID(), false, ""); err != nil {
 			return err
 		}
 	}

@@ -1,0 +1,2 @@
+ALTER TABLE approvals
+    ADD COLUMN IF NOT EXISTS approval_reason TEXT NOT NULL DEFAULT '';

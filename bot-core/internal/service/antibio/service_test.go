@@ -56,7 +56,7 @@ func TestAntiBioApprovalBypassAndBioEnforcement(t *testing.T) {
 	}
 
 	h.Client.ChatsByID[20] = telegram.Chat{ID: 20, Bio: "https://spam.example"}
-	if err := h.Store.SetApproval(context.Background(), h.Bot.ID, chat.ID, 20, 1, true); err != nil {
+	if err := h.Store.SetApproval(context.Background(), h.Bot.ID, chat.ID, 20, 1, true, ""); err != nil {
 		t.Fatalf("set approval failed: %v", err)
 	}
 	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{

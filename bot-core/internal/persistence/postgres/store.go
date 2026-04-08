@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -580,15 +581,33 @@ func (s *Store) IsApproved(ctx context.Context, botID string, chatID int64, user
 	return exists, err
 }
 
-func (s *Store) SetApproval(ctx context.Context, botID string, chatID int64, userID int64, approvedBy int64, approved bool) error {
+func (s *Store) GetApproval(ctx context.Context, botID string, chatID int64, userID int64) (domain.Approval, error) {
+	var approval domain.Approval
+	err := s.pool.QueryRow(ctx, `
+		SELECT bot_id, chat_id, user_id, approved_by, approval_reason, approved_at
+		FROM approvals
+		WHERE bot_id=$1 AND chat_id=$2 AND user_id=$3
+	`, botID, chatID, userID).Scan(
+		&approval.BotID,
+		&approval.ChatID,
+		&approval.UserID,
+		&approval.ApprovedBy,
+		&approval.Reason,
+		&approval.ApprovedAt,
+	)
+	return approval, err
+}
+
+func (s *Store) SetApproval(ctx context.Context, botID string, chatID int64, userID int64, approvedBy int64, approved bool, reason string) error {
 	if approved {
 		_, err := s.pool.Exec(ctx, `
-			INSERT INTO approvals (bot_id, chat_id, user_id, approved_by)
-			VALUES ($1, $2, $3, $4)
+			INSERT INTO approvals (bot_id, chat_id, user_id, approved_by, approval_reason)
+			VALUES ($1, $2, $3, $4, $5)
 			ON CONFLICT (bot_id, chat_id, user_id) DO UPDATE SET
 				approved_by = EXCLUDED.approved_by,
+				approval_reason = EXCLUDED.approval_reason,
 				approved_at = NOW()
-		`, botID, chatID, userID, approvedBy)
+		`, botID, chatID, userID, approvedBy, strings.TrimSpace(reason))
 		return err
 	}
 

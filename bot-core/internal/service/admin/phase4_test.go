@@ -330,14 +330,22 @@ func TestApprovalStatusUnapproveAllAndLogAliases(t *testing.T) {
 	if err := h.Store.EnsureUser(context.Background(), telegram.User{ID: 20, Username: "target", FirstName: "Target"}); err != nil {
 		t.Fatalf("ensure user failed: %v", err)
 	}
+	h.Client.AdminsByChat[chat.ID] = []telegram.ChatAdministrator{
+		{
+			User:   telegram.User{ID: 10, FirstName: "Admin", Username: "admin"},
+			Status: "administrator",
+		},
+		{
+			User:   telegram.User{ID: 1, FirstName: "Owner", Username: "owner"},
+			Status: "creator",
+		},
+	}
 
 	for idx, text := range []string{
-		"/approve @target",
-		"/approval @target",
+		"/approve @target testing",
 		"/setlog -100999",
 		"/logcategories",
 		"/nolog",
-		"/unapproveall",
 	} {
 		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
 			UpdateID: int64(idx + 1),
@@ -352,7 +360,19 @@ func TestApprovalStatusUnapproveAllAndLogAliases(t *testing.T) {
 		}
 	}
 
-	if got := h.Client.Messages[1].Text; !strings.Contains(got, "is approved") {
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 10,
+		Message: &telegram.Message{
+			MessageID: 60,
+			From:      &telegram.User{ID: 55, FirstName: "Member"},
+			Chat:      chat,
+			Text:      "/approval @target",
+		},
+	}); err != nil {
+		t.Fatalf("approval status failed: %v", err)
+	}
+
+	if got := h.Client.Messages[len(h.Client.Messages)-1].Text; !strings.Contains(got, "is approved") || !strings.Contains(got, "testing") {
 		t.Fatalf("expected approval status response, got %q", got)
 	}
 
@@ -363,8 +383,36 @@ func TestApprovalStatusUnapproveAllAndLogAliases(t *testing.T) {
 	if bundle.Settings.LogChannelID != nil {
 		t.Fatalf("expected nolog to clear log channel, got %+v", bundle.Settings.LogChannelID)
 	}
-	if got := h.Client.Messages[3].Text; !strings.Contains(got, "Current log categories") {
+	if got := h.Client.Messages[2].Text; !strings.Contains(got, "Current log categories") {
 		t.Fatalf("expected logcategories response, got %q", got)
+	}
+
+	before := len(h.Client.Messages)
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 11,
+		Message: &telegram.Message{
+			MessageID: 61,
+			From:      &telegram.User{ID: 10, FirstName: "Admin"},
+			Chat:      chat,
+			Text:      "/unapproveall",
+		},
+	}); err != nil {
+		t.Fatalf("admin unapproveall failed: %v", err)
+	}
+	if len(h.Client.Messages) != before+1 || !strings.Contains(h.Client.Messages[len(h.Client.Messages)-1].Text, "Only the chat owner can do this.") {
+		t.Fatalf("expected owner-only warning for unapproveall, got %+v", h.Client.Messages[before:])
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 12,
+		Message: &telegram.Message{
+			MessageID: 62,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/unapproveall",
+		},
+	}); err != nil {
+		t.Fatalf("owner unapproveall failed: %v", err)
 	}
 
 	approved, err := h.Store.IsApproved(context.Background(), h.Bot.ID, chat.ID, 20)

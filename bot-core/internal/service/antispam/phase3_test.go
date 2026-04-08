@@ -25,7 +25,7 @@ func TestApprovedUserBypassesBlocklist(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("add blocklist failed: %v", err)
 	}
-	if err := h.Store.SetApproval(context.Background(), h.Bot.ID, chat.ID, 20, 1, true); err != nil {
+	if err := h.Store.SetApproval(context.Background(), h.Bot.ID, chat.ID, 20, 1, true, ""); err != nil {
 		t.Fatalf("set approval failed: %v", err)
 	}
 

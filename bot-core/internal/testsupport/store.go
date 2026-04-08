@@ -33,7 +33,7 @@ type MemoryStore struct {
 	antibio          map[string]domain.AntiBioSettings
 	roles            map[string]map[int64][]string
 	chatRoles        map[string]map[int64][]string
-	approvals        map[string]map[int64]bool
+	approvals        map[string]map[int64]domain.Approval
 	disabled         map[string]map[string]struct{}
 	warnings         map[string]int
 	notes            map[string]map[string]domain.Note
@@ -77,7 +77,7 @@ func NewMemoryStore() *MemoryStore {
 		antibio:          map[string]domain.AntiBioSettings{},
 		roles:            map[string]map[int64][]string{},
 		chatRoles:        map[string]map[int64][]string{},
-		approvals:        map[string]map[int64]bool{},
+		approvals:        map[string]map[int64]domain.Approval{},
 		disabled:         map[string]map[string]struct{}{},
 		warnings:         map[string]int{},
 		notes:            map[string]map[string]domain.Note{},
@@ -387,19 +387,36 @@ func (m *MemoryStore) GetBotRoles(_ context.Context, botID string, userID int64)
 func (m *MemoryStore) IsApproved(_ context.Context, botID string, chatID int64, userID int64) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.approvals[chatKey(botID, chatID)][userID], nil
+	_, ok := m.approvals[chatKey(botID, chatID)][userID]
+	return ok, nil
 }
 
-func (m *MemoryStore) SetApproval(_ context.Context, botID string, chatID int64, userID int64, approvedBy int64, approved bool) error {
+func (m *MemoryStore) GetApproval(_ context.Context, botID string, chatID int64, userID int64) (domain.Approval, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	_ = approvedBy
+	approval, ok := m.approvals[chatKey(botID, chatID)][userID]
+	if !ok {
+		return domain.Approval{}, pgx.ErrNoRows
+	}
+	return approval, nil
+}
+
+func (m *MemoryStore) SetApproval(_ context.Context, botID string, chatID int64, userID int64, approvedBy int64, approved bool, reason string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	key := chatKey(botID, chatID)
 	if _, ok := m.approvals[key]; !ok {
-		m.approvals[key] = map[int64]bool{}
+		m.approvals[key] = map[int64]domain.Approval{}
 	}
 	if approved {
-		m.approvals[key][userID] = true
+		m.approvals[key][userID] = domain.Approval{
+			BotID:      botID,
+			ChatID:     chatID,
+			UserID:     userID,
+			ApprovedBy: approvedBy,
+			Reason:     strings.TrimSpace(reason),
+			ApprovedAt: time.Now(),
+		}
 	} else {
 		delete(m.approvals[key], userID)
 	}

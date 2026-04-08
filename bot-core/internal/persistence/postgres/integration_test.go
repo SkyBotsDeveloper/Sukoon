@@ -76,7 +76,7 @@ func TestStoreMigratesAndPersistsCanonicalContracts(t *testing.T) {
 		t.Fatalf("MarkUpdateCompleted() error = %v", err)
 	}
 
-	if err := store.SetApproval(ctx, bot.ID, -100123, 2002, 1001, true); err != nil {
+	if err := store.SetApproval(ctx, bot.ID, -100123, 2002, 1001, true, "testing"); err != nil {
 		t.Fatalf("SetApproval() error = %v", err)
 	}
 	approved, err := store.IsApproved(ctx, bot.ID, -100123, 2002)
@@ -85,6 +85,13 @@ func TestStoreMigratesAndPersistsCanonicalContracts(t *testing.T) {
 	}
 	if !approved {
 		t.Fatal("expected approval to persist")
+	}
+	approval, err := store.GetApproval(ctx, bot.ID, -100123, 2002)
+	if err != nil {
+		t.Fatalf("GetApproval() error = %v", err)
+	}
+	if approval.Reason != "testing" {
+		t.Fatalf("expected approval reason to persist, got %+v", approval)
 	}
 
 	antiraidUntil := time.Now().Add(2 * time.Hour)

@@ -34,7 +34,8 @@ type Store interface {
 	SetChatRole(ctx context.Context, botID string, chatID int64, userID int64, role string, grantedBy int64, enabled bool) error
 	ListChatRoleUsers(ctx context.Context, botID string, chatID int64, role string) ([]domain.UserProfile, error)
 	IsApproved(ctx context.Context, botID string, chatID int64, userID int64) (bool, error)
-	SetApproval(ctx context.Context, botID string, chatID int64, userID int64, approvedBy int64, approved bool) error
+	GetApproval(ctx context.Context, botID string, chatID int64, userID int64) (domain.Approval, error)
+	SetApproval(ctx context.Context, botID string, chatID int64, userID int64, approvedBy int64, approved bool, reason string) error
 	ListApprovedUsers(ctx context.Context, botID string, chatID int64) ([]int64, error)
 	SetDisabledCommand(ctx context.Context, botID string, chatID int64, command string, disabled bool, changedBy int64) error
 	SetDisabledDelete(ctx context.Context, botID string, chatID int64, enabled bool) error

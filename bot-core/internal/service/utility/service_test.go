@@ -610,6 +610,48 @@ func TestAntifloodHelpPageUsesBackOnlyMarkup(t *testing.T) {
 	assertNoButtonText(t, markup, "Add to Group")
 }
 
+func TestApprovalHelpPageUsesBackOnlyMarkup(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: 57, Type: "private"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 63,
+			From:      &telegram.User{ID: 57, FirstName: "User"},
+			Chat:      chat,
+			Text:      "/help",
+		},
+	}); err != nil {
+		t.Fatalf("help failed: %v", err)
+	}
+
+	root := h.Client.Messages[len(h.Client.Messages)-1]
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-help-approval",
+			From: telegram.User{ID: 57, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: root.MessageID,
+				Chat:      chat,
+			},
+			Data: "ux:help:approval",
+		},
+	}); err != nil {
+		t.Fatalf("approval help callback failed: %v", err)
+	}
+
+	page := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	if !strings.Contains(page.Text, "User commands:") || !strings.Contains(page.Text, "/approval") || !strings.Contains(page.Text, "/unapproveall") {
+		t.Fatalf("expected approval help copy, got %q", page.Text)
+	}
+	markup := requireEditedMarkup(t, page)
+	assertButton(t, markup, 0, 0, "Back", "ux:help:root", "")
+	assertNoButtonText(t, markup, "Website")
+	assertNoButtonText(t, markup, "Add to Group")
+}
+
 func TestAntiRaidHelpPageUsesBackOnlyMarkup(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	chat := telegram.Chat{ID: 56, Type: "private"}

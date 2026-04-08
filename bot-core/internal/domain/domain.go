@@ -151,6 +151,15 @@ type AFKState struct {
 	SetAt  time.Time
 }
 
+type Approval struct {
+	BotID      string
+	ChatID     int64
+	UserID     int64
+	ApprovedBy int64
+	Reason     string
+	ApprovedAt time.Time
+}
+
 type UserProfile struct {
 	ID        int64
 	Username  string

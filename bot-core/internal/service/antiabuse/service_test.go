@@ -111,7 +111,7 @@ func TestAntiAbuseRespectsApprovalBypassAndPunctuation(t *testing.T) {
 		t.Fatalf("enable antiabuse failed: %v", err)
 	}
 
-	if err := h.Store.SetApproval(context.Background(), h.Bot.ID, chat.ID, 25, 1, true); err != nil {
+	if err := h.Store.SetApproval(context.Background(), h.Bot.ID, chat.ID, 25, 1, true, ""); err != nil {
 		t.Fatalf("set approval failed: %v", err)
 	}
 	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{

@@ -115,15 +115,19 @@ var helpPages = map[string]helpPage{
 	helpApproval: {
 		Title: "Approval",
 		Lines: []string{
-			"Approvals mark trusted members so they bypass selected protections without weakening the whole chat.",
+			"Sometimes, you might trust a user not to send unwanted content.",
+			"Maybe not enough to make them admin, but you might be ok with locks, blocklists, and antiflood not applying to them.",
 			"",
-			"/approval <reply|user>",
-			"/approve <reply|user>",
-			"/unapprove <reply|user>",
-			"/approved",
-			"/unapproveall",
+			"That's what approvals are for - approve trustworthy users to allow them to send.",
 			"",
-			"Approved users currently bypass blocklist and antibio enforcement.",
+			"User commands:",
+			"- /approval: Check a user's approval status in this chat.",
+			"",
+			"Admin commands:",
+			"- /approve: Approve a user. Locks, blocklists, and antiflood won't apply to them anymore.",
+			"- /unapprove: Unapprove a user. They will now be subject to locks, blocklists, and antiflood again.",
+			"- /approved: List all approved users.",
+			"- /unapproveall: Unapprove ALL users in a chat. This cannot be undone.",
 		},
 	},
 	helpBans: {
@@ -876,6 +880,12 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 			},
 		)
 	case helpAntiflood:
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: callbackHelpMain},
+			},
+		)
+	case helpApproval:
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},
