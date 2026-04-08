@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"sukoon/bot-core/internal/telegram"
@@ -135,5 +136,144 @@ func TestAntifloodClearFloodDeletesFullTriggeredSet(t *testing.T) {
 		if want := int64(50 + idx); deleted.MessageID != want {
 			t.Fatalf("deleted message %d = %d, want %d", idx, deleted.MessageID, want)
 		}
+	}
+}
+
+func TestAntiRaidCommandsAndJoinEnforcement(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100303, Type: "supergroup", Title: "Raid Room"}
+
+	for idx, text := range []string{
+		"/raidtime 6h",
+		"/raidactiontime 3h",
+		"/autoantiraid 15",
+		"/antiraid 3h",
+		"/antiraid",
+	} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(100 + idx),
+			Message: &telegram.Message{
+				MessageID: int64(1000 + idx),
+				From:      &telegram.User{ID: 1, FirstName: "Owner"},
+				Chat:      chat,
+				Text:      text,
+			},
+		}); err != nil {
+			t.Fatalf("command %q failed: %v", text, err)
+		}
+	}
+
+	bundle, err := h.Store.LoadRuntimeBundle(context.Background(), h.Bot.ID, chat.ID)
+	if err != nil {
+		t.Fatalf("load runtime bundle failed: %v", err)
+	}
+	if bundle.AntiRaid.RaidDurationSeconds != 6*60*60 || bundle.AntiRaid.ActionDurationSeconds != 3*60*60 || bundle.AntiRaid.AutoThreshold != 15 {
+		t.Fatalf("expected configured antiraid settings, got %+v", bundle.AntiRaid)
+	}
+	if bundle.AntiRaid.EnabledUntil == nil {
+		t.Fatalf("expected antiraid to be enabled")
+	}
+	if got := h.Client.Messages[len(h.Client.Messages)-1].Text; !strings.Contains(got, "AntiRaid settings:") || !strings.Contains(got, "Tempban duration: 3h") {
+		t.Fatalf("unexpected /antiraid status response: %q", got)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 200,
+		Message: &telegram.Message{
+			MessageID: 2000,
+			From:      &telegram.User{ID: 30, FirstName: "Joiner"},
+			Chat:      chat,
+			NewChatMembers: []telegram.User{
+				{ID: 30, FirstName: "Joiner"},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("join handling failed: %v", err)
+	}
+
+	if len(h.Client.Bans) == 0 {
+		t.Fatalf("expected antiraid ban for new join")
+	}
+	if h.Client.Bans[len(h.Client.Bans)-1].UserID != 30 {
+		t.Fatalf("expected antiraid ban target 30, got %+v", h.Client.Bans[len(h.Client.Bans)-1])
+	}
+	if h.Client.Bans[len(h.Client.Bans)-1].Until == nil {
+		t.Fatalf("expected temporary antiraid ban")
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 201,
+		Message: &telegram.Message{
+			MessageID: 2001,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/antiraid off",
+		},
+	}); err != nil {
+		t.Fatalf("disable antiraid failed: %v", err)
+	}
+
+	bundle, err = h.Store.LoadRuntimeBundle(context.Background(), h.Bot.ID, chat.ID)
+	if err != nil {
+		t.Fatalf("load runtime bundle after disable failed: %v", err)
+	}
+	if bundle.AntiRaid.EnabledUntil != nil {
+		t.Fatalf("expected antiraid to be disabled, got %+v", bundle.AntiRaid)
+	}
+}
+
+func TestAutoAntiRaidTriggersAfterJoinBurst(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100304, Type: "supergroup", Title: "Auto Raid"}
+
+	for idx, text := range []string{
+		"/raidtime 2h",
+		"/raidactiontime 1h",
+		"/autoantiraid 2",
+	} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(300 + idx),
+			Message: &telegram.Message{
+				MessageID: int64(3000 + idx),
+				From:      &telegram.User{ID: 1, FirstName: "Owner"},
+				Chat:      chat,
+				Text:      text,
+			},
+		}); err != nil {
+			t.Fatalf("setup command %q failed: %v", text, err)
+		}
+	}
+
+	for i, userID := range []int64{41, 42, 43} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(400 + i),
+			Message: &telegram.Message{
+				MessageID: int64(4000 + i),
+				From:      &telegram.User{ID: userID, FirstName: "Joiner"},
+				Chat:      chat,
+				NewChatMembers: []telegram.User{
+					{ID: userID, FirstName: "Joiner"},
+				},
+			},
+		}); err != nil {
+			t.Fatalf("join %d failed: %v", i, err)
+		}
+	}
+
+	if len(h.Client.Bans) == 0 {
+		t.Fatalf("expected auto antiraid ban")
+	}
+	if h.Client.Bans[len(h.Client.Bans)-1].UserID != 43 {
+		t.Fatalf("expected third join to trigger auto antiraid, got %+v", h.Client.Bans)
+	}
+	bundle, err := h.Store.LoadRuntimeBundle(context.Background(), h.Bot.ID, chat.ID)
+	if err != nil {
+		t.Fatalf("load runtime bundle failed: %v", err)
+	}
+	if bundle.AntiRaid.EnabledUntil == nil {
+		t.Fatalf("expected auto antiraid to become active")
+	}
+	if !strings.Contains(h.Client.Messages[len(h.Client.Messages)-1].Text, "AntiRaid auto-enabled") {
+		t.Fatalf("expected auto antiraid notification, got %q", h.Client.Messages[len(h.Client.Messages)-1].Text)
 	}
 }

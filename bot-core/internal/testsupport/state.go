@@ -13,6 +13,7 @@ type MemoryState struct {
 	mu            sync.Mutex
 	bots          map[string]domain.BotInstance
 	flood         map[string][]timedFloodMessage
+	joins         map[string][]time.Time
 	streakUser    map[string]int64
 	streakMessage map[string][]int64
 	lease         map[string]time.Time
@@ -27,6 +28,7 @@ func NewMemoryState() *MemoryState {
 	return &MemoryState{
 		bots:          map[string]domain.BotInstance{},
 		flood:         map[string][]timedFloodMessage{},
+		joins:         map[string][]time.Time{},
 		streakUser:    map[string]int64{},
 		streakMessage: map[string][]int64{},
 		lease:         map[string]time.Time{},
@@ -96,6 +98,23 @@ func (m *MemoryState) ClearFlood(_ context.Context, botID string, chatID int64, 
 		delete(m.streakMessage, chatKey)
 	}
 	return nil
+}
+
+func (m *MemoryState) TrackJoinBurst(_ context.Context, botID string, chatID int64, userID int64, window time.Duration) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_ = userID
+	key := botID + ":" + strconv.FormatInt(chatID, 10)
+	now := time.Now()
+	var kept []time.Time
+	for _, ts := range m.joins[key] {
+		if now.Sub(ts) <= window {
+			kept = append(kept, ts)
+		}
+	}
+	kept = append(kept, now)
+	m.joins[key] = kept
+	return int64(len(kept)), nil
 }
 
 func (m *MemoryState) AcquireLease(_ context.Context, key string, ttl time.Duration) (bool, error) {

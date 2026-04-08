@@ -21,12 +21,14 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 			cs.welcome_enabled, cs.welcome_text, cs.goodbye_enabled, cs.goodbye_text, cs.rules_text,
 			ms.warn_limit, ms.warn_mode,
 			afs.enabled, afs.flood_limit, afs.timed_limit, afs.window_seconds, afs.action, afs.action_duration_seconds, afs.clear_all,
+			ars.enabled_until, ars.raid_duration_seconds, ars.action_duration_seconds, ars.auto_threshold,
 			cps.enabled, cps.mode, cps.timeout_seconds, cps.failure_action, cps.challenge_digits,
 			aas.enabled, aas.action,
 			abs.enabled, abs.action
 		FROM chat_settings cs
 		JOIN moderation_settings ms ON ms.bot_id = cs.bot_id AND ms.chat_id = cs.chat_id
 		JOIN antiflood_settings afs ON afs.bot_id = cs.bot_id AND afs.chat_id = cs.chat_id
+		JOIN antiraid_settings ars ON ars.bot_id = cs.bot_id AND ars.chat_id = cs.chat_id
 		JOIN captcha_settings cps ON cps.bot_id = cs.bot_id AND cps.chat_id = cs.chat_id
 		JOIN antiabuse_settings aas ON aas.bot_id = cs.bot_id AND aas.chat_id = cs.chat_id
 		JOIN antibio_settings abs ON abs.bot_id = cs.bot_id AND abs.chat_id = cs.chat_id
@@ -63,6 +65,10 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 		&bundle.Antiflood.Action,
 		&bundle.Antiflood.ActionDurationSeconds,
 		&bundle.Antiflood.ClearAll,
+		&bundle.AntiRaid.EnabledUntil,
+		&bundle.AntiRaid.RaidDurationSeconds,
+		&bundle.AntiRaid.ActionDurationSeconds,
+		&bundle.AntiRaid.AutoThreshold,
 		&bundle.Captcha.Enabled,
 		&bundle.Captcha.Mode,
 		&bundle.Captcha.TimeoutSeconds,

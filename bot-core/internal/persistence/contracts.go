@@ -67,6 +67,7 @@ type Store interface {
 	DeleteBlocklistRule(ctx context.Context, botID string, chatID int64, pattern string) error
 	ListBlocklistRules(ctx context.Context, botID string, chatID int64) ([]domain.BlocklistRule, error)
 	SetAntiflood(ctx context.Context, settings domain.AntifloodSettings) error
+	SetAntiRaidSettings(ctx context.Context, settings domain.AntiRaidSettings) error
 	SetAntiAbuseSettings(ctx context.Context, settings domain.AntiAbuseSettings) error
 	SetAntiBioSettings(ctx context.Context, settings domain.AntiBioSettings) error
 	IsAntiBioExempt(ctx context.Context, botID string, chatID int64, userID int64) (bool, error)

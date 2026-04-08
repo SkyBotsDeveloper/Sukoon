@@ -87,6 +87,25 @@ func TestStoreMigratesAndPersistsCanonicalContracts(t *testing.T) {
 		t.Fatal("expected approval to persist")
 	}
 
+	antiraidUntil := time.Now().Add(2 * time.Hour)
+	if err := store.SetAntiRaidSettings(ctx, domain.AntiRaidSettings{
+		BotID:                 bot.ID,
+		ChatID:                -100123,
+		EnabledUntil:          &antiraidUntil,
+		RaidDurationSeconds:   6 * 60 * 60,
+		ActionDurationSeconds: 60 * 60,
+		AutoThreshold:         12,
+	}); err != nil {
+		t.Fatalf("SetAntiRaidSettings() error = %v", err)
+	}
+	bundle, err := store.LoadRuntimeBundle(ctx, bot.ID, -100123)
+	if err != nil {
+		t.Fatalf("LoadRuntimeBundle() error = %v", err)
+	}
+	if bundle.AntiRaid.EnabledUntil == nil || bundle.AntiRaid.AutoThreshold != 12 || bundle.AntiRaid.ActionDurationSeconds != 60*60 {
+		t.Fatalf("expected antiraid settings to persist, got %+v", bundle.AntiRaid)
+	}
+
 	job := domain.Job{
 		ID:           "job_broadcast",
 		BotID:        bot.ID,

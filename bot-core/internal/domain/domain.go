@@ -183,6 +183,15 @@ type AntiBioSettings struct {
 	Action  string
 }
 
+type AntiRaidSettings struct {
+	BotID                 string
+	ChatID                int64
+	EnabledUntil          *time.Time
+	RaidDurationSeconds   int
+	ActionDurationSeconds int
+	AutoThreshold         int
+}
+
 type Federation struct {
 	ID          string
 	BotID       string
@@ -259,6 +268,7 @@ type RuntimeBundle struct {
 	Settings         ChatSettings
 	Moderation       ModerationSettings
 	Antiflood        AntifloodSettings
+	AntiRaid         AntiRaidSettings
 	Captcha          CaptchaSettings
 	AntiAbuse        AntiAbuseSettings
 	AntiBio          AntiBioSettings

@@ -61,7 +61,7 @@
 - `/setlang`, `/language`
 - `/privacy`, `/mydata`, `/forgetme`
 - callback-driven help pages for:
-  admin, approval, bans, antiflood, blocklists, captcha, clean commands, disabling, locks, log channels, federations, filters, and formatting
+  admin, approval, bans, antiflood, antiraid, blocklists, captcha, clean commands, disabling, locks, log channels, federations, filters, and formatting
 - help subpages for:
   blocklist command examples, federation admin/owner/user commands, filter examples, markdown formatting truth, fillings, random content, buttons, lock descriptions, and lock examples
 
@@ -103,7 +103,6 @@
 
 ## Deferred Or Intentionally Not Claimed
 
-- antiraid
 - chat connections / remote management
 - anti-porn
 - night mode

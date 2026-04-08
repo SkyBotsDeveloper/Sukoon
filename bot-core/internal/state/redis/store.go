@@ -140,6 +140,26 @@ func (s *Store) ClearFlood(ctx context.Context, botID string, chatID int64, user
 	return s.client.Del(ctx, keys...).Err()
 }
 
+func (s *Store) TrackJoinBurst(ctx context.Context, botID string, chatID int64, userID int64, window time.Duration) (int64, error) {
+	key := fmt.Sprintf("joins:%s:%d", botID, chatID)
+	now := time.Now()
+	cutoff := now.Add(-window).UnixMilli()
+	member := fmt.Sprintf("%d:%d", userID, now.UnixNano())
+
+	pipe := s.client.TxPipeline()
+	pipe.ZAdd(ctx, key, goredis.Z{
+		Score:  float64(now.UnixMilli()),
+		Member: member,
+	})
+	pipe.ZRemRangeByScore(ctx, key, "0", fmt.Sprintf("%d", cutoff))
+	countCmd := pipe.ZCard(ctx, key)
+	pipe.Expire(ctx, key, window+time.Minute)
+	if _, err := pipe.Exec(ctx); err != nil {
+		return 0, err
+	}
+	return countCmd.Val(), nil
+}
+
 func (s *Store) AcquireLease(ctx context.Context, key string, ttl time.Duration) (bool, error) {
 	return s.client.SetNX(ctx, "lease:"+key, "1", ttl).Result()
 }

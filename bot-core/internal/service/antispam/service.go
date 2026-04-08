@@ -47,6 +47,14 @@ func (s *Service) HandleCommand(ctx context.Context, rt *runtime.Context) (bool,
 		return true, s.setFloodTimer(ctx, rt)
 	case "clearflood":
 		return true, s.clearFlood(ctx, rt)
+	case "antiraid":
+		return true, s.antiRaid(ctx, rt)
+	case "raidtime":
+		return true, s.raidTime(ctx, rt)
+	case "raidactiontime":
+		return true, s.raidActionTime(ctx, rt)
+	case "autoantiraid":
+		return true, s.autoAntiRaid(ctx, rt)
 	default:
 		return false, nil
 	}
@@ -78,6 +86,51 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 		return handled, err
 	}
 	return false, nil
+}
+
+func (s *Service) HandleJoin(ctx context.Context, rt *runtime.Context, member telegram.User) (bool, error) {
+	settings := normalizeAntiRaidSettings(rt.RuntimeBundle.AntiRaid, rt.Bot.ID, rt.ChatID())
+	now := time.Now()
+
+	if antiRaidIsActive(settings, now) {
+		if shouldSkipAntiRaid(rt, member.ID) {
+			return false, nil
+		}
+		if err := s.enforceAntiRaidJoin(ctx, rt, member, settings); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+
+	if settings.AutoThreshold <= 0 {
+		return false, nil
+	}
+	count, err := rt.State.TrackJoinBurst(ctx, rt.Bot.ID, rt.ChatID(), member.ID, time.Minute)
+	if err != nil {
+		return false, err
+	}
+	if int(count) <= settings.AutoThreshold {
+		return false, nil
+	}
+
+	enabledUntil := now.Add(time.Duration(settings.RaidDurationSeconds) * time.Second)
+	settings.EnabledUntil = &enabledUntil
+	if err := rt.Store.SetAntiRaidSettings(ctx, settings); err != nil {
+		return false, err
+	}
+	rt.RuntimeBundle.AntiRaid = settings
+
+	if acquired, err := rt.State.AcquireLease(ctx, fmt.Sprintf("antiraid:auto:%s:%d", rt.Bot.ID, rt.ChatID()), 15*time.Second); err == nil && acquired {
+		_, _ = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("AntiRaid auto-enabled for %s after %d joins in under a minute.", humanizeFlexibleDuration(time.Duration(settings.RaidDurationSeconds)*time.Second), count), telegram.SendMessageOptions{})
+	}
+
+	if shouldSkipAntiRaid(rt, member.ID) {
+		return false, nil
+	}
+	if err := s.enforceAntiRaidJoin(ctx, rt, member, settings); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (s *Service) lock(ctx context.Context, rt *runtime.Context, enable bool) error {
@@ -252,6 +305,124 @@ func (s *Service) setFlood(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Antiflood will trigger after %d consecutive messages.", settings.Limit), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) antiRaid(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+
+	settings := normalizeAntiRaidSettings(rt.RuntimeBundle.AntiRaid, rt.Bot.ID, rt.ChatID())
+	if len(rt.Command.Args) == 0 {
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), formatAntiRaidStatus(settings), rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+
+	arg := strings.ToLower(strings.TrimSpace(rt.Command.Args[0]))
+	switch arg {
+	case "off", "no", "0":
+		settings.EnabledUntil = nil
+		if err := rt.Store.SetAntiRaidSettings(ctx, settings); err != nil {
+			return err
+		}
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "AntiRaid disabled.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	case "on", "yes":
+		until := time.Now().Add(time.Duration(settings.RaidDurationSeconds) * time.Second)
+		settings.EnabledUntil = &until
+		if err := rt.Store.SetAntiRaidSettings(ctx, settings); err != nil {
+			return err
+		}
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("AntiRaid enabled for %s.", humanizeFlexibleDuration(time.Duration(settings.RaidDurationSeconds)*time.Second)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	default:
+		duration, err := parseFlexibleDuration(rt.Command.Args[0])
+		if err != nil || duration <= 0 {
+			return fmt.Errorf("usage: /antiraid [on|off|<duration>]")
+		}
+		until := time.Now().Add(duration)
+		settings.EnabledUntil = &until
+		if err := rt.Store.SetAntiRaidSettings(ctx, settings); err != nil {
+			return err
+		}
+		_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("AntiRaid enabled for %s.", humanizeFlexibleDuration(duration)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+}
+
+func (s *Service) raidTime(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	settings := normalizeAntiRaidSettings(rt.RuntimeBundle.AntiRaid, rt.Bot.ID, rt.ChatID())
+	if len(rt.Command.Args) == 0 {
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("AntiRaid duration is %s.", humanizeFlexibleDuration(time.Duration(settings.RaidDurationSeconds)*time.Second)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	duration, err := parseFlexibleDuration(rt.Command.Args[0])
+	if err != nil || duration <= 0 {
+		return fmt.Errorf("usage: /raidtime <duration>")
+	}
+	settings.RaidDurationSeconds = int(duration.Seconds())
+	if err := rt.Store.SetAntiRaidSettings(ctx, settings); err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("AntiRaid duration set to %s.", humanizeFlexibleDuration(duration)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) raidActionTime(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	settings := normalizeAntiRaidSettings(rt.RuntimeBundle.AntiRaid, rt.Bot.ID, rt.ChatID())
+	if len(rt.Command.Args) == 0 {
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("AntiRaid action time is %s.", humanizeFlexibleDuration(time.Duration(settings.ActionDurationSeconds)*time.Second)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	duration, err := parseFlexibleDuration(rt.Command.Args[0])
+	if err != nil || duration <= 0 {
+		return fmt.Errorf("usage: /raidactiontime <duration>")
+	}
+	settings.ActionDurationSeconds = int(duration.Seconds())
+	if err := rt.Store.SetAntiRaidSettings(ctx, settings); err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("AntiRaid action time set to %s.", humanizeFlexibleDuration(duration)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) autoAntiRaid(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	settings := normalizeAntiRaidSettings(rt.RuntimeBundle.AntiRaid, rt.Bot.ID, rt.ChatID())
+	if len(rt.Command.Args) == 0 {
+		if settings.AutoThreshold <= 0 {
+			_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Auto AntiRaid is off.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+			return err
+		}
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Auto AntiRaid will enable if more than %d users join in under a minute.", settings.AutoThreshold), rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	if isAntifloodOff(rt.Command.Args[0]) {
+		settings.AutoThreshold = 0
+		if err := rt.Store.SetAntiRaidSettings(ctx, settings); err != nil {
+			return err
+		}
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Auto AntiRaid disabled.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	threshold, err := strconv.Atoi(rt.Command.Args[0])
+	if err != nil || threshold < 1 {
+		return fmt.Errorf("auto antiraid threshold must be at least 1")
+	}
+	settings.AutoThreshold = threshold
+	if err := rt.Store.SetAntiRaidSettings(ctx, settings); err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Auto AntiRaid will trigger if more than %d users join in under a minute.", threshold), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -446,6 +617,72 @@ func canonicalLockType(value string) string {
 	default:
 		return ""
 	}
+}
+
+func normalizeAntiRaidSettings(settings domain.AntiRaidSettings, botID string, chatID int64) domain.AntiRaidSettings {
+	settings.BotID = botID
+	settings.ChatID = chatID
+	if settings.RaidDurationSeconds <= 0 {
+		settings.RaidDurationSeconds = 6 * 60 * 60
+	}
+	if settings.ActionDurationSeconds <= 0 {
+		settings.ActionDurationSeconds = 60 * 60
+	}
+	if settings.AutoThreshold < 0 {
+		settings.AutoThreshold = 0
+	}
+	return settings
+}
+
+func antiRaidIsActive(settings domain.AntiRaidSettings, now time.Time) bool {
+	return settings.EnabledUntil != nil && settings.EnabledUntil.After(now)
+}
+
+func formatAntiRaidStatus(settings domain.AntiRaidSettings) string {
+	settings = normalizeAntiRaidSettings(settings, settings.BotID, settings.ChatID)
+	status := "off"
+	if antiRaidIsActive(settings, time.Now()) {
+		status = "on until " + settings.EnabledUntil.Format(time.RFC3339)
+	}
+	auto := "off"
+	if settings.AutoThreshold > 0 {
+		auto = fmt.Sprintf("more than %d joins in under a minute", settings.AutoThreshold)
+	}
+	return strings.Join([]string{
+		"AntiRaid settings:",
+		fmt.Sprintf("- Status: %s", status),
+		fmt.Sprintf("- Raid duration: %s", humanizeFlexibleDuration(time.Duration(settings.RaidDurationSeconds)*time.Second)),
+		fmt.Sprintf("- Tempban duration: %s", humanizeFlexibleDuration(time.Duration(settings.ActionDurationSeconds)*time.Second)),
+		fmt.Sprintf("- Auto AntiRaid: %s", auto),
+	}, "\n")
+}
+
+func shouldSkipAntiRaid(rt *runtime.Context, userID int64) bool {
+	if userID == 0 {
+		return true
+	}
+	if _, ok := rt.KnownChatAdmins[userID]; ok {
+		return true
+	}
+	roles, err := rt.Store.GetBotRoles(rt.Base, rt.Bot.ID, userID)
+	if err != nil {
+		return false
+	}
+	for _, role := range roles {
+		if role == "owner" || role == "sudo" {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Service) enforceAntiRaidJoin(ctx context.Context, rt *runtime.Context, member telegram.User, settings domain.AntiRaidSettings) error {
+	until := time.Now().Add(time.Duration(settings.ActionDurationSeconds) * time.Second)
+	if err := rt.Client.BanChatMember(ctx, rt.ChatID(), member.ID, &until, true); err != nil {
+		return err
+	}
+	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("antiraid: user=%d until=%s", member.ID, until.Format(time.RFC3339)))
+	return nil
 }
 
 func matchesBlocklist(rule domain.BlocklistRule, text string) bool {

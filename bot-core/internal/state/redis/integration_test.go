@@ -63,6 +63,21 @@ func TestStoreTracksFloodAndLeaseState(t *testing.T) {
 		t.Fatalf("ClearFlood() error = %v", err)
 	}
 
+	joins, err := store.TrackJoinBurst(ctx, bot.ID, -100123, 3003, time.Minute)
+	if err != nil {
+		t.Fatalf("TrackJoinBurst(first) error = %v", err)
+	}
+	if joins != 1 {
+		t.Fatalf("TrackJoinBurst(first) count = %d, want 1", joins)
+	}
+	joins, err = store.TrackJoinBurst(ctx, bot.ID, -100123, 3004, time.Minute)
+	if err != nil {
+		t.Fatalf("TrackJoinBurst(second) error = %v", err)
+	}
+	if joins != 2 {
+		t.Fatalf("TrackJoinBurst(second) count = %d, want 2", joins)
+	}
+
 	acquired, err := store.AcquireLease(ctx, "integration:lease", time.Minute)
 	if err != nil {
 		t.Fatalf("AcquireLease(first) error = %v", err)

@@ -506,8 +506,8 @@ func TestHelpNavigationSupportsNestedHelpBatchPages(t *testing.T) {
 	if !strings.Contains(h.Client.EditedMessages[11].Text, "does not expose remote chat connections") {
 		t.Fatalf("expected truthful connections placeholder, got %q", h.Client.EditedMessages[11].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[12].Text, "does not expose dedicated antiraid commands yet") {
-		t.Fatalf("expected truthful antiraid placeholder, got %q", h.Client.EditedMessages[12].Text)
+	if !strings.Contains(h.Client.EditedMessages[12].Text, "/raidtime <time>") || !strings.Contains(h.Client.EditedMessages[12].Text, "/autoantiraid <number/off/no>") {
+		t.Fatalf("expected live antiraid help page, got %q", h.Client.EditedMessages[12].Text)
 	}
 	if !strings.Contains(h.Client.EditedMessages[13].Text, "/mods") || !strings.Contains(h.Client.EditedMessages[13].Text, "/muter") {
 		t.Fatalf("expected silent power page, got %q", h.Client.EditedMessages[13].Text)
@@ -603,6 +603,48 @@ func TestAntifloodHelpPageUsesBackOnlyMarkup(t *testing.T) {
 	page := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
 	if !strings.Contains(page.Text, "/setfloodtimer <count> <duration>") || !strings.Contains(page.Text, "/clearflood <yes/no/on/off>") || !strings.Contains(page.Text, "/floodmode tban 3d") {
 		t.Fatalf("expected antiflood help copy, got %q", page.Text)
+	}
+	markup := requireEditedMarkup(t, page)
+	assertButton(t, markup, 0, 0, "Back", "ux:help:root", "")
+	assertNoButtonText(t, markup, "Website")
+	assertNoButtonText(t, markup, "Add to Group")
+}
+
+func TestAntiRaidHelpPageUsesBackOnlyMarkup(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: 56, Type: "private"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 62,
+			From:      &telegram.User{ID: 56, FirstName: "User"},
+			Chat:      chat,
+			Text:      "/help",
+		},
+	}); err != nil {
+		t.Fatalf("help failed: %v", err)
+	}
+
+	root := h.Client.Messages[len(h.Client.Messages)-1]
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-help-antiraid",
+			From: telegram.User{ID: 56, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: root.MessageID,
+				Chat:      chat,
+			},
+			Data: "ux:help:antiraid",
+		},
+	}); err != nil {
+		t.Fatalf("antiraid help callback failed: %v", err)
+	}
+
+	page := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	if !strings.Contains(page.Text, "/antiraid <optional time/off/no>") || !strings.Contains(page.Text, "/raidactiontime <time>") || !strings.Contains(page.Text, "-> /autoantiraid off") {
+		t.Fatalf("expected antiraid help copy, got %q", page.Text)
 	}
 	markup := requireEditedMarkup(t, page)
 	assertButton(t, markup, 0, 0, "Back", "ux:help:root", "")

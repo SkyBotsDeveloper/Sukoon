@@ -25,6 +25,7 @@ type Context struct {
 	Command          commands.Parsed
 	CommandOK        bool
 	RuntimeBundle    domain.RuntimeBundle
+	KnownChatAdmins  map[int64]struct{}
 	ActorPermissions ActorPermissions
 }
 

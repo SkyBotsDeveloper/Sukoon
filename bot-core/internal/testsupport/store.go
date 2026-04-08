@@ -27,6 +27,7 @@ type MemoryStore struct {
 	settings         map[string]domain.ChatSettings
 	moderation       map[string]domain.ModerationSettings
 	antiflood        map[string]domain.AntifloodSettings
+	antiraid         map[string]domain.AntiRaidSettings
 	captchaSettings  map[string]domain.CaptchaSettings
 	antiabuse        map[string]domain.AntiAbuseSettings
 	antibio          map[string]domain.AntiBioSettings
@@ -70,6 +71,7 @@ func NewMemoryStore() *MemoryStore {
 		settings:         map[string]domain.ChatSettings{},
 		moderation:       map[string]domain.ModerationSettings{},
 		antiflood:        map[string]domain.AntifloodSettings{},
+		antiraid:         map[string]domain.AntiRaidSettings{},
 		captchaSettings:  map[string]domain.CaptchaSettings{},
 		antiabuse:        map[string]domain.AntiAbuseSettings{},
 		antibio:          map[string]domain.AntiBioSettings{},
@@ -301,6 +303,9 @@ func (m *MemoryStore) EnsureChat(_ context.Context, botID string, chat telegram.
 	if _, ok := m.antiflood[key]; !ok {
 		m.antiflood[key] = domain.AntifloodSettings{BotID: botID, ChatID: chat.ID, Limit: 0, TimedLimit: 0, WindowSeconds: 10, Action: "mute"}
 	}
+	if _, ok := m.antiraid[key]; !ok {
+		m.antiraid[key] = domain.AntiRaidSettings{BotID: botID, ChatID: chat.ID, RaidDurationSeconds: 6 * 60 * 60, ActionDurationSeconds: 60 * 60}
+	}
 	if _, ok := m.captchaSettings[key]; !ok {
 		m.captchaSettings[key] = domain.CaptchaSettings{BotID: botID, ChatID: chat.ID, Mode: "button", TimeoutSeconds: 120, FailureAction: "kick", ChallengeDigits: 2}
 	}
@@ -356,6 +361,7 @@ func (m *MemoryStore) LoadRuntimeBundle(_ context.Context, botID string, chatID 
 		Settings:         m.settings[key],
 		Moderation:       m.moderation[key],
 		Antiflood:        m.antiflood[key],
+		AntiRaid:         m.antiraid[key],
 		Captcha:          m.captchaSettings[key],
 		AntiAbuse:        m.antiabuse[key],
 		AntiBio:          m.antibio[key],
@@ -729,6 +735,13 @@ func (m *MemoryStore) SetAntiflood(_ context.Context, settings domain.AntifloodS
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.antiflood[chatKey(settings.BotID, settings.ChatID)] = settings
+	return nil
+}
+
+func (m *MemoryStore) SetAntiRaidSettings(_ context.Context, settings domain.AntiRaidSettings) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.antiraid[chatKey(settings.BotID, settings.ChatID)] = settings
 	return nil
 }
 

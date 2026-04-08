@@ -20,6 +20,15 @@ func (s *Store) SetAntiAbuseSettings(ctx context.Context, settings domain.AntiAb
 	return err
 }
 
+func (s *Store) SetAntiRaidSettings(ctx context.Context, settings domain.AntiRaidSettings) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE antiraid_settings
+		SET enabled_until=$3, raid_duration_seconds=$4, action_duration_seconds=$5, auto_threshold=$6, updated_at=NOW()
+		WHERE bot_id=$1 AND chat_id=$2
+	`, settings.BotID, settings.ChatID, settings.EnabledUntil, settings.RaidDurationSeconds, settings.ActionDurationSeconds, settings.AutoThreshold)
+	return err
+}
+
 func (s *Store) SetAntiBioSettings(ctx context.Context, settings domain.AntiBioSettings) error {
 	_, err := s.pool.Exec(ctx, `
 		UPDATE antibio_settings

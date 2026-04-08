@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"sukoon/bot-core/internal/commands"
 	"sukoon/bot-core/internal/domain"
@@ -138,18 +139,19 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 	}
 
 	rt := &runtime.Context{
-		Base:          ctx,
-		Logger:        r.logger.With("bot_id", bot.ID, "chat_id", chat.ID, "update_id", update.UpdateID),
-		Store:         r.store,
-		State:         r.state,
-		Bot:           bot,
-		Client:        client,
-		Update:        update,
-		Message:       message,
-		CallbackQuery: callback,
-		Command:       parsed,
-		CommandOK:     commandOK,
-		RuntimeBundle: bundle,
+		Base:            ctx,
+		Logger:          r.logger.With("bot_id", bot.ID, "chat_id", chat.ID, "update_id", update.UpdateID),
+		Store:           r.store,
+		State:           r.state,
+		Bot:             bot,
+		Client:          client,
+		Update:          update,
+		Message:         message,
+		CallbackQuery:   callback,
+		Command:         parsed,
+		CommandOK:       commandOK,
+		RuntimeBundle:   bundle,
+		KnownChatAdmins: map[int64]struct{}{},
 	}
 
 	actorID := rt.ActorID()
@@ -216,6 +218,17 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 		_ = rt.Client.DeleteMessage(ctx, rt.ChatID(), rt.Message.MessageID)
 	}
 
+	if len(message.NewChatMembers) > 0 && (rt.RuntimeBundle.AntiRaid.AutoThreshold > 0 || (rt.RuntimeBundle.AntiRaid.EnabledUntil != nil && rt.RuntimeBundle.AntiRaid.EnabledUntil.After(time.Now()))) {
+		admins, err := client.GetChatAdministrators(ctx, chat.ID)
+		if err == nil {
+			for _, admin := range admins {
+				rt.KnownChatAdmins[admin.User.ID] = struct{}{}
+			}
+		} else {
+			rt.Logger.Warn("antiraid admin lookup failed", "error", err)
+		}
+	}
+
 	for _, member := range message.NewChatMembers {
 		if member.IsBot {
 			continue
@@ -228,6 +241,15 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 		if r.federation != nil {
 			if err := r.federation.HandleJoin(ctx, rt, member); err != nil {
 				return err
+			}
+		}
+		if r.antispam != nil {
+			handled, err := r.antispam.HandleJoin(ctx, rt, member)
+			if err != nil {
+				return err
+			}
+			if handled {
+				continue
 			}
 		}
 		if err := r.captcha.HandleJoin(ctx, rt, member); err != nil {

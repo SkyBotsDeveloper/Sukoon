@@ -633,11 +633,29 @@ var helpPages = map[string]helpPage{
 	helpAntiRaid: {
 		Title: "AntiRaid",
 		Lines: []string{
-			"AntiRaid is meant for coordinated join-wave protection and emergency lockdown style flows.",
+			"Some people on telegram find it entertaining to \"raid\" chats. During a raid, hundreds of users join a chat to spam.",
 			"",
-			"Live runtime status: Sukoon does not expose dedicated antiraid commands yet.",
+			"The antiraid module allows you to quickly stop anyone from joining when such a raid is happening.",
+			"All new joins will be temporarily banned for the next few hours, allowing you to wait out the spam attack until the trolls stop.",
 			"",
-			"Current protection coverage comes from /captcha, /flood, /lock, /cleanservice, and federation/global moderation.",
+			"Admin commands:",
+			"- /antiraid <optional time/off/no>: Toggle antiraid. All new joins will be temporarily banned for the next few hours.",
+			"- /raidtime <time>: View or set the desired antiraid duration. Default 6h.",
+			"- /raidactiontime <time>: View or set the time for antiraid to tempban users for. Default 1h.",
+			"- /autoantiraid <number/off/no>: Set the number of joins per minute after which to enable automatic antiraid. Set to 0, off, or no to disable.",
+			"",
+			"Examples:",
+			"- Enable antiraid for 3 hours:",
+			"-> /antiraid 3h",
+			"",
+			"- Disable antiraid:",
+			"-> /antiraid off",
+			"",
+			"- Automatically enable antiraid if over 15 users join in under a minute:",
+			"-> /autoantiraid 15",
+			"",
+			"- Disable automatic antiraid:",
+			"-> /autoantiraid off",
 		},
 	},
 	helpAntiAbuse: {
@@ -858,6 +876,12 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 			},
 		)
 	case helpAntiflood:
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: callbackHelpMain},
+			},
+		)
+	case helpAntiRaid:
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},

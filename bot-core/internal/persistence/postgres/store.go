@@ -396,6 +396,14 @@ func (s *Store) EnsureChat(ctx context.Context, botID string, chat telegram.Chat
 	}
 
 	if _, err := tx.Exec(ctx, `
+		INSERT INTO antiraid_settings (bot_id, chat_id)
+		VALUES ($1, $2)
+		ON CONFLICT DO NOTHING
+	`, botID, chat.ID); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO captcha_settings (bot_id, chat_id)
 		VALUES ($1, $2)
 		ON CONFLICT DO NOTHING
