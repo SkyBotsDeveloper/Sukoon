@@ -56,6 +56,7 @@ func (s *Service) Load(ctx context.Context, botID string, actorID int64, chatID 
 			continue
 		}
 		perms.IsChatAdmin = true
+		perms.IsChatCreator = admin.Status == "creator"
 		perms.CanDeleteMessages = admin.CanDeleteMessages || admin.Status == "creator"
 		perms.CanMuteMembers = admin.CanRestrictMembers || admin.Status == "creator"
 		perms.CanRestrictMembers = admin.CanRestrictMembers || admin.Status == "creator"

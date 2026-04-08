@@ -295,7 +295,7 @@ func (m *MemoryStore) EnsureChat(_ context.Context, botID string, chat telegram.
 	key := chatKey(botID, chat.ID)
 	m.chats[key] = chat
 	if _, ok := m.settings[key]; !ok {
-		m.settings[key] = domain.ChatSettings{BotID: botID, ChatID: chat.ID, Language: "en", AdminErrors: true}
+		m.settings[key] = domain.ChatSettings{BotID: botID, ChatID: chat.ID, Language: "en", AdminErrors: true, BlocklistAction: "nothing", BlocklistDelete: true}
 	}
 	if _, ok := m.moderation[key]; !ok {
 		m.moderation[key] = domain.ModerationSettings{BotID: botID, ChatID: chat.ID, WarnLimit: 3, WarnMode: "mute"}
@@ -724,6 +724,9 @@ func (m *MemoryStore) AddBlocklistRule(_ context.Context, rule domain.BlocklistR
 	key := chatKey(rule.BotID, rule.ChatID)
 	m.nextBlocklistID++
 	rule.ID = m.nextBlocklistID
+	if rule.DeleteBehavior == "" {
+		rule.DeleteBehavior = "inherit"
+	}
 	m.blocklist[key] = append(m.blocklist[key], rule)
 	return rule, nil
 }
@@ -746,6 +749,37 @@ func (m *MemoryStore) ListBlocklistRules(_ context.Context, botID string, chatID
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return append([]domain.BlocklistRule{}, m.blocklist[chatKey(botID, chatID)]...), nil
+}
+
+func (m *MemoryStore) SetBlocklistMode(_ context.Context, botID string, chatID int64, action string, actionDurationSeconds int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := chatKey(botID, chatID)
+	settings := m.settings[key]
+	settings.BlocklistAction = action
+	settings.BlocklistActionSecs = actionDurationSeconds
+	m.settings[key] = settings
+	return nil
+}
+
+func (m *MemoryStore) SetBlocklistDelete(_ context.Context, botID string, chatID int64, enabled bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := chatKey(botID, chatID)
+	settings := m.settings[key]
+	settings.BlocklistDelete = enabled
+	m.settings[key] = settings
+	return nil
+}
+
+func (m *MemoryStore) SetBlocklistReason(_ context.Context, botID string, chatID int64, reason string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := chatKey(botID, chatID)
+	settings := m.settings[key]
+	settings.BlocklistReason = strings.TrimSpace(reason)
+	m.settings[key] = settings
+	return nil
 }
 
 func (m *MemoryStore) SetAntiflood(_ context.Context, settings domain.AntifloodSettings) error {

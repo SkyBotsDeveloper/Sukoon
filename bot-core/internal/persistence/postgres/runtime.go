@@ -17,7 +17,7 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 	err := s.pool.QueryRow(ctx, `
 		SELECT
 			cs.bot_id, cs.chat_id, cs.language, cs.reports_enabled, cs.log_channel_id,
-			cs.clean_commands, cs.disabled_delete, cs.disable_admins, cs.admin_errors, cs.anon_admins, cs.clean_service_join, cs.clean_service_leave, cs.clean_service_pin, cs.clean_service_title, cs.clean_service_photo, cs.clean_service_other, cs.clean_service_videochat,
+			cs.clean_commands, cs.blocklist_action, cs.blocklist_action_duration_seconds, cs.blocklist_delete, cs.blocklist_reason, cs.disabled_delete, cs.disable_admins, cs.admin_errors, cs.anon_admins, cs.clean_service_join, cs.clean_service_leave, cs.clean_service_pin, cs.clean_service_title, cs.clean_service_photo, cs.clean_service_other, cs.clean_service_videochat,
 			cs.welcome_enabled, cs.welcome_text, cs.goodbye_enabled, cs.goodbye_text, cs.rules_text,
 			ms.warn_limit, ms.warn_mode,
 			afs.enabled, afs.flood_limit, afs.timed_limit, afs.window_seconds, afs.action, afs.action_duration_seconds, afs.clear_all,
@@ -40,6 +40,10 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 		&bundle.Settings.ReportsEnabled,
 		&bundle.Settings.LogChannelID,
 		&bundle.Settings.CleanCommands,
+		&bundle.Settings.BlocklistAction,
+		&bundle.Settings.BlocklistActionSecs,
+		&bundle.Settings.BlocklistDelete,
+		&bundle.Settings.BlocklistReason,
 		&bundle.Settings.DisabledDelete,
 		&bundle.Settings.DisableAdmins,
 		&bundle.Settings.AdminErrors,
@@ -114,7 +118,7 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 	lockRows.Close()
 
 	blockRows, err := s.pool.Query(ctx, `
-		SELECT id, pattern, match_mode, action, created_by, created_at
+		SELECT id, pattern, match_mode, action, action_duration_seconds, delete_behavior, reason, created_by, created_at
 		FROM blocklist_rules
 		WHERE bot_id=$1 AND chat_id=$2
 		ORDER BY id ASC
@@ -127,7 +131,7 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 		var rule domain.BlocklistRule
 		rule.BotID = botID
 		rule.ChatID = chatID
-		if err := blockRows.Scan(&rule.ID, &rule.Pattern, &rule.MatchMode, &rule.Action, &rule.CreatedBy, &rule.CreatedAt); err != nil {
+		if err := blockRows.Scan(&rule.ID, &rule.Pattern, &rule.MatchMode, &rule.Action, &rule.ActionDurationSeconds, &rule.DeleteBehavior, &rule.Reason, &rule.CreatedBy, &rule.CreatedAt); err != nil {
 			return domain.RuntimeBundle{}, err
 		}
 		bundle.Blocklist = append(bundle.Blocklist, rule)

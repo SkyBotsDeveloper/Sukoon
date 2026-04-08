@@ -37,6 +37,7 @@
 
 - `/lock`, `/unlock`, `/locks`, `/locktypes`
 - `/addblocklist`, `/rmbl`, `/rmblocklist`, `/unblocklistall`, `/blocklist`
+- `/blocklistmode`, `/blocklistdelete`, `/setblocklistreason`, `/resetblocklistreason`
 - `/flood`, `/setflood`, `/setfloodtimer`, `/floodmode`, `/setfloodmode`, `/clearflood`
 - `/captcha`, `/captchamode`, `/captchakick`, `/captchakicktime`
 
@@ -109,7 +110,6 @@
 - recurring timed messages
 - channel-subscription enforcement
 - private-rules toggle commands
-- advanced blocklist modes, blocklist delete toggles, and custom blocklist reasons
 - advanced captcha text/rules variants beyond the current button-mode controls
 - warn-mode locks and allowlist-based lock exemptions
 - separate admin web panel

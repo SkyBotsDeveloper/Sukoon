@@ -39,6 +39,14 @@ func (s *Service) HandleCommand(ctx context.Context, rt *runtime.Context) (bool,
 		return true, s.removeAllBlocklist(ctx, rt)
 	case "blocklist":
 		return true, s.listBlocklist(ctx, rt)
+	case "blocklistmode":
+		return true, s.setBlocklistMode(ctx, rt)
+	case "blocklistdelete":
+		return true, s.setBlocklistDelete(ctx, rt)
+	case "setblocklistreason":
+		return true, s.setBlocklistReason(ctx, rt)
+	case "resetblocklistreason":
+		return true, s.resetBlocklistReason(ctx, rt)
 	case "setflood", "flood":
 		return true, s.setFlood(ctx, rt)
 	case "setfloodmode", "floodmode":
@@ -188,39 +196,21 @@ func (s *Service) addBlocklist(ctx context.Context, rt *runtime.Context) error {
 	if !rt.ActorPermissions.IsChatAdmin {
 		return fmt.Errorf("admin rights required")
 	}
-	if len(rt.Command.Args) < 2 {
-		return fmt.Errorf("usage: /addblocklist <word|phrase|regex> <pattern>")
-	}
-	matchMode := strings.ToLower(rt.Command.Args[0])
-	pattern := strings.TrimSpace(strings.Join(rt.Command.Args[1:], " "))
-	if pattern == "" {
-		return fmt.Errorf("pattern is required")
-	}
-	switch matchMode {
-	case "word":
-		matchMode = "word"
-	case "phrase", "contains":
-		matchMode = "contains"
-	case "regex":
-		if _, err := regexp.Compile(pattern); err != nil {
-			return fmt.Errorf("invalid regex: %w", err)
-		}
-	default:
-		return fmt.Errorf("match mode must be word, phrase, or regex")
-	}
-
-	rule, err := rt.Store.AddBlocklistRule(ctx, domain.BlocklistRule{
-		BotID:     rt.Bot.ID,
-		ChatID:    rt.ChatID(),
-		Pattern:   pattern,
-		MatchMode: matchMode,
-		Action:    "delete",
-		CreatedBy: rt.ActorID(),
-	})
+	rules, err := parseBlocklistRules(rt)
 	if err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Added blocklist rule #%d for %q.", rule.ID, pattern), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	added := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		rule.BotID = rt.Bot.ID
+		rule.ChatID = rt.ChatID()
+		rule.CreatedBy = rt.ActorID()
+		if _, err := rt.Store.AddBlocklistRule(ctx, rule); err != nil {
+			return err
+		}
+		added = append(added, rule.Pattern)
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Added %d blocklist rule(s): %s.", len(added), strings.Join(added, ", ")), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -242,8 +232,8 @@ func (s *Service) removeBlocklist(ctx context.Context, rt *runtime.Context) erro
 }
 
 func (s *Service) removeAllBlocklist(ctx context.Context, rt *runtime.Context) error {
-	if !rt.ActorPermissions.IsChatAdmin {
-		return fmt.Errorf("admin rights required")
+	if !rt.ActorPermissions.IsOwner && !rt.ActorPermissions.IsSudo && !rt.ActorPermissions.IsChatCreator {
+		return fmt.Errorf("chat creator rights required")
 	}
 	rules, err := rt.Store.ListBlocklistRules(ctx, rt.Bot.ID, rt.ChatID())
 	if err != nil {
@@ -263,16 +253,418 @@ func (s *Service) removeAllBlocklist(ctx context.Context, rt *runtime.Context) e
 }
 
 func (s *Service) listBlocklist(ctx context.Context, rt *runtime.Context) error {
+	settings := normalizeBlocklistSettings(rt.RuntimeBundle.Settings)
+	lines := []string{
+		"Blocklist settings:",
+		fmt.Sprintf("- Mode: %s", formatBlocklistAction(settings.Action, settings.ActionDurationSeconds)),
+		fmt.Sprintf("- Delete messages: %s", onOff(settings.DeleteMessages)),
+	}
+	if strings.TrimSpace(settings.DefaultReason) != "" {
+		lines = append(lines, "- Default reason: "+settings.DefaultReason)
+	}
 	if len(rt.RuntimeBundle.Blocklist) == 0 {
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No blocklist rules.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		lines = append(lines, "", "No blocklist rules.")
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), strings.Join(lines, "\n"), rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
-	lines := make([]string, 0, len(rt.RuntimeBundle.Blocklist))
+	lines = append(lines, "", "Rules:")
 	for _, rule := range rt.RuntimeBundle.Blocklist {
-		lines = append(lines, fmt.Sprintf("%d. [%s] %s", rule.ID, rule.MatchMode, rule.Pattern))
+		description := fmt.Sprintf("%d. [%s] %s", rule.ID, rule.MatchMode, rule.Pattern)
+		action := effectiveBlocklistAction(rule, settings)
+		actionText := formatBlocklistAction(action.Action, action.DurationSeconds)
+		if action.Action != "nothing" {
+			description += " {" + actionText + "}"
+		}
+		switch effectiveBlocklistDelete(rule, settings) {
+		case true:
+			description += " {del}"
+		default:
+			description += " {nodel}"
+		}
+		if reason := effectiveBlocklistReason(rule, settings); reason != "" {
+			description += " - " + reason
+		}
+		lines = append(lines, description)
 	}
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), strings.Join(lines, "\n"), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
+}
+
+func (s *Service) setBlocklistMode(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	settings := normalizeBlocklistSettings(rt.RuntimeBundle.Settings)
+	if len(rt.Command.Args) == 0 {
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Blocklist mode is "+formatBlocklistAction(settings.Action, settings.ActionDurationSeconds)+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	action, durationSeconds, err := parseBlocklistAction(rt.Command.Args)
+	if err != nil {
+		return err
+	}
+	if err := rt.Store.SetBlocklistMode(ctx, rt.Bot.ID, rt.ChatID(), action, durationSeconds); err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Blocklist mode set to "+formatBlocklistAction(action, durationSeconds)+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) setBlocklistDelete(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	settings := normalizeBlocklistSettings(rt.RuntimeBundle.Settings)
+	if len(rt.Command.Args) == 0 {
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Blocklist delete is "+onOff(settings.DeleteMessages)+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	enabled, err := parseAntifloodToggle(rt.Command.Args[0])
+	if err != nil {
+		return fmt.Errorf("value must be yes/no/on/off")
+	}
+	if err := rt.Store.SetBlocklistDelete(ctx, rt.Bot.ID, rt.ChatID(), enabled); err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Blocklist delete is now "+onOff(enabled)+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) setBlocklistReason(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	reason := strings.TrimSpace(rt.Command.RawArgs)
+	if reason == "" {
+		return fmt.Errorf("usage: /setblocklistreason <reason>")
+	}
+	if err := rt.Store.SetBlocklistReason(ctx, rt.Bot.ID, rt.ChatID(), reason); err != nil {
+		return err
+	}
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Default blocklist reason updated.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) resetBlocklistReason(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	if err := rt.Store.SetBlocklistReason(ctx, rt.Bot.ID, rt.ChatID(), ""); err != nil {
+		return err
+	}
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Default blocklist reason reset.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+type blocklistSettings struct {
+	Action                string
+	ActionDurationSeconds int
+	DeleteMessages        bool
+	DefaultReason         string
+}
+
+type blocklistAction struct {
+	Action          string
+	DurationSeconds int
+}
+
+type blocklistModifiers struct {
+	Action                string
+	ActionDurationSeconds int
+	DeleteBehavior        string
+}
+
+func normalizeBlocklistSettings(settings domain.ChatSettings) blocklistSettings {
+	action := strings.ToLower(strings.TrimSpace(settings.BlocklistAction))
+	if action == "" {
+		action = "nothing"
+	}
+	deleteMessages := settings.BlocklistDelete
+	if !settings.BlocklistDelete && settings.BlocklistAction == "" && settings.BlocklistReason == "" && settings.BlocklistActionSecs == 0 {
+		deleteMessages = true
+	}
+	return blocklistSettings{
+		Action:                action,
+		ActionDurationSeconds: settings.BlocklistActionSecs,
+		DeleteMessages:        deleteMessages,
+		DefaultReason:         strings.TrimSpace(settings.BlocklistReason),
+	}
+}
+
+func effectiveBlocklistAction(rule domain.BlocklistRule, settings blocklistSettings) blocklistAction {
+	action := strings.ToLower(strings.TrimSpace(rule.Action))
+	if action == "" {
+		return blocklistAction{Action: settings.Action, DurationSeconds: settings.ActionDurationSeconds}
+	}
+	return blocklistAction{Action: action, DurationSeconds: rule.ActionDurationSeconds}
+}
+
+func effectiveBlocklistDelete(rule domain.BlocklistRule, settings blocklistSettings) bool {
+	switch strings.ToLower(strings.TrimSpace(rule.DeleteBehavior)) {
+	case "delete", "del":
+		return true
+	case "nodel", "nodelete":
+		return false
+	default:
+		return settings.DeleteMessages
+	}
+}
+
+func effectiveBlocklistReason(rule domain.BlocklistRule, settings blocklistSettings) string {
+	if strings.TrimSpace(rule.Reason) != "" {
+		return strings.TrimSpace(rule.Reason)
+	}
+	return settings.DefaultReason
+}
+
+func formatBlocklistAction(action string, durationSeconds int) string {
+	action = strings.ToLower(strings.TrimSpace(action))
+	if action == "" {
+		action = "nothing"
+	}
+	if (action == "tban" || action == "tmute") && durationSeconds > 0 {
+		return fmt.Sprintf("%s %s", action, humanizeFlexibleDuration(time.Duration(durationSeconds)*time.Second))
+	}
+	return action
+}
+
+func parseBlocklistAction(args []string) (string, int, error) {
+	action := strings.ToLower(strings.TrimSpace(args[0]))
+	switch action {
+	case "nothing", "none", "off":
+		return "nothing", 0, nil
+	case "ban", "mute", "kick", "warn":
+		return action, 0, nil
+	case "tban", "tmute":
+		if len(args) < 2 {
+			return "", 0, fmt.Errorf("%s requires a duration like 6h or 5d", action)
+		}
+		duration, err := parseFlexibleDuration(args[1])
+		if err != nil || duration <= 0 {
+			return "", 0, fmt.Errorf("invalid %s duration", action)
+		}
+		return action, int(duration.Seconds()), nil
+	default:
+		return "", 0, fmt.Errorf("blocklist mode must be nothing, ban, mute, kick, warn, tban, or tmute")
+	}
+}
+
+func parseBlocklistRules(rt *runtime.Context) ([]domain.BlocklistRule, error) {
+	if rt.Message != nil && rt.Message.ReplyToMessage != nil && rt.Message.ReplyToMessage.Sticker != nil && strings.TrimSpace(rt.Command.RawArgs) == "" {
+		if strings.TrimSpace(rt.Message.ReplyToMessage.Sticker.SetName) == "" {
+			return nil, fmt.Errorf("reply to a sticker with a known sticker pack")
+		}
+		return []domain.BlocklistRule{{
+			Pattern:        rt.Message.ReplyToMessage.Sticker.SetName,
+			MatchMode:      "stickerpack",
+			DeleteBehavior: "inherit",
+		}}, nil
+	}
+
+	raw := strings.TrimSpace(rt.Command.RawArgs)
+	if raw == "" {
+		return nil, fmt.Errorf("usage: /addblocklist <trigger> <reason>")
+	}
+	cleaned, modifiers, err := extractBlocklistModifiers(raw)
+	if err != nil {
+		return nil, err
+	}
+	trigger, reason, err := splitBlocklistTriggerAndReason(cleaned)
+	if err != nil {
+		return nil, err
+	}
+	items, err := expandBlocklistTrigger(trigger, rt.Message)
+	if err != nil {
+		return nil, err
+	}
+	rules := make([]domain.BlocklistRule, 0, len(items))
+	for _, item := range items {
+		matchMode, pattern, err := classifyBlocklistTrigger(item, rt.Message)
+		if err != nil {
+			return nil, err
+		}
+		rules = append(rules, domain.BlocklistRule{
+			Pattern:               pattern,
+			MatchMode:             matchMode,
+			Action:                modifiers.Action,
+			ActionDurationSeconds: modifiers.ActionDurationSeconds,
+			DeleteBehavior:        modifiers.DeleteBehavior,
+			Reason:                strings.TrimSpace(reason),
+		})
+	}
+	return rules, nil
+}
+
+func extractBlocklistModifiers(raw string) (string, blocklistModifiers, error) {
+	modifiers := blocklistModifiers{DeleteBehavior: "inherit"}
+	re := regexp.MustCompile(`\{([^{}]+)\}`)
+	matches := re.FindAllStringSubmatch(raw, -1)
+	for _, match := range matches {
+		token := strings.TrimSpace(match[1])
+		lower := strings.ToLower(token)
+		switch lower {
+		case "del":
+			modifiers.DeleteBehavior = "delete"
+			continue
+		case "nodel":
+			modifiers.DeleteBehavior = "nodel"
+			continue
+		}
+		fields := strings.Fields(lower)
+		if len(fields) == 0 {
+			continue
+		}
+		action, durationSeconds, err := parseBlocklistAction(fields)
+		if err != nil {
+			return "", blocklistModifiers{}, err
+		}
+		modifiers.Action = action
+		modifiers.ActionDurationSeconds = durationSeconds
+	}
+	return strings.TrimSpace(re.ReplaceAllString(raw, "")), modifiers, nil
+}
+
+func splitBlocklistTriggerAndReason(raw string) (string, string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", "", fmt.Errorf("usage: /addblocklist <trigger> <reason>")
+	}
+	if raw[0] == '"' {
+		end := findClosingQuote(raw)
+		if end <= 0 {
+			return "", "", fmt.Errorf("unterminated quoted blocklist trigger")
+		}
+		return raw[1:end], strings.TrimSpace(raw[end+1:]), nil
+	}
+	if raw[0] == '(' {
+		end := strings.Index(raw, ")")
+		if end <= 0 {
+			return "", "", fmt.Errorf("unterminated blocklist group")
+		}
+		return strings.TrimSpace(raw[:end+1]), strings.TrimSpace(raw[end+1:]), nil
+	}
+	fields := strings.Fields(raw)
+	if len(fields) == 0 {
+		return "", "", fmt.Errorf("usage: /addblocklist <trigger> <reason>")
+	}
+	trigger := fields[0]
+	reason := strings.TrimSpace(raw[len(trigger):])
+	if legacyTrigger, legacyReason, ok := legacyBlocklistTrigger(raw, fields); ok {
+		trigger = legacyTrigger
+		reason = legacyReason
+	}
+	return trigger, reason, nil
+}
+
+func legacyBlocklistTrigger(raw string, fields []string) (string, string, bool) {
+	if len(fields) < 2 {
+		return "", "", false
+	}
+	switch strings.ToLower(fields[0]) {
+	case "word":
+		reason := strings.TrimSpace(strings.TrimPrefix(raw, strings.Join(fields[:2], " ")))
+		return fields[1], reason, true
+	case "phrase", "contains":
+		return strings.TrimSpace(raw[len(fields[0])+1:]), "", true
+	case "regex":
+		return "regex:" + strings.TrimSpace(raw[len(fields[0])+1:]), "", true
+	default:
+		return "", "", false
+	}
+}
+
+func findClosingQuote(raw string) int {
+	escaped := false
+	for idx := 1; idx < len(raw); idx++ {
+		switch raw[idx] {
+		case '\\':
+			escaped = !escaped
+		case '"':
+			if !escaped {
+				return idx
+			}
+			escaped = false
+		default:
+			escaped = false
+		}
+	}
+	return -1
+}
+
+func expandBlocklistTrigger(trigger string, message *telegram.Message) ([]string, error) {
+	trigger = strings.TrimSpace(trigger)
+	if trigger == "" {
+		return nil, fmt.Errorf("blocklist trigger is required")
+	}
+	if strings.HasPrefix(trigger, "(") && strings.HasSuffix(trigger, ")") {
+		inner := strings.TrimSpace(trigger[1 : len(trigger)-1])
+		if inner == "" {
+			return nil, fmt.Errorf("blocklist group cannot be empty")
+		}
+		parts := strings.Split(inner, ",")
+		items := make([]string, 0, len(parts))
+		for _, part := range parts {
+			value := strings.TrimSpace(strings.Trim(part, `"`))
+			if value != "" {
+				items = append(items, value)
+			}
+		}
+		if len(items) == 0 {
+			return nil, fmt.Errorf("blocklist group cannot be empty")
+		}
+		return items, nil
+	}
+	if strings.EqualFold(trigger, "stickerpack:<>") {
+		if message == nil || message.ReplyToMessage == nil || message.ReplyToMessage.Sticker == nil || strings.TrimSpace(message.ReplyToMessage.Sticker.SetName) == "" {
+			return nil, fmt.Errorf("reply to a sticker with a known sticker pack to use stickerpack:<>")
+		}
+		return []string{"stickerpack:" + message.ReplyToMessage.Sticker.SetName}, nil
+	}
+	return []string{strings.Trim(trigger, `"`)}, nil
+}
+
+func classifyBlocklistTrigger(trigger string, message *telegram.Message) (string, string, error) {
+	_ = message
+	trigger = strings.TrimSpace(strings.Trim(trigger, `"`))
+	if trigger == "" {
+		return "", "", fmt.Errorf("blocklist trigger is required")
+	}
+	lower := strings.ToLower(trigger)
+	switch {
+	case strings.HasPrefix(lower, "regex:"):
+		pattern := strings.TrimSpace(trigger[len("regex:"):])
+		if _, err := regexp.Compile(pattern); err != nil {
+			return "", "", fmt.Errorf("invalid regex: %w", err)
+		}
+		return "regex", pattern, nil
+	case strings.HasPrefix(lower, "exact:"):
+		return "exact", strings.TrimSpace(trigger[len("exact:"):]), nil
+	case strings.HasPrefix(lower, "prefix:"):
+		return "prefix", strings.TrimSpace(trigger[len("prefix:"):]), nil
+	case strings.HasPrefix(lower, "file:"):
+		return "file", strings.TrimSpace(trigger[len("file:"):]), nil
+	case strings.HasPrefix(lower, "inline:"):
+		return "inline", strings.TrimSpace(trigger[len("inline:"):]), nil
+	case strings.HasPrefix(lower, "forward:"):
+		return "forward", strings.TrimSpace(trigger[len("forward:"):]), nil
+	case strings.HasPrefix(lower, "lookalike:"):
+		return "lookalike", strings.TrimSpace(trigger[len("lookalike:"):]), nil
+	case strings.HasPrefix(lower, "stickerpack:"):
+		return "stickerpack", strings.TrimSpace(trigger[len("stickerpack:"):]), nil
+	case strings.Contains(trigger, "?") || strings.Contains(trigger, "*"):
+		return "wildcard", trigger, nil
+	case strings.Contains(trigger, " "):
+		return "contains", trigger, nil
+	default:
+		return "word", trigger, nil
+	}
+}
+
+func onOff(value bool) string {
+	if value {
+		return "on"
+	}
+	return "off"
 }
 
 func (s *Service) setFlood(ctx context.Context, rt *runtime.Context) error {
@@ -531,13 +923,13 @@ func (s *Service) checkLocks(ctx context.Context, rt *runtime.Context) (bool, er
 }
 
 func (s *Service) checkBlocklist(ctx context.Context, rt *runtime.Context) (bool, error) {
-	text := strings.ToLower(strings.TrimSpace(rt.Text()))
-	if text == "" {
+	if rt.Message == nil {
 		return false, nil
 	}
+	message := rt.Message
 	for _, rule := range rt.RuntimeBundle.Blocklist {
-		if matchesBlocklist(rule, text) {
-			if err := enforceAction(ctx, rt, rule.Action, 0, "blocklist:"+rule.Pattern, true); err != nil {
+		if matchesBlocklist(rule, message) {
+			if err := s.applyBlocklistRule(ctx, rt, rule); err != nil {
 				return false, err
 			}
 			return true, nil
@@ -685,18 +1077,261 @@ func (s *Service) enforceAntiRaidJoin(ctx context.Context, rt *runtime.Context, 
 	return nil
 }
 
-func matchesBlocklist(rule domain.BlocklistRule, text string) bool {
+func matchesBlocklist(rule domain.BlocklistRule, message *telegram.Message) bool {
+	text := normalizeBlocklistText(message.Text + " " + message.Caption)
 	switch rule.MatchMode {
 	case "regex":
 		re, err := regexp.Compile(rule.Pattern)
 		return err == nil && re.MatchString(text)
 	case "contains":
-		return strings.Contains(text, strings.ToLower(rule.Pattern))
+		return strings.Contains(text, normalizeBlocklistText(rule.Pattern))
+	case "exact":
+		return matchExactPattern(text, normalizeBlocklistText(rule.Pattern))
+	case "prefix":
+		return matchPrefixPattern(text, normalizeBlocklistText(rule.Pattern))
+	case "wildcard":
+		return matchWildcardPattern(text, normalizeBlocklistText(rule.Pattern))
+	case "file":
+		return message.Document != nil && matchWildcardPattern(strings.ToLower(strings.TrimSpace(message.Document.FileName)), strings.ToLower(strings.TrimSpace(rule.Pattern)))
+	case "inline":
+		return message.ViaBot != nil && matchWildcardPattern(strings.ToLower("@"+strings.TrimPrefix(message.ViaBot.Username, "@")), strings.ToLower(strings.TrimSpace(rule.Pattern)))
+	case "forward":
+		return matchForwardPattern(message, strings.ToLower(strings.TrimSpace(rule.Pattern)))
+	case "lookalike":
+		return matchWordPattern(normalizeLookalikeText(text), normalizeLookalikeText(normalizeBlocklistText(rule.Pattern)))
+	case "stickerpack":
+		return message.Sticker != nil && strings.EqualFold(strings.TrimSpace(message.Sticker.SetName), strings.TrimSpace(rule.Pattern))
 	default:
-		pattern := `\b` + regexp.QuoteMeta(strings.ToLower(rule.Pattern)) + `\b`
-		re := regexp.MustCompile(pattern)
-		return re.MatchString(text)
+		return matchWordPattern(text, normalizeBlocklistText(rule.Pattern))
 	}
+}
+
+func (s *Service) applyBlocklistRule(ctx context.Context, rt *runtime.Context, rule domain.BlocklistRule) error {
+	settings := normalizeBlocklistSettings(rt.RuntimeBundle.Settings)
+	action := effectiveBlocklistAction(rule, settings)
+	deleteMessage := effectiveBlocklistDelete(rule, settings)
+	reason := effectiveBlocklistReason(rule, settings)
+	if deleteMessage && rt.Message != nil {
+		_ = rt.Client.DeleteMessage(ctx, rt.ChatID(), rt.Message.MessageID)
+	}
+
+	switch action.Action {
+	case "", "nothing":
+		_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("blocklist: actor=%d pattern=%s delete=%t", rt.ActorID(), rule.Pattern, deleteMessage))
+		return nil
+	case "warn":
+		return s.warnBlocklistUser(ctx, rt, reason, rule.Pattern)
+	case "ban":
+		if err := rt.Client.BanChatMember(ctx, rt.ChatID(), rt.ActorID(), nil, true); err != nil {
+			return err
+		}
+		return s.sendBlocklistActionMessage(ctx, rt, "Banned", reason)
+	case "kick":
+		until := time.Now().Add(30 * time.Second)
+		if err := rt.Client.BanChatMember(ctx, rt.ChatID(), rt.ActorID(), &until, true); err != nil {
+			return err
+		}
+		if err := rt.Client.UnbanChatMember(ctx, rt.ChatID(), rt.ActorID(), true); err != nil {
+			return err
+		}
+		return s.sendBlocklistActionMessage(ctx, rt, "Kicked", reason)
+	case "mute":
+		if err := rt.Client.RestrictChatMember(ctx, rt.ChatID(), rt.ActorID(), telegram.RestrictPermissions{CanSendMessages: false}, nil); err != nil {
+			return err
+		}
+		return s.sendBlocklistActionMessage(ctx, rt, "Muted", reason)
+	case "tban":
+		if action.DurationSeconds <= 0 {
+			return fmt.Errorf("temporary blocklist ban duration is not configured")
+		}
+		until := time.Now().Add(time.Duration(action.DurationSeconds) * time.Second)
+		if err := rt.Client.BanChatMember(ctx, rt.ChatID(), rt.ActorID(), &until, true); err != nil {
+			return err
+		}
+		return s.sendBlocklistTimedActionMessage(ctx, rt, "Temp-banned", action.DurationSeconds, reason)
+	case "tmute":
+		if action.DurationSeconds <= 0 {
+			return fmt.Errorf("temporary blocklist mute duration is not configured")
+		}
+		until := time.Now().Add(time.Duration(action.DurationSeconds) * time.Second)
+		if err := rt.Client.RestrictChatMember(ctx, rt.ChatID(), rt.ActorID(), telegram.RestrictPermissions{CanSendMessages: false}, &until); err != nil {
+			return err
+		}
+		return s.sendBlocklistTimedActionMessage(ctx, rt, "Temp-muted", action.DurationSeconds, reason)
+	default:
+		return fmt.Errorf("unsupported blocklist action %q", action.Action)
+	}
+}
+
+func (s *Service) sendBlocklistActionMessage(ctx context.Context, rt *runtime.Context, verb string, reason string) error {
+	name := strconv.FormatInt(rt.ActorID(), 10)
+	if rt.Message != nil && rt.Message.From != nil {
+		name = serviceutil.DisplayName(*rt.Message.From)
+	}
+	text := fmt.Sprintf("%s %s.", verb, name)
+	if strings.TrimSpace(reason) != "" {
+		text += " Reason: " + reason
+	}
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
+	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("blocklist: actor=%d action=%s reason=%s", rt.ActorID(), strings.ToLower(verb), reason))
+	return err
+}
+
+func (s *Service) sendBlocklistTimedActionMessage(ctx context.Context, rt *runtime.Context, verb string, durationSeconds int, reason string) error {
+	name := strconv.FormatInt(rt.ActorID(), 10)
+	if rt.Message != nil && rt.Message.From != nil {
+		name = serviceutil.DisplayName(*rt.Message.From)
+	}
+	text := fmt.Sprintf("%s %s for %s.", verb, name, humanizeFlexibleDuration(time.Duration(durationSeconds)*time.Second))
+	if strings.TrimSpace(reason) != "" {
+		text += " Reason: " + reason
+	}
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
+	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("blocklist: actor=%d action=%s duration=%d reason=%s", rt.ActorID(), strings.ToLower(verb), durationSeconds, reason))
+	return err
+}
+
+func (s *Service) warnBlocklistUser(ctx context.Context, rt *runtime.Context, reason string, pattern string) error {
+	count, err := rt.Store.IncrementWarnings(ctx, rt.Bot.ID, rt.ChatID(), rt.ActorID(), reason)
+	if err != nil {
+		return err
+	}
+	name := strconv.FormatInt(rt.ActorID(), 10)
+	if rt.Message != nil && rt.Message.From != nil {
+		name = serviceutil.DisplayName(*rt.Message.From)
+	}
+	text := fmt.Sprintf("%s now has %d warning(s).", name, count)
+	if strings.TrimSpace(reason) != "" {
+		text += " Reason: " + reason
+	}
+	if rt.RuntimeBundle.Moderation.WarnLimit > 0 && count >= rt.RuntimeBundle.Moderation.WarnLimit {
+		switch strings.ToLower(rt.RuntimeBundle.Moderation.WarnMode) {
+		case "ban":
+			if err := rt.Client.BanChatMember(ctx, rt.ChatID(), rt.ActorID(), nil, true); err != nil {
+				return err
+			}
+			text = fmt.Sprintf("%s hit %d warnings and was banned.", name, count)
+		case "kick":
+			until := time.Now().Add(30 * time.Second)
+			if err := rt.Client.BanChatMember(ctx, rt.ChatID(), rt.ActorID(), &until, true); err != nil {
+				return err
+			}
+			if err := rt.Client.UnbanChatMember(ctx, rt.ChatID(), rt.ActorID(), true); err != nil {
+				return err
+			}
+			text = fmt.Sprintf("%s hit %d warnings and was kicked.", name, count)
+		default:
+			if err := rt.Client.RestrictChatMember(ctx, rt.ChatID(), rt.ActorID(), telegram.RestrictPermissions{CanSendMessages: false}, nil); err != nil {
+				return err
+			}
+			text = fmt.Sprintf("%s hit %d warnings and was muted.", name, count)
+		}
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
+	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("blocklist: actor=%d action=warn pattern=%s count=%d reason=%s", rt.ActorID(), pattern, count, reason))
+	return err
+}
+
+func normalizeBlocklistText(value string) string {
+	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(value)), " "))
+}
+
+func matchWordPattern(text string, pattern string) bool {
+	if text == "" || pattern == "" {
+		return false
+	}
+	if !containsWordChars(pattern) {
+		return strings.Contains(text, pattern)
+	}
+	re := regexp.MustCompile(`(^|[^\p{L}\p{N}_])` + regexp.QuoteMeta(pattern) + `($|[^\p{L}\p{N}_])`)
+	return re.MatchString(text)
+}
+
+func matchExactPattern(text string, pattern string) bool {
+	if strings.Contains(pattern, "?") || strings.Contains(pattern, "*") {
+		re, err := regexp.Compile("^" + blocklistWildcardRegex(pattern) + "$")
+		return err == nil && re.MatchString(text)
+	}
+	return text == pattern
+}
+
+func matchPrefixPattern(text string, pattern string) bool {
+	if strings.Contains(pattern, "?") || strings.Contains(pattern, "*") {
+		re, err := regexp.Compile("^" + blocklistWildcardRegex(pattern))
+		return err == nil && re.MatchString(text)
+	}
+	return strings.HasPrefix(text, pattern)
+}
+
+func matchWildcardPattern(text string, pattern string) bool {
+	if text == "" || pattern == "" {
+		return false
+	}
+	re, err := regexp.Compile(blocklistWildcardRegex(pattern))
+	return err == nil && re.MatchString(text)
+}
+
+func blocklistWildcardRegex(pattern string) string {
+	pattern = normalizeBlocklistText(pattern)
+	var builder strings.Builder
+	for i := 0; i < len(pattern); i++ {
+		switch {
+		case i+1 < len(pattern) && pattern[i] == '*' && pattern[i+1] == '*':
+			builder.WriteString(".*")
+			i++
+		case pattern[i] == '*':
+			builder.WriteString(`\S*`)
+		case pattern[i] == '?':
+			builder.WriteString(`\S`)
+		default:
+			builder.WriteString(regexp.QuoteMeta(string(pattern[i])))
+		}
+	}
+	return builder.String()
+}
+
+func matchForwardPattern(message *telegram.Message, pattern string) bool {
+	if message == nil {
+		return false
+	}
+	candidates := make([]string, 0, 2)
+	if message.ForwardFromChat != nil && message.ForwardFromChat.Username != "" {
+		candidates = append(candidates, strings.ToLower("@"+strings.TrimPrefix(message.ForwardFromChat.Username, "@")))
+	}
+	if message.SenderChat != nil && message.SenderChat.Username != "" {
+		candidates = append(candidates, strings.ToLower("@"+strings.TrimPrefix(message.SenderChat.Username, "@")))
+	}
+	if originMap, ok := message.ForwardOrigin.(map[string]any); ok {
+		if chatMap, ok := originMap["chat"].(map[string]any); ok {
+			if username, ok := chatMap["username"].(string); ok && username != "" {
+				candidates = append(candidates, strings.ToLower("@"+strings.TrimPrefix(username, "@")))
+			}
+		}
+	}
+	for _, candidate := range candidates {
+		if matchWildcardPattern(candidate, pattern) || candidate == pattern {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeLookalikeText(value string) string {
+	replacer := strings.NewReplacer(
+		"а", "a", "е", "e", "о", "o", "р", "p", "с", "c", "у", "y", "х", "x", "в", "b", "і", "i", "ј", "j", "к", "k", "м", "m", "н", "h", "т", "t",
+		"А", "a", "Е", "e", "О", "o", "Р", "p", "С", "c", "У", "y", "Х", "x", "В", "b", "І", "i", "Ј", "j", "К", "k", "М", "m", "Н", "h", "Т", "t",
+		"ο", "o", "Ο", "o", "Β", "b", "Ь", "b",
+	)
+	return normalizeBlocklistText(replacer.Replace(value))
+}
+
+func containsWordChars(value string) bool {
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || (r >= 'A' && r <= 'Z') {
+			return true
+		}
+	}
+	return false
 }
 
 func enforceAction(ctx context.Context, rt *runtime.Context, action string, durationSeconds int, reason string, deleteCurrent bool) error {

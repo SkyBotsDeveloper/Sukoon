@@ -32,6 +32,7 @@ type Context struct {
 type ActorPermissions struct {
 	IsOwner            bool
 	IsSudo             bool
+	IsChatCreator      bool
 	IsChatAdmin        bool
 	IsSilentMod        bool
 	CanDeleteMessages  bool

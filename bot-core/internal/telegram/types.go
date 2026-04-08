@@ -17,7 +17,9 @@ type CallbackQuery struct {
 type Message struct {
 	MessageID                     int64                          `json:"message_id"`
 	From                          *User                          `json:"from,omitempty"`
+	ViaBot                        *User                          `json:"via_bot,omitempty"`
 	SenderChat                    *Chat                          `json:"sender_chat,omitempty"`
+	ForwardFromChat               *Chat                          `json:"forward_from_chat,omitempty"`
 	Chat                          Chat                           `json:"chat"`
 	Date                          int64                          `json:"date"`
 	Text                          string                         `json:"text,omitempty"`
@@ -73,7 +75,8 @@ type PhotoSize struct {
 }
 
 type Sticker struct {
-	FileID string `json:"file_id"`
+	FileID  string `json:"file_id"`
+	SetName string `json:"set_name,omitempty"`
 }
 
 type Animation struct {
@@ -85,7 +88,8 @@ type Video struct {
 }
 
 type Document struct {
-	FileID string `json:"file_id"`
+	FileID   string `json:"file_id"`
+	FileName string `json:"file_name,omitempty"`
 }
 
 type MessageAutoDeleteTimerChanged struct {

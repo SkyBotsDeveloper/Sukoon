@@ -166,29 +166,86 @@ var helpPages = map[string]helpPage{
 	helpBlocklists: {
 		Title: "Blocklists",
 		Lines: []string{
-			"Blocklists delete matching content automatically. The current build supports word, phrase, and regex patterns with approved-user bypass.",
+			"Want to stop people asking stupid questions? or ban anyone saying censored words? Blocklists is the module for you!",
 			"",
-			"/addblocklist <word|phrase|regex> <pattern>",
-			"/rmbl <pattern> or /rmblocklist <pattern>",
-			"/unblocklistall",
-			"/blocklist",
+			"From blocking rude words, filenames/extensions, to specific emoji, everything is possible.",
 			"",
-			"Open the examples page below for live command syntax.",
-			"Advanced blocklist mode, delete toggles, and custom blocklist reasons are still deferred.",
+			"Admin commands:",
+			"- /addblocklist <blocklist trigger><reason>: Add a blocklist trigger. You can blocklist an entire sentence by putting it in quotes.",
+			"- /rmblocklist <blocklist trigger>: Remove a blocklist trigger.",
+			"- /unblocklistall: Remove all blocklist triggers - chat creator only.",
+			"- /blocklist: List all blocklisted items.",
+			"- /blocklistmode <blocklist mode>: Set the desired action to take when someone says a blocklisted item. Available: nothing/ban/mute/kick/warn/tban/tmute.",
+			"- /blocklistdelete <yes/no/on/off>: Set whether blocklisted messages should be deleted. Default: on.",
+			"- /setblocklistreason <reason>: Set the default blocklist reason to warn people with.",
+			"- /resetblocklistreason: Reset the default blocklist reason to default - nothing.",
+			"",
+			"Top tip:",
+			"Blocklists allow you to use some modifiers to match unknown characters.",
+			"- ? matches a single occurrence of any non-whitespace character.",
+			"- * matches any number of any non-whitespace character.",
+			"- ** matches any number of any character (including spaces).",
 		},
 	},
 	helpBlocklistExamples: {
 		Title: "Blocklist Command Examples",
 		Lines: []string{
-			"Examples for the current Sukoon parser:",
+			"If you're still curious as to how blocklists work, here are some examples you can copy.",
 			"",
-			"/addblocklist word spam",
-			"/addblocklist phrase buy now",
-			"/addblocklist regex (?i)free\\s+crypto",
-			"/rmblocklist spam | buy now",
-			"/unblocklistall",
+			"Example blocklist commands:",
+			"- Automatically warn users who say blocklisted words:",
+			"-> /blocklistmode warn",
 			"",
-			"Bulk removal accepts the same pipe-separated syntax already used elsewhere in Sukoon.",
+			"- Override the blocklist mode for a single filter. Users that say 'boo' will get muted for 6 hours, instead of the default blocklist action:",
+			"-> /addblocklist boo Don't scare the ghosts! {tmute 6h}",
+			"",
+			"- Add a full sentence to the blocklist. This would delete any message containing 'the admins suck':",
+			"-> /addblocklist \"the admins suck\" Respect your admins!",
+			"",
+			"- Add multiple blocklist entries at once by separating them with commas inside brackets:",
+			"-> /addblocklist (hi, hey, hello) Stop saying hello!",
+			"",
+			"- Stop any bit.ly links followed by exactly three characters:",
+			"-> /addblocklist \"bit.ly/???\" We dont like 3 letter shorteners!",
+			"",
+			"- Stop any bit.ly links using the * shortcut to match any character:",
+			"-> /addblocklist \"bit.ly/*\" We dont like shorteners!",
+			"",
+			"- Stop \"follow me on X\", as well as \"follow on X\", by using the ** syntax to block any number of words:",
+			"-> /addblocklist \"follow ** X\" No promoting X accounts!",
+			"",
+			"- Stop people sending zip files, by blocklisting file:*.zip:",
+			"-> /addblocklist \"file:*.zip\" zip files are not allowed here.",
+			"",
+			"- Stop people using the @gif inline bot by adding inline:@gif:",
+			"-> /addblocklist \"inline:@gif\" The gif bot is not allowed here.",
+			"",
+			"- Stop forwards from a channel by adding forward:@channelusername:",
+			"-> /addblocklist \"forward:@botnews\" The bot news channel is not allowed here.",
+			"",
+			"- Stop messages that exactly match the blocklist entry:",
+			"-> /addblocklist \"exact:hi\" This will delete messages that just say 'hi', and not 'hi there'",
+			"",
+			"- Stop messages that start with a certain prefix:",
+			"-> /addblocklist \"prefix:hi\" This will delete messages that start with 'hi', but not 'say hi'",
+			"",
+			"- Stop messages containing visually similar words, for example using mixtures of scripts:",
+			"-> /addblocklist \"lookalike:bot\" This will delete messages that contain 'bot', but also 'вот' (cyrillic script)",
+			"",
+			"- Stop any 🖕 emoji, or any stickers related to it:",
+			"-> /addblocklist 🖕 This emoji is not allowed here.",
+			"",
+			"- To blocklist a stickerpack, simply reply to a sticker with your addblocklist command:",
+			"-> (replying to a sticker) /addblocklist",
+			"",
+			"- To blocklist a stickerpack and assign a reason, use the stickerpack:<> syntax:",
+			"-> (replying to a sticker) /addblocklist stickerpack:<> These stickers are banned!",
+			"",
+			"- To stop a single blocklist item from deleting messages:",
+			"-> /addblocklist test {nodel} {warn} No talking about tests here, don't do it again!",
+			"",
+			"- If you've disabled blocklist deletion, but you want to configure some items to still delete:",
+			"-> /addblocklist boop {del} {ban} No b words here!",
 		},
 	},
 	helpCaptcha: {
@@ -923,14 +980,10 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 	case helpBlocklists:
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
-				{Text: "Examples", CallbackData: helpCallback(helpBlocklistExamples)},
+				{Text: "Blocklist Command Examples", CallbackData: helpCallback(helpBlocklistExamples)},
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},
-			},
-			[]telegram.InlineKeyboardButton{
-				{Text: "Website", URL: serviceutil.WebsiteURL},
-				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
 			},
 		)
 	case helpFederations:
@@ -999,7 +1052,11 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 			},
 		)
 	case helpBlocklistExamples:
-		return helpSubsectionMarkup(username, helpBlocklists)
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: helpCallback(helpBlocklists)},
+			},
+		)
 	case helpFederationsAdmin, helpFederationsOwner, helpFederationsUser:
 		return helpSubsectionMarkup(username, helpFederations)
 	case helpFilterExamples:
@@ -1131,7 +1188,7 @@ func normalizeHelpSection(value string) string {
 		return helpBans
 	case "warningsonly", "warning", "warn", "warns", "resetwarns", "setwarnlimit", "setwarnmode":
 		return helpWarnings
-	case "blocklist", "blocklists", "rmblocklist", "rmbl", "unblocklistall":
+	case "blocklist", "blocklists", "rmblocklist", "rmbl", "unblocklistall", "blocklistmode", "blocklistdelete", "setblocklistreason", "resetblocklistreason":
 		return helpBlocklists
 	case "blocklists_examples", "blocklistexamples", "blocklist_examples":
 		return helpBlocklistExamples

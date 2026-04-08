@@ -222,12 +222,14 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	}
 
 	sectionMessage := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(sectionMessage.Text, "/addblocklist") || !strings.Contains(sectionMessage.Text, "/unblocklistall") {
+	if !strings.Contains(sectionMessage.Text, "/blocklistmode <blocklist mode>") || !strings.Contains(sectionMessage.Text, "/blocklistdelete <yes/no/on/off>") || !strings.Contains(sectionMessage.Text, "/setblocklistreason <reason>") {
 		t.Fatalf("expected blocklist help page, got %q", sectionMessage.Text)
 	}
 	sectionMarkup := requireEditedMarkup(t, sectionMessage)
-	assertButton(t, sectionMarkup, 0, 0, "Examples", "ux:help:blocklists_examples", "")
+	assertButton(t, sectionMarkup, 0, 0, "Blocklist Command Examples", "ux:help:blocklists_examples", "")
 	assertButton(t, sectionMarkup, 1, 0, "Back", "ux:help:root", "")
+	assertNoButtonText(t, sectionMarkup, "Website")
+	assertNoButtonText(t, sectionMarkup, "Add to Group")
 	assertNoButtonText(t, sectionMarkup, "Home")
 	assertNoButtonText(t, sectionMarkup, "Close")
 
@@ -247,11 +249,13 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	}
 
 	examplesMessage := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(examplesMessage.Text, "/addblocklist regex") || !strings.Contains(examplesMessage.Text, "/rmblocklist spam | buy now") {
+	if !strings.Contains(examplesMessage.Text, "/blocklistmode warn") || !strings.Contains(examplesMessage.Text, "\"bit.ly/???\"") || !strings.Contains(examplesMessage.Text, "stickerpack:<>") {
 		t.Fatalf("expected blocklist examples help page, got %q", examplesMessage.Text)
 	}
 	examplesMarkup := requireEditedMarkup(t, examplesMessage)
 	assertButton(t, examplesMarkup, 0, 0, "Back", "ux:help:blocklists", "")
+	assertNoButtonText(t, examplesMarkup, "Website")
+	assertNoButtonText(t, examplesMarkup, "Add to Group")
 	assertNoButtonText(t, examplesMarkup, "Home")
 	assertNoButtonText(t, examplesMarkup, "Close")
 
@@ -271,7 +275,7 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	}
 
 	backMessage := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(backMessage.Text, "Blocklists") || !strings.Contains(backMessage.Text, "/unblocklistall") {
+	if !strings.Contains(backMessage.Text, "Blocklists") || !strings.Contains(backMessage.Text, "/blocklistmode <blocklist mode>") {
 		t.Fatalf("expected blocklists page after back, got %q", backMessage.Text)
 	}
 

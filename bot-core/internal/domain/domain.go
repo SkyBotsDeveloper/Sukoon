@@ -33,6 +33,10 @@ type ChatSettings struct {
 	ReportsEnabled        bool
 	LogChannelID          *int64
 	CleanCommands         bool
+	BlocklistAction       string
+	BlocklistActionSecs   int
+	BlocklistDelete       bool
+	BlocklistReason       string
 	DisabledDelete        bool
 	DisableAdmins         bool
 	AdminErrors           bool
@@ -95,14 +99,17 @@ type LockRule struct {
 }
 
 type BlocklistRule struct {
-	ID        int64
-	BotID     string
-	ChatID    int64
-	Pattern   string
-	MatchMode string
-	Action    string
-	CreatedBy int64
-	CreatedAt time.Time
+	ID                    int64
+	BotID                 string
+	ChatID                int64
+	Pattern               string
+	MatchMode             string
+	Action                string
+	ActionDurationSeconds int
+	DeleteBehavior        string
+	Reason                string
+	CreatedBy             int64
+	CreatedAt             time.Time
 }
 
 type Note struct {

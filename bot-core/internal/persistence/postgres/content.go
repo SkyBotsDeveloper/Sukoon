@@ -164,13 +164,16 @@ func (s *Store) ListLocks(ctx context.Context, botID string, chatID int64) ([]do
 
 func (s *Store) AddBlocklistRule(ctx context.Context, rule domain.BlocklistRule) (domain.BlocklistRule, error) {
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO blocklist_rules (bot_id, chat_id, pattern, match_mode, action, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO blocklist_rules (bot_id, chat_id, pattern, match_mode, action, action_duration_seconds, delete_behavior, reason, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (bot_id, chat_id, pattern, match_mode) DO UPDATE SET
 			action = EXCLUDED.action,
+			action_duration_seconds = EXCLUDED.action_duration_seconds,
+			delete_behavior = EXCLUDED.delete_behavior,
+			reason = EXCLUDED.reason,
 			created_by = EXCLUDED.created_by
 		RETURNING id, created_at
-	`, rule.BotID, rule.ChatID, rule.Pattern, rule.MatchMode, rule.Action, rule.CreatedBy).Scan(&rule.ID, &rule.CreatedAt)
+	`, rule.BotID, rule.ChatID, rule.Pattern, rule.MatchMode, rule.Action, rule.ActionDurationSeconds, rule.DeleteBehavior, rule.Reason, rule.CreatedBy).Scan(&rule.ID, &rule.CreatedAt)
 	return rule, err
 }
 
@@ -181,7 +184,7 @@ func (s *Store) DeleteBlocklistRule(ctx context.Context, botID string, chatID in
 
 func (s *Store) ListBlocklistRules(ctx context.Context, botID string, chatID int64) ([]domain.BlocklistRule, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, bot_id, chat_id, pattern, match_mode, action, created_by, created_at
+		SELECT id, bot_id, chat_id, pattern, match_mode, action, action_duration_seconds, delete_behavior, reason, created_by, created_at
 		FROM blocklist_rules
 		WHERE bot_id=$1 AND chat_id=$2
 		ORDER BY id ASC
@@ -194,12 +197,39 @@ func (s *Store) ListBlocklistRules(ctx context.Context, botID string, chatID int
 	var rules []domain.BlocklistRule
 	for rows.Next() {
 		var rule domain.BlocklistRule
-		if err := rows.Scan(&rule.ID, &rule.BotID, &rule.ChatID, &rule.Pattern, &rule.MatchMode, &rule.Action, &rule.CreatedBy, &rule.CreatedAt); err != nil {
+		if err := rows.Scan(&rule.ID, &rule.BotID, &rule.ChatID, &rule.Pattern, &rule.MatchMode, &rule.Action, &rule.ActionDurationSeconds, &rule.DeleteBehavior, &rule.Reason, &rule.CreatedBy, &rule.CreatedAt); err != nil {
 			return nil, err
 		}
 		rules = append(rules, rule)
 	}
 	return rules, rows.Err()
+}
+
+func (s *Store) SetBlocklistMode(ctx context.Context, botID string, chatID int64, action string, actionDurationSeconds int) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE chat_settings
+		SET blocklist_action=$3, blocklist_action_duration_seconds=$4, updated_at=NOW()
+		WHERE bot_id=$1 AND chat_id=$2
+	`, botID, chatID, action, actionDurationSeconds)
+	return err
+}
+
+func (s *Store) SetBlocklistDelete(ctx context.Context, botID string, chatID int64, enabled bool) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE chat_settings
+		SET blocklist_delete=$3, updated_at=NOW()
+		WHERE bot_id=$1 AND chat_id=$2
+	`, botID, chatID, enabled)
+	return err
+}
+
+func (s *Store) SetBlocklistReason(ctx context.Context, botID string, chatID int64, reason string) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE chat_settings
+		SET blocklist_reason=$3, updated_at=NOW()
+		WHERE bot_id=$1 AND chat_id=$2
+	`, botID, chatID, reason)
+	return err
 }
 
 func (s *Store) SetAntiflood(ctx context.Context, settings domain.AntifloodSettings) error {
