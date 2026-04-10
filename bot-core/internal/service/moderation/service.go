@@ -99,7 +99,7 @@ func (s *Service) ban(ctx context.Context, rt *runtime.Context, silent bool, del
 			return err
 		}
 	}
-	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("ban: actor=%d target=%d reason=%s", rt.ActorID(), target.UserID, reason))
+	_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAdmin, fmt.Sprintf("ban: actor=%d target=%d reason=%s", rt.ActorID(), target.UserID, reason))
 	return nil
 }
 
@@ -115,7 +115,7 @@ func (s *Service) unban(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Unbanned %s.", target.Name), rt.ReplyOptions(telegram.SendMessageOptions{}))
-	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("unban: actor=%d target=%d", rt.ActorID(), target.UserID))
+	_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAdmin, fmt.Sprintf("unban: actor=%d target=%d", rt.ActorID(), target.UserID))
 	return err
 }
 
@@ -131,7 +131,7 @@ func (s *Service) tban(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Temp-banned %s for %s. %s", target.Name, humanizeModerationDuration(duration), suffixReason(reason)), rt.ReplyOptions(telegram.SendMessageOptions{}))
-	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("tban: actor=%d target=%d until=%s reason=%s", rt.ActorID(), target.UserID, until.Format(time.RFC3339), reason))
+	_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAdmin, fmt.Sprintf("tban: actor=%d target=%d until=%s reason=%s", rt.ActorID(), target.UserID, until.Format(time.RFC3339), reason))
 	return err
 }
 
@@ -160,7 +160,7 @@ func (s *Service) mute(ctx context.Context, rt *runtime.Context, until *time.Tim
 			return err
 		}
 	}
-	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("mute: actor=%d target=%d until=%v reason=%s", rt.ActorID(), target.UserID, until, reason))
+	_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAdmin, fmt.Sprintf("mute: actor=%d target=%d until=%v reason=%s", rt.ActorID(), target.UserID, until, reason))
 	return nil
 }
 
@@ -176,7 +176,7 @@ func (s *Service) tmute(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Temp-muted %s for %s. %s", target.Name, humanizeModerationDuration(duration), suffixReason(reason)), rt.ReplyOptions(telegram.SendMessageOptions{}))
-	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("tmute: actor=%d target=%d until=%s reason=%s", rt.ActorID(), target.UserID, until.Format(time.RFC3339), reason))
+	_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAdmin, fmt.Sprintf("tmute: actor=%d target=%d until=%s reason=%s", rt.ActorID(), target.UserID, until.Format(time.RFC3339), reason))
 	return err
 }
 
@@ -192,7 +192,7 @@ func (s *Service) unmute(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Unmuted %s.", target.Name), rt.ReplyOptions(telegram.SendMessageOptions{}))
-	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("unmute: actor=%d target=%d", rt.ActorID(), target.UserID))
+	_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAdmin, fmt.Sprintf("unmute: actor=%d target=%d", rt.ActorID(), target.UserID))
 	return err
 }
 
@@ -221,7 +221,7 @@ func (s *Service) kick(ctx context.Context, rt *runtime.Context, silent bool, de
 			return err
 		}
 	}
-	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("kick: actor=%d target=%d reason=%s", rt.ActorID(), target.UserID, reason))
+	_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAdmin, fmt.Sprintf("kick: actor=%d target=%d reason=%s", rt.ActorID(), target.UserID, reason))
 	return nil
 }
 
@@ -237,6 +237,9 @@ func (s *Service) kickMe(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "You asked Sukoon to kick you from the chat.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+	if err == nil {
+		_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryUser, fmt.Sprintf("kickme: actor=%d", rt.ActorID()))
+	}
 	return err
 }
 
@@ -279,7 +282,7 @@ func (s *Service) warn(ctx context.Context, rt *runtime.Context) error {
 	}
 
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
-	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("warn: actor=%d target=%d count=%d mode=%s reason=%s", rt.ActorID(), target.UserID, count, rt.RuntimeBundle.Moderation.WarnMode, reason))
+	_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAdmin, fmt.Sprintf("warn: actor=%d target=%d count=%d mode=%s reason=%s", rt.ActorID(), target.UserID, count, rt.RuntimeBundle.Moderation.WarnMode, reason))
 	return err
 }
 

@@ -49,8 +49,10 @@ func (s *Service) Handle(ctx context.Context, rt *runtime.Context) (bool, error)
 		return true, s.disableAdmins(ctx, rt)
 	case "disabled":
 		return true, s.listDisabled(ctx, rt)
-	case "logchannel", "setlog", "unsetlog", "log", "nolog":
+	case "logchannel", "setlog", "unsetlog":
 		return true, s.logChannel(ctx, rt)
+	case "log", "nolog":
+		return true, s.logCategoryToggle(ctx, rt)
 	case "logcategories":
 		return true, s.logCategories(ctx, rt)
 	case "reports":
@@ -197,6 +199,9 @@ func (s *Service) approve(ctx context.Context, rt *runtime.Context, approved boo
 		text = "Removed approval for " + target.Name + "."
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
+	if err == nil {
+		_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAdmin, fmt.Sprintf("approval: actor=%d target=%d approved=%t reason=%s", rt.ActorID(), target.UserID, approved, reason))
+	}
 	return err
 }
 
@@ -271,6 +276,9 @@ func (s *Service) unapproveAll(ctx context.Context, rt *runtime.Context) error {
 		}
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Removed approvals for %d user(s).", len(approvedUsers)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	if err == nil {
+		_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAdmin, fmt.Sprintf("approval: actor=%d action=unapproveall count=%d", rt.ActorID(), len(approvedUsers)))
+	}
 	return err
 }
 
@@ -406,23 +414,34 @@ func (s *Service) logChannel(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	switch rt.Command.Name {
-	case "unsetlog", "nolog":
+	case "unsetlog":
 		if err := rt.Store.SetLogChannel(ctx, rt.Bot.ID, rt.ChatID(), nil); err != nil {
 			return err
 		}
+		rt.RuntimeBundle.Settings.LogChannelID = nil
 		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Log channel disabled.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	case "setlog":
-		if len(rt.Command.Args) == 0 {
-			return fmt.Errorf("usage: /setlog <chat_id>")
+		channelID, label, err := s.resolveLogChannelTarget(ctx, rt)
+		if err != nil {
+			return err
 		}
+		if err := rt.Store.SetLogChannel(ctx, rt.Bot.ID, rt.ChatID(), &channelID); err != nil {
+			return err
+		}
+		rt.RuntimeBundle.Settings.LogChannelID = &channelID
+		_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Log channel set to %s.", label), rt.ReplyOptions(telegram.SendMessageOptions{}))
+		if err == nil {
+			_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategorySettings, fmt.Sprintf("settings: actor=%d logchannel=%d", rt.ActorID(), channelID))
+		}
+		return err
 	}
 	if len(rt.Command.Args) == 0 {
 		if rt.RuntimeBundle.Settings.LogChannelID == nil {
 			_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No log channel configured.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 			return err
 		}
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Current log channel: %d", *rt.RuntimeBundle.Settings.LogChannelID), rt.ReplyOptions(telegram.SendMessageOptions{}))
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Current log channel: "+s.logChannelLabel(ctx, rt, *rt.RuntimeBundle.Settings.LogChannelID), rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 
@@ -442,13 +461,56 @@ func (s *Service) logChannel(ctx context.Context, rt *runtime.Context) error {
 	if err := rt.Store.SetLogChannel(ctx, rt.Bot.ID, rt.ChatID(), &channelID); err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Log channel set to %d.", channelID), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	rt.RuntimeBundle.Settings.LogChannelID = &channelID
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Log channel set to %s.", s.logChannelLabel(ctx, rt, channelID)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	if err == nil {
+		_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategorySettings, fmt.Sprintf("settings: actor=%d logchannel=%d", rt.ActorID(), channelID))
+	}
 	return err
 }
 
 func (s *Service) logCategories(ctx context.Context, rt *runtime.Context) error {
-	text := "Current log categories: moderation, antispam, antiabuse, antibio, reports."
+	text := strings.Join([]string{
+		"Log categories:",
+		"",
+		fmt.Sprintf("- settings: Bot configuration updates. [%s]", enabledLabel(rt.RuntimeBundle.Settings.LogCategorySettings)),
+		fmt.Sprintf("- admin: Manual admin actions such as bans, mutes, kicks, warns, and approvals. [%s]", enabledLabel(rt.RuntimeBundle.Settings.LogCategoryAdmin)),
+		fmt.Sprintf("- user: User-driven actions such as /kickme and other member-side moderation flows. [%s]", enabledLabel(rt.RuntimeBundle.Settings.LogCategoryUser)),
+		fmt.Sprintf("- automated: Automatic moderation triggers such as locks, blocklists, antiflood, antiraid, antiabuse, and antibio. [%s]", enabledLabel(rt.RuntimeBundle.Settings.LogCategoryAutomated)),
+		fmt.Sprintf("- reports: User reports sent through /report. [%s]", enabledLabel(rt.RuntimeBundle.Settings.LogCategoryReports)),
+		fmt.Sprintf("- other: Extra bot events that do not fit the other categories. [%s]", enabledLabel(rt.RuntimeBundle.Settings.LogCategoryOther)),
+	}, "\n")
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) logCategoryToggle(ctx context.Context, rt *runtime.Context) error {
+	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
+		return err
+	}
+	if len(rt.Command.Args) == 0 {
+		if rt.Command.Name == "log" {
+			return fmt.Errorf("usage: /log <category>")
+		}
+		return fmt.Errorf("usage: /nolog <category>")
+	}
+	categories, err := parseLogCategories(rt.Command.Args)
+	if err != nil {
+		return err
+	}
+	enabled := rt.Command.Name == "log"
+	if err := rt.Store.SetLogCategories(ctx, rt.Bot.ID, rt.ChatID(), categories, enabled); err != nil {
+		return err
+	}
+	applyLogCategories(&rt.RuntimeBundle.Settings, categories, enabled)
+	verb := "Enabled"
+	if !enabled {
+		verb = "Disabled"
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("%s log categories: %s.", verb, strings.Join(categories, ", ")), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	if err == nil {
+		_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategorySettings, fmt.Sprintf("settings: actor=%d logcategories enabled=%t values=%s", rt.ActorID(), enabled, strings.Join(categories, ",")))
+	}
 	return err
 }
 
@@ -487,8 +549,7 @@ func (s *Service) report(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	reportText := fmt.Sprintf("Report from %d against %s in %d. %s", rt.ActorID(), target.Name, rt.ChatID(), strings.TrimSpace(reason))
-	_, err = rt.Client.SendMessage(ctx, *rt.RuntimeBundle.Settings.LogChannelID, reportText, telegram.SendMessageOptions{})
-	if err != nil {
+	if err := serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryReports, reportText); err != nil {
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Report sent.", rt.ReplyOptions(telegram.SendMessageOptions{}))
@@ -634,34 +695,73 @@ func (s *Service) cleanCommands(ctx context.Context, rt *runtime.Context) error 
 	if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
 		return err
 	}
-	if rt.Command.Name == "keepcommand" {
-		if err := rt.Store.SetCleanCommands(ctx, rt.Bot.ID, rt.ChatID(), false); err != nil {
+	if len(rt.Command.Args) == 0 {
+		if rt.Command.Name == "keepcommand" {
+			if err := rt.Store.SetCleanCommandTypes(ctx, rt.Bot.ID, rt.ChatID(), []string{"all"}, false); err != nil {
+				return err
+			}
+			applyCleanCommandTypes(&rt.RuntimeBundle.Settings, []string{"all"}, false)
+			_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Clean command categories disabled.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 			return err
 		}
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Clean commands disabled.", rt.ReplyOptions(telegram.SendMessageOptions{}))
-		return err
-	}
-	if len(rt.Command.Args) == 0 {
-		status := "off"
-		if rt.RuntimeBundle.Settings.CleanCommands {
-			status = "on"
+		enabled := rt.RuntimeBundle.Settings.EnabledCleanCommandCategories()
+		if len(enabled) == 0 {
+			_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Clean Commands is off. Use /cleancommand <all|admin|user|other> to enable categories.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+			return err
 		}
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Clean commands is "+status+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Currently cleaned command types: "+strings.Join(enabled, ", ")+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
-	enabled, err := ParseToggle(rt.Command.Args[0])
+	enabled := rt.Command.Name != "keepcommand"
+	if toggled, err := ParseToggle(rt.Command.Args[0]); err == nil {
+		enabled = toggled
+		if rt.Command.Name == "keepcommand" {
+			enabled = false
+		}
+		if err := rt.Store.SetCleanCommandTypes(ctx, rt.Bot.ID, rt.ChatID(), []string{"all"}, enabled); err != nil {
+			return err
+		}
+		applyCleanCommandTypes(&rt.RuntimeBundle.Settings, []string{"all"}, enabled)
+		verb := "Enabled"
+		if !enabled {
+			verb = "Disabled"
+		}
+		_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("%s clean command category: all.", verb), rt.ReplyOptions(telegram.SendMessageOptions{}))
+		if err == nil {
+			_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategorySettings, fmt.Sprintf("settings: actor=%d cleancommands enabled=%t categories=all", rt.ActorID(), enabled))
+		}
+		return err
+	}
+	categories, err := parseCleanCommandTypes(rt.Command.Args)
 	if err != nil {
 		return err
 	}
-	if err := rt.Store.SetCleanCommands(ctx, rt.Bot.ID, rt.ChatID(), enabled); err != nil {
+	if err := rt.Store.SetCleanCommandTypes(ctx, rt.Bot.ID, rt.ChatID(), categories, enabled); err != nil {
 		return err
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Clean commands %s.", toggleWord(enabled)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	applyCleanCommandTypes(&rt.RuntimeBundle.Settings, categories, enabled)
+	verb := "Enabled"
+	if !enabled {
+		verb = "Disabled"
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("%s clean command categories: %s.", verb, strings.Join(categories, ", ")), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	if err == nil {
+		_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategorySettings, fmt.Sprintf("settings: actor=%d cleancommands enabled=%t categories=%s", rt.ActorID(), enabled, strings.Join(categories, ",")))
+	}
 	return err
 }
 
 func (s *Service) cleanCommandTypes(ctx context.Context, rt *runtime.Context) error {
-	text := "Clean command types: command messages only in the current build. Service-message cleanup is configured separately with /cleanservice."
+	text := strings.Join([]string{
+		"Clean command types:",
+		"",
+		"- all: Delete all command messages sent to the group.",
+		"- admin: Delete admin-only commands such as /ban, /mute, /setwelcome, and settings changes.",
+		"- user: Delete user-facing commands such as /get, /rules, /report, and /help.",
+		"- other: Delete commands Sukoon does not recognise, including commands for other bots.",
+		"",
+		"Use /cleancommand <type> to enable one or more categories, and /keepcommand <type> to stop deleting them.",
+	}, "\n")
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
@@ -924,6 +1024,145 @@ func ParseToggle(value string) (bool, error) {
 	default:
 		return false, fmt.Errorf("expected on or off")
 	}
+}
+
+func enabledLabel(enabled bool) string {
+	if enabled {
+		return "on"
+	}
+	return "off"
+}
+
+func parseCleanCommandTypes(args []string) ([]string, error) {
+	return parseCategories(args, map[string]string{
+		"all":    "all",
+		"admin":  "admin",
+		"admins": "admin",
+		"user":   "user",
+		"users":  "user",
+		"other":  "other",
+	}, "clean command type")
+}
+
+func parseLogCategories(args []string) ([]string, error) {
+	return parseCategories(args, map[string]string{
+		"all":       "all",
+		"settings":  "settings",
+		"setting":   "settings",
+		"admin":     "admin",
+		"admins":    "admin",
+		"user":      "user",
+		"users":     "user",
+		"automated": "automated",
+		"auto":      "automated",
+		"reports":   "reports",
+		"report":    "reports",
+		"other":     "other",
+	}, "log category")
+}
+
+func parseCategories(args []string, allowed map[string]string, label string) ([]string, error) {
+	seen := map[string]struct{}{}
+	categories := make([]string, 0, len(args))
+	for _, arg := range args {
+		category, ok := allowed[strings.ToLower(strings.TrimSpace(arg))]
+		if !ok {
+			return nil, fmt.Errorf("unknown %s: %s", label, arg)
+		}
+		if _, exists := seen[category]; exists {
+			continue
+		}
+		seen[category] = struct{}{}
+		categories = append(categories, category)
+	}
+	if len(categories) == 0 {
+		return nil, fmt.Errorf("at least one %s is required", label)
+	}
+	return categories, nil
+}
+
+func applyCleanCommandTypes(settings *domain.ChatSettings, categories []string, enabled bool) {
+	for _, category := range categories {
+		switch category {
+		case "all":
+			settings.CleanCommandAll = enabled
+			if !enabled {
+				settings.CleanCommandAdmin = false
+				settings.CleanCommandUser = false
+				settings.CleanCommandOther = false
+			}
+		case "admin":
+			settings.CleanCommandAdmin = enabled
+		case "user":
+			settings.CleanCommandUser = enabled
+		case "other":
+			settings.CleanCommandOther = enabled
+		}
+	}
+	settings.CleanCommands = settings.CleanCommandAll || settings.CleanCommandAdmin || settings.CleanCommandUser || settings.CleanCommandOther
+}
+
+func applyLogCategories(settings *domain.ChatSettings, categories []string, enabled bool) {
+	for _, category := range categories {
+		switch category {
+		case "all":
+			settings.LogCategorySettings = enabled
+			settings.LogCategoryAdmin = enabled
+			settings.LogCategoryUser = enabled
+			settings.LogCategoryAutomated = enabled
+			settings.LogCategoryReports = enabled
+			settings.LogCategoryOther = enabled
+		case "settings":
+			settings.LogCategorySettings = enabled
+		case "admin":
+			settings.LogCategoryAdmin = enabled
+		case "user":
+			settings.LogCategoryUser = enabled
+		case "automated":
+			settings.LogCategoryAutomated = enabled
+		case "reports":
+			settings.LogCategoryReports = enabled
+		case "other":
+			settings.LogCategoryOther = enabled
+		}
+	}
+}
+
+func (s *Service) resolveLogChannelTarget(ctx context.Context, rt *runtime.Context) (int64, string, error) {
+	if len(rt.Command.Args) > 0 {
+		channelID, err := strconv.ParseInt(rt.Command.Args[0], 10, 64)
+		if err != nil {
+			return 0, "", fmt.Errorf("usage: /setlog <chat_id> or forward /setlog from the log channel")
+		}
+		return channelID, s.logChannelLabel(ctx, rt, channelID), nil
+	}
+	if rt.Message != nil && rt.Message.ForwardFromChat != nil {
+		channel := rt.Message.ForwardFromChat
+		if channel.Type != "channel" {
+			return 0, "", fmt.Errorf("forward /setlog from the channel you want to use for logs")
+		}
+		return channel.ID, logChatLabel(*channel), nil
+	}
+	return 0, "", fmt.Errorf("usage: /setlog <chat_id> or forward /setlog from the log channel")
+}
+
+func (s *Service) logChannelLabel(ctx context.Context, rt *runtime.Context, channelID int64) string {
+	if rt.Client != nil {
+		if chat, err := rt.Client.GetChat(ctx, channelID); err == nil {
+			return logChatLabel(chat)
+		}
+	}
+	return fmt.Sprintf("%d", channelID)
+}
+
+func logChatLabel(chat telegram.Chat) string {
+	if strings.TrimSpace(chat.Title) != "" {
+		return fmt.Sprintf("%s (%d)", chat.Title, chat.ID)
+	}
+	if strings.TrimSpace(chat.Username) != "" {
+		return fmt.Sprintf("@%s (%d)", chat.Username, chat.ID)
+	}
+	return fmt.Sprintf("%d", chat.ID)
 }
 
 func toggleWord(enabled bool) string {

@@ -14,6 +14,7 @@ const (
 	callbackStartHome  = "ux:start:home"
 	callbackStartClone = "ux:start:clone"
 	callbackHelpPrefix = "ux:help:"
+	callbackHelpCtx    = "ux:helpctx:"
 	callbackHelpMain   = callbackHelpPrefix + "root"
 	callbackPrivacy    = "ux:privacy"
 	callbackClose      = "ux:close"
@@ -289,16 +290,33 @@ var helpPages = map[string]helpPage{
 	helpCleanCommands: {
 		Title: "Clean Commands",
 		Lines: []string{
-			"Command cleanup removes handled command messages after Sukoon responds, reducing admin clutter.",
+			"Keep your chat clean by cleaning up commands from both users and admins!",
 			"",
-			"/cleancommands [on|off]",
-			"/cleancommand [on|off]",
-			"/keepcommand",
-			"/cleancommandtypes",
+			"This module allows you to delete certain command categories, for both users and admins, to ensure your chat is kept clean.",
+			"For example, you might choose to delete all user commands; this will stop users from accidentally pressing on blue-text commands in other people's messages.",
+			"",
+			"Available options are:",
+			"- all: Delete ALL commands sent to the group.",
+			"- admin: Delete any admin-only commands sent to the group (eg /ban, /mute, or any settings changes).",
+			"- user: Delete any user commands sent to the group (eg /get, /rules, or /report). These commands will also be cleaned when admins use them.",
+			"- other: Delete any commands which aren't recognised as being valid Sukoon commands.",
+			"",
+			"Admin commands:",
+			"- /cleancommand <type>: Select which command types to delete.",
+			"- /keepcommand <type>: Select which command types to stop deleting.",
+			"- /cleancommandtypes: List the different command types which can be cleaned.",
 			"",
 			"Examples:",
-			"/cleancommand on",
-			"/keepcommand",
+			"- Delete all commands, but still respond to them:",
+			"-> /cleancommand all",
+			"",
+			"- Delete all users commands (but still respond), as well as commands for other bots:",
+			"-> /cleancommand user other",
+			"",
+			"- Stop deleting all commands:",
+			"-> /keepcommand all",
+			"",
+			"Note: If you are looking to stop your users from using any commands altogether, and don't want Sukoon to reply to them, have a look at the locks module instead. You may also want to set up log channels, to track the settings changes that your admins are making!",
 		},
 	},
 	helpCleanService: {
@@ -637,16 +655,23 @@ var helpPages = map[string]helpPage{
 	helpLogChannels: {
 		Title: "Log Channels",
 		Lines: []string{
-			"Log channels receive moderation and protection events outside the main chat.",
+			"Recent actions are nice, but they don't help you log every action taken by the bot. This is why you need log channels!",
 			"",
-			"/logchannel [chat_id|off]",
-			"/setlog <chat_id>",
-			"/unsetlog",
-			"/log [chat_id|off]",
-			"/nolog",
-			"/logcategories",
+			"Log channels can help you keep track of exactly what the other admins are doing. Bans, mutes, warns, approvals, reports, and automated actions can all be tracked there.",
 			"",
-			"Reports also use the configured log channel when /reports is enabled.",
+			"Setting a log channel is done by the following steps:",
+			"- Add Sukoon to your channel, as an admin.",
+			"- Send /setlog to your channel.",
+			"- Forward the /setlog command to the group you wish to be logged.",
+			"- Congrats! all done :)",
+			"",
+			"Admin commands:",
+			"- /logchannel: Get the name of the current log channel.",
+			"- /setlog: Set the log channel for the current chat.",
+			"- /unsetlog: Unset the log channel for the current chat.",
+			"- /log <category>: Enable a log category - actions of that type will now be logged.",
+			"- /nolog <category>: Disable a log category - actions of that type will no longer be logged.",
+			"- /logcategories: List all supported categories, with information on what they refer to.",
 		},
 	},
 	helpMisc: {
@@ -859,6 +884,10 @@ var helpPages = map[string]helpPage{
 
 func helpCallback(page string) string {
 	return callbackHelpPrefix + page
+}
+
+func helpContextCallback(parent string, page string) string {
+	return callbackHelpCtx + parent + ":" + page
 }
 
 func startLandingText() string {
@@ -1104,7 +1133,10 @@ func helpLandingMarkup(username string) *telegram.InlineKeyboardMarkup {
 	)
 }
 
-func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMarkup {
+func helpSectionMarkup(page string, username string, parent string) *telegram.InlineKeyboardMarkup {
+	if parent == "" {
+		parent = helpRoot
+	}
 	switch page {
 	case helpAdmin:
 		return serviceutil.Markup(
@@ -1202,14 +1234,42 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
 			},
 		)
-	case helpLocks:
+	case helpCleanCommands:
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
-				{Text: "Example Commands", CallbackData: helpCallback(helpLockExamples)},
-				{Text: "Lock descriptions", CallbackData: helpCallback(helpLockDescriptions)},
+				{Text: "Locks", CallbackData: helpContextCallback(helpCleanCommands, helpLocks)},
+				{Text: "Log Channels", CallbackData: helpContextCallback(helpCleanCommands, helpLogChannels)},
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},
+			},
+		)
+	case helpLocks:
+		lockExamplesCallback := helpCallback(helpLockExamples)
+		lockDescriptionsCallback := helpCallback(helpLockDescriptions)
+		lockBackCallback := callbackHelpMain
+		if parent == helpCleanCommands {
+			lockExamplesCallback = helpContextCallback(helpCleanCommands, helpLockExamples)
+			lockDescriptionsCallback = helpContextCallback(helpCleanCommands, helpLockDescriptions)
+			lockBackCallback = helpCallback(helpCleanCommands)
+		}
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Example Commands", CallbackData: lockExamplesCallback},
+				{Text: "Lock descriptions", CallbackData: lockDescriptionsCallback},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: lockBackCallback},
+			},
+		)
+	case helpLogChannels:
+		logBackCallback := callbackHelpMain
+		if parent == helpCleanCommands {
+			logBackCallback = helpCallback(helpCleanCommands)
+		}
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: logBackCallback},
 			},
 		)
 	case helpBlocklistExamples:
@@ -1238,9 +1298,13 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 	case helpFormattingFillings, helpFormattingRandom, helpFormattingButtons:
 		return helpSubsectionMarkup(username, helpFormatting)
 	case helpLockDescriptions, helpLockExamples:
+		lockParentCallback := helpCallback(helpLocks)
+		if parent == helpCleanCommands {
+			lockParentCallback = helpContextCallback(helpCleanCommands, helpLocks)
+		}
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
-				{Text: "Back", CallbackData: helpCallback(helpLocks)},
+				{Text: "Back", CallbackData: lockParentCallback},
 			},
 		)
 	default:
@@ -1266,6 +1330,13 @@ func helpSubsectionMarkup(username string, parent string) *telegram.InlineKeyboa
 			{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
 		},
 	)
+}
+
+func helpMarkupWithParent(section string, username string, parent string) *telegram.InlineKeyboardMarkup {
+	if section == helpRoot {
+		return helpLandingMarkup(username)
+	}
+	return helpSectionMarkup(section, username, parent)
 }
 
 func privacyMarkup(username string) *telegram.InlineKeyboardMarkup {

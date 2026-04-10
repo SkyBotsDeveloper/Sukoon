@@ -303,7 +303,20 @@ func (m *MemoryStore) EnsureChat(_ context.Context, botID string, chat telegram.
 	key := chatKey(botID, chat.ID)
 	m.chats[key] = chat
 	if _, ok := m.settings[key]; !ok {
-		m.settings[key] = domain.ChatSettings{BotID: botID, ChatID: chat.ID, Language: "en", AdminErrors: true, BlocklistAction: "nothing", BlocklistDelete: true}
+		m.settings[key] = domain.ChatSettings{
+			BotID:                botID,
+			ChatID:               chat.ID,
+			Language:             "en",
+			AdminErrors:          true,
+			BlocklistAction:      "nothing",
+			BlocklistDelete:      true,
+			LogCategorySettings:  true,
+			LogCategoryAdmin:     true,
+			LogCategoryUser:      true,
+			LogCategoryAutomated: true,
+			LogCategoryReports:   true,
+			LogCategoryOther:     true,
+		}
 	}
 	if _, ok := m.moderation[key]; !ok {
 		m.moderation[key] = domain.ModerationSettings{BotID: botID, ChatID: chat.ID, WarnLimit: 3, WarnMode: "mute"}
@@ -389,6 +402,7 @@ func (m *MemoryStore) LoadRuntimeBundle(_ context.Context, botID string, chatID 
 		Locks:            map[string]domain.LockRule{},
 		LockAllowlist:    []string{},
 	}
+	bundle.Settings.CleanCommands = bundle.Settings.CleanCommandAll || bundle.Settings.CleanCommandAdmin || bundle.Settings.CleanCommandUser || bundle.Settings.CleanCommandOther
 	for command := range m.disabled[key] {
 		bundle.DisabledCommands[command] = struct{}{}
 	}
@@ -569,6 +583,38 @@ func (m *MemoryStore) SetLogChannel(_ context.Context, botID string, chatID int6
 	return nil
 }
 
+func (m *MemoryStore) SetLogCategories(_ context.Context, botID string, chatID int64, categories []string, enabled bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := chatKey(botID, chatID)
+	settings := m.settings[key]
+	for _, category := range categories {
+		switch strings.ToLower(strings.TrimSpace(category)) {
+		case "settings":
+			settings.LogCategorySettings = enabled
+		case "admin":
+			settings.LogCategoryAdmin = enabled
+		case "user":
+			settings.LogCategoryUser = enabled
+		case "automated":
+			settings.LogCategoryAutomated = enabled
+		case "reports":
+			settings.LogCategoryReports = enabled
+		case "other":
+			settings.LogCategoryOther = enabled
+		case "all":
+			settings.LogCategorySettings = enabled
+			settings.LogCategoryAdmin = enabled
+			settings.LogCategoryUser = enabled
+			settings.LogCategoryAutomated = enabled
+			settings.LogCategoryReports = enabled
+			settings.LogCategoryOther = enabled
+		}
+	}
+	m.settings[key] = settings
+	return nil
+}
+
 func (m *MemoryStore) SetReportsEnabled(_ context.Context, botID string, chatID int64, enabled bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -585,6 +631,39 @@ func (m *MemoryStore) SetCleanCommands(_ context.Context, botID string, chatID i
 	key := chatKey(botID, chatID)
 	settings := m.settings[key]
 	settings.CleanCommands = enabled
+	settings.CleanCommandAll = enabled
+	if !enabled {
+		settings.CleanCommandAdmin = false
+		settings.CleanCommandUser = false
+		settings.CleanCommandOther = false
+	}
+	m.settings[key] = settings
+	return nil
+}
+
+func (m *MemoryStore) SetCleanCommandTypes(_ context.Context, botID string, chatID int64, categories []string, enabled bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := chatKey(botID, chatID)
+	settings := m.settings[key]
+	for _, category := range categories {
+		switch strings.ToLower(strings.TrimSpace(category)) {
+		case "all":
+			settings.CleanCommandAll = enabled
+			if !enabled {
+				settings.CleanCommandAdmin = false
+				settings.CleanCommandUser = false
+				settings.CleanCommandOther = false
+			}
+		case "admin":
+			settings.CleanCommandAdmin = enabled
+		case "user":
+			settings.CleanCommandUser = enabled
+		case "other":
+			settings.CleanCommandOther = enabled
+		}
+	}
+	settings.CleanCommands = settings.CleanCommandAll || settings.CleanCommandAdmin || settings.CleanCommandUser || settings.CleanCommandOther
 	m.settings[key] = settings
 	return nil
 }

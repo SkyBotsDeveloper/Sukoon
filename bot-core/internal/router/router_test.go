@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"sukoon/bot-core/internal/permissions"
@@ -99,5 +100,42 @@ func TestRepeatedAdminCommandsReuseCachedAdminLookup(t *testing.T) {
 	_ = state
 	if len(client.AdminLookups) != 1 {
 		t.Fatalf("expected one admin lookup, got %+v", client.AdminLookups)
+	}
+}
+
+func TestCleanCommandCategoriesDeleteHandledAndOtherCommands(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100126, Type: "supergroup", Title: "Clean"}
+
+	for idx, text := range []string{
+		"/cleancommand user other",
+		"/help",
+		"/start@otherbot",
+		"/keepcommand all",
+	} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(idx + 1),
+			Message: &telegram.Message{
+				MessageID: int64(20 + idx),
+				From:      &telegram.User{ID: 1, FirstName: "Owner"},
+				Chat:      chat,
+				Text:      text,
+			},
+		}); err != nil {
+			t.Fatalf("command %q failed: %v", text, err)
+		}
+	}
+
+	if len(h.Client.DeletedMessages) < 2 {
+		t.Fatalf("expected clean command deletes, got %+v", h.Client.DeletedMessages)
+	}
+	if h.Client.DeletedMessages[0].MessageID != 21 {
+		t.Fatalf("expected /help message to be cleaned as a user command, got %+v", h.Client.DeletedMessages)
+	}
+	if h.Client.DeletedMessages[1].MessageID != 22 {
+		t.Fatalf("expected /start@otherbot message to be cleaned as other command, got %+v", h.Client.DeletedMessages)
+	}
+	if len(h.Client.Messages) == 0 || !strings.Contains(h.Client.Messages[1].Text, "easier to browse in PM") {
+		t.Fatalf("expected /help to still respond before delete, got %+v", h.Client.Messages)
 	}
 }

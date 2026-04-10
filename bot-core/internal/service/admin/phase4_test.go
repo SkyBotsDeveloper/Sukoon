@@ -324,12 +324,14 @@ func TestPromoteDemoteAdminCacheAdminErrorAndAnonAdmin(t *testing.T) {
 	}
 }
 
-func TestApprovalStatusUnapproveAllAndLogAliases(t *testing.T) {
+func TestApprovalStatusUnapproveAllAndLogCategories(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	chat := telegram.Chat{ID: -100716, Type: "supergroup", Title: "Approvals"}
+	logChannel := telegram.Chat{ID: -100999, Type: "channel", Title: "Audit Log", Username: "auditlog"}
 	if err := h.Store.EnsureUser(context.Background(), telegram.User{ID: 20, Username: "target", FirstName: "Target"}); err != nil {
 		t.Fatalf("ensure user failed: %v", err)
 	}
+	h.Client.ChatsByID[logChannel.ID] = logChannel
 	h.Client.AdminsByChat[chat.ID] = []telegram.ChatAdministrator{
 		{
 			User:   telegram.User{ID: 10, FirstName: "Admin", Username: "admin"},
@@ -341,16 +343,39 @@ func TestApprovalStatusUnapproveAllAndLogAliases(t *testing.T) {
 		},
 	}
 
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 50,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/approve @target testing",
+		},
+	}); err != nil {
+		t.Fatalf("approve failed: %v", err)
+	}
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		Message: &telegram.Message{
+			MessageID:       51,
+			From:            &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:            chat,
+			Text:            "/setlog",
+			ForwardFromChat: &logChannel,
+		},
+	}); err != nil {
+		t.Fatalf("setlog forward failed: %v", err)
+	}
 	for idx, text := range []string{
-		"/approve @target testing",
-		"/setlog -100999",
 		"/logcategories",
-		"/nolog",
+		"/nolog automated",
+		"/nolog reports",
+		"/log reports",
 	} {
 		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
-			UpdateID: int64(idx + 1),
+			UpdateID: int64(3 + idx),
 			Message: &telegram.Message{
-				MessageID: int64(50 + idx),
+				MessageID: int64(52 + idx),
 				From:      &telegram.User{ID: 1, FirstName: "Owner"},
 				Chat:      chat,
 				Text:      text,
@@ -380,11 +405,24 @@ func TestApprovalStatusUnapproveAllAndLogAliases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load runtime bundle failed: %v", err)
 	}
-	if bundle.Settings.LogChannelID != nil {
-		t.Fatalf("expected nolog to clear log channel, got %+v", bundle.Settings.LogChannelID)
+	if bundle.Settings.LogChannelID == nil || *bundle.Settings.LogChannelID != logChannel.ID {
+		t.Fatalf("expected forwarded setlog to configure log channel %d, got %+v", logChannel.ID, bundle.Settings.LogChannelID)
 	}
-	if got := h.Client.Messages[2].Text; !strings.Contains(got, "Current log categories") {
-		t.Fatalf("expected logcategories response, got %q", got)
+	if bundle.Settings.LogCategoryAutomated {
+		t.Fatalf("expected /nolog automated to disable automated logs")
+	}
+	if !bundle.Settings.LogCategoryReports {
+		t.Fatalf("expected /log reports to re-enable reports logs")
+	}
+	var logCategoriesText string
+	for _, msg := range h.Client.Messages {
+		if msg.ChatID == chat.ID && strings.Contains(msg.Text, "Log categories:") {
+			logCategoriesText = msg.Text
+			break
+		}
+	}
+	if !strings.Contains(logCategoriesText, "Log categories:") || !strings.Contains(logCategoriesText, "automated") {
+		t.Fatalf("expected logcategories response, got %q", logCategoriesText)
 	}
 
 	before := len(h.Client.Messages)
@@ -424,14 +462,15 @@ func TestApprovalStatusUnapproveAllAndLogAliases(t *testing.T) {
 	}
 }
 
-func TestCleanCommandAliases(t *testing.T) {
+func TestCleanCommandTypeSelection(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	chat := telegram.Chat{ID: -100717, Type: "supergroup", Title: "Clean Commands"}
 
 	for idx, text := range []string{
-		"/cleancommand on",
+		"/cleancommand user other",
 		"/cleancommandtypes",
-		"/keepcommand",
+		"/keepcommand other",
+		"/keepcommand all",
 	} {
 		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
 			UpdateID: int64(idx + 1),
@@ -451,9 +490,12 @@ func TestCleanCommandAliases(t *testing.T) {
 		t.Fatalf("load runtime bundle failed: %v", err)
 	}
 	if bundle.Settings.CleanCommands {
-		t.Fatalf("expected keepcommand to disable clean commands")
+		t.Fatalf("expected keepcommand all to disable all clean command categories")
 	}
-	if got := h.Client.Messages[1].Text; !strings.Contains(got, "Clean command types") {
+	if bundle.Settings.CleanCommandUser || bundle.Settings.CleanCommandOther || bundle.Settings.CleanCommandAll {
+		t.Fatalf("expected all clean command categories to be disabled, got %+v", bundle.Settings)
+	}
+	if got := h.Client.Messages[1].Text; !strings.Contains(got, "Clean command types") || !strings.Contains(got, "- user:") {
 		t.Fatalf("expected cleancommandtypes response, got %q", got)
 	}
 }

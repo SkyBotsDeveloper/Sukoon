@@ -48,8 +48,10 @@ type Store interface {
 	ResetWarnings(ctx context.Context, botID string, chatID int64, userID int64) error
 	GetWarnings(ctx context.Context, botID string, chatID int64, userID int64) (int, error)
 	SetLogChannel(ctx context.Context, botID string, chatID int64, logChannelID *int64) error
+	SetLogCategories(ctx context.Context, botID string, chatID int64, categories []string, enabled bool) error
 	SetReportsEnabled(ctx context.Context, botID string, chatID int64, enabled bool) error
 	SetCleanCommands(ctx context.Context, botID string, chatID int64, enabled bool) error
+	SetCleanCommandTypes(ctx context.Context, botID string, chatID int64, categories []string, enabled bool) error
 	SetCleanService(ctx context.Context, botID string, chatID int64, target string, enabled bool) error
 	SetLanguage(ctx context.Context, botID string, chatID int64, language string) error
 	UpsertNote(ctx context.Context, note domain.Note) error

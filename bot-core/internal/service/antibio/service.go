@@ -82,7 +82,7 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 	if err != nil {
 		return false, err
 	}
-	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("antibio: actor=%d action=%s", rt.ActorID(), rt.RuntimeBundle.AntiBio.Action))
+	_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAutomated, fmt.Sprintf("antibio: actor=%d action=%s", rt.ActorID(), rt.RuntimeBundle.AntiBio.Action))
 	return true, nil
 }
 

@@ -127,7 +127,7 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 			return err
 		}
 	}
-	if message != nil && commandOK && r.utility != nil && r.utility.ShouldFastPathCommand(parsed) && !shouldBypassUtilityFastPath(parsed) {
+	if message != nil && chat.Type == "private" && commandOK && r.utility != nil && r.utility.ShouldFastPathCommand(parsed) && !shouldBypassUtilityFastPath(parsed) {
 		rt := &runtime.Context{
 			Base:      ctx,
 			Logger:    baseLogger,
@@ -343,7 +343,7 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 		} {
 			handled, err := handler(ctx, rt)
 			if handled || err != nil {
-				if err == nil && rt.RuntimeBundle.Settings.CleanCommands {
+				if err == nil && shouldCleanHandledCommand(rt.Command.Name, rt.RuntimeBundle.Settings) {
 					_ = rt.Client.DeleteMessage(ctx, rt.ChatID(), rt.Message.MessageID)
 				}
 				return err
@@ -361,6 +361,10 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 		if handled || err != nil {
 			return err
 		}
+	}
+
+	if shouldCleanUnhandledCommandMessage(rt.Text(), rt.RuntimeBundle.Settings) {
+		_ = rt.Client.DeleteMessage(ctx, rt.ChatID(), rt.Message.MessageID)
 	}
 
 	return nil

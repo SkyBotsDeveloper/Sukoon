@@ -946,6 +946,112 @@ func TestLocksHelpPageUsesExamplesDescriptionsAndBack(t *testing.T) {
 	assertNoButtonText(t, descriptionMarkup, "Add to Group")
 }
 
+func TestCleanCommandsHelpPageLinksToContextualLocksAndLogChannels(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: 67, Type: "private"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 71,
+			From:      &telegram.User{ID: 67, FirstName: "User"},
+			Chat:      chat,
+			Text:      "/help",
+		},
+	}); err != nil {
+		t.Fatalf("help failed: %v", err)
+	}
+
+	root := h.Client.Messages[len(h.Client.Messages)-1]
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-help-cleancommands",
+			From: telegram.User{ID: 67, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: root.MessageID,
+				Chat:      chat,
+			},
+			Data: "ux:help:cleancommands",
+		},
+	}); err != nil {
+		t.Fatalf("cleancommands help callback failed: %v", err)
+	}
+
+	page := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	pageRendered := renderedText(page.Text)
+	if !strings.Contains(pageRendered, "/cleancommand <type>") || !strings.Contains(pageRendered, "/keepcommand <type>") || !strings.Contains(pageRendered, "/cleancommand user other") {
+		t.Fatalf("expected clean commands help copy, got %q", page.Text)
+	}
+	markup := requireEditedMarkup(t, page)
+	assertButton(t, markup, 0, 0, "Locks", "ux:helpctx:cleancommands:locks", "")
+	assertButton(t, markup, 0, 1, "Log Channels", "ux:helpctx:cleancommands:logchannels", "")
+	assertButton(t, markup, 1, 0, "Back", "ux:help:root", "")
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 3,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-help-cleancommands-locks",
+			From: telegram.User{ID: 67, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: root.MessageID,
+				Chat:      chat,
+			},
+			Data: "ux:helpctx:cleancommands:locks",
+		},
+	}); err != nil {
+		t.Fatalf("cleancommands locks callback failed: %v", err)
+	}
+
+	locksPage := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	locksMarkup := requireEditedMarkup(t, locksPage)
+	assertButton(t, locksMarkup, 0, 0, "Example Commands", "ux:helpctx:cleancommands:locks_examples", "")
+	assertButton(t, locksMarkup, 0, 1, "Lock descriptions", "ux:helpctx:cleancommands:locks_descriptions", "")
+	assertButton(t, locksMarkup, 1, 0, "Back", "ux:help:cleancommands", "")
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 4,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-help-cleancommands-locks-examples",
+			From: telegram.User{ID: 67, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: root.MessageID,
+				Chat:      chat,
+			},
+			Data: "ux:helpctx:cleancommands:locks_examples",
+		},
+	}); err != nil {
+		t.Fatalf("cleancommands locks examples callback failed: %v", err)
+	}
+
+	locksExamplesPage := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	locksExamplesMarkup := requireEditedMarkup(t, locksExamplesPage)
+	assertButton(t, locksExamplesMarkup, 0, 0, "Back", "ux:helpctx:cleancommands:locks", "")
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 5,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-help-cleancommands-logchannels",
+			From: telegram.User{ID: 67, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: root.MessageID,
+				Chat:      chat,
+			},
+			Data: "ux:helpctx:cleancommands:logchannels",
+		},
+	}); err != nil {
+		t.Fatalf("cleancommands log channels callback failed: %v", err)
+	}
+
+	logPage := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	logRendered := renderedText(logPage.Text)
+	if !strings.Contains(logRendered, "/setlog") || !strings.Contains(logRendered, "/logcategories") {
+		t.Fatalf("expected log channels help copy, got %q", logPage.Text)
+	}
+	logMarkup := requireEditedMarkup(t, logPage)
+	assertButton(t, logMarkup, 0, 0, "Back", "ux:help:cleancommands", "")
+}
+
 func TestGroupPMGuidanceUsesButtonsForHelpAndPrivacy(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	group := telegram.Chat{ID: -100990, Type: "supergroup", Title: "Help"}

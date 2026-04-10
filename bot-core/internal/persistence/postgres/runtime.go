@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -17,7 +18,9 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 	err := s.pool.QueryRow(ctx, `
 		SELECT
 			cs.bot_id, cs.chat_id, cs.language, cs.reports_enabled, cs.log_channel_id,
-			cs.clean_commands, cs.lock_warns, cs.blocklist_action, cs.blocklist_action_duration_seconds, cs.blocklist_delete, cs.blocklist_reason, cs.disabled_delete, cs.disable_admins, cs.admin_errors, cs.anon_admins, cs.clean_service_join, cs.clean_service_leave, cs.clean_service_pin, cs.clean_service_title, cs.clean_service_photo, cs.clean_service_other, cs.clean_service_videochat,
+			cs.clean_commands, cs.clean_command_all, cs.clean_command_admin, cs.clean_command_user, cs.clean_command_other,
+			cs.log_category_settings, cs.log_category_admin, cs.log_category_user, cs.log_category_automated, cs.log_category_reports, cs.log_category_other,
+			cs.lock_warns, cs.blocklist_action, cs.blocklist_action_duration_seconds, cs.blocklist_delete, cs.blocklist_reason, cs.disabled_delete, cs.disable_admins, cs.admin_errors, cs.anon_admins, cs.clean_service_join, cs.clean_service_leave, cs.clean_service_pin, cs.clean_service_title, cs.clean_service_photo, cs.clean_service_other, cs.clean_service_videochat,
 			cs.welcome_enabled, cs.welcome_text, cs.goodbye_enabled, cs.goodbye_text, cs.rules_text,
 			ms.warn_limit, ms.warn_mode,
 			afs.enabled, afs.flood_limit, afs.timed_limit, afs.window_seconds, afs.action, afs.action_duration_seconds, afs.clear_all,
@@ -40,6 +43,16 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 		&bundle.Settings.ReportsEnabled,
 		&bundle.Settings.LogChannelID,
 		&bundle.Settings.CleanCommands,
+		&bundle.Settings.CleanCommandAll,
+		&bundle.Settings.CleanCommandAdmin,
+		&bundle.Settings.CleanCommandUser,
+		&bundle.Settings.CleanCommandOther,
+		&bundle.Settings.LogCategorySettings,
+		&bundle.Settings.LogCategoryAdmin,
+		&bundle.Settings.LogCategoryUser,
+		&bundle.Settings.LogCategoryAutomated,
+		&bundle.Settings.LogCategoryReports,
+		&bundle.Settings.LogCategoryOther,
 		&bundle.Settings.LockWarns,
 		&bundle.Settings.BlocklistAction,
 		&bundle.Settings.BlocklistActionSecs,
@@ -91,6 +104,12 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 	if err != nil {
 		return domain.RuntimeBundle{}, err
 	}
+
+	bundle.Settings.CleanCommands = bundle.Settings.CleanCommands ||
+		bundle.Settings.CleanCommandAll ||
+		bundle.Settings.CleanCommandAdmin ||
+		bundle.Settings.CleanCommandUser ||
+		bundle.Settings.CleanCommandOther
 
 	rows, err := s.pool.Query(ctx, `SELECT command FROM disabled_commands WHERE bot_id=$1 AND chat_id=$2`, botID, chatID)
 	if err != nil {
@@ -272,6 +291,46 @@ func (s *Store) SetLogChannel(ctx context.Context, botID string, chatID int64, l
 	return err
 }
 
+func (s *Store) SetLogCategories(ctx context.Context, botID string, chatID int64, categories []string, enabled bool) error {
+	query := `
+		UPDATE chat_settings
+		SET updated_at=NOW()
+	`
+	assignments := make([]string, 0, len(categories))
+	for _, category := range categories {
+		switch category {
+		case "settings":
+			assignments = append(assignments, "log_category_settings=$3")
+		case "admin":
+			assignments = append(assignments, "log_category_admin=$3")
+		case "user":
+			assignments = append(assignments, "log_category_user=$3")
+		case "automated":
+			assignments = append(assignments, "log_category_automated=$3")
+		case "reports":
+			assignments = append(assignments, "log_category_reports=$3")
+		case "other":
+			assignments = append(assignments, "log_category_other=$3")
+		case "all":
+			assignments = append(assignments,
+				"log_category_settings=$3",
+				"log_category_admin=$3",
+				"log_category_user=$3",
+				"log_category_automated=$3",
+				"log_category_reports=$3",
+				"log_category_other=$3",
+			)
+		}
+	}
+	if len(assignments) == 0 {
+		return nil
+	}
+	query += ", " + strings.Join(assignments, ", ")
+	query += ` WHERE bot_id=$1 AND chat_id=$2`
+	_, err := s.pool.Exec(ctx, query, botID, chatID, enabled)
+	return err
+}
+
 func (s *Store) SetReportsEnabled(ctx context.Context, botID string, chatID int64, enabled bool) error {
 	_, err := s.pool.Exec(ctx, `
 		UPDATE chat_settings
@@ -284,9 +343,47 @@ func (s *Store) SetReportsEnabled(ctx context.Context, botID string, chatID int6
 func (s *Store) SetCleanCommands(ctx context.Context, botID string, chatID int64, enabled bool) error {
 	_, err := s.pool.Exec(ctx, `
 		UPDATE chat_settings
-		SET clean_commands=$3, updated_at=NOW()
+		SET clean_commands=$3, clean_command_all=$3, updated_at=NOW()
 		WHERE bot_id=$1 AND chat_id=$2
 	`, botID, chatID, enabled)
+	return err
+}
+
+func (s *Store) SetCleanCommandTypes(ctx context.Context, botID string, chatID int64, categories []string, enabled bool) error {
+	query := `
+		UPDATE chat_settings
+		SET updated_at=NOW()
+	`
+	assignments := make([]string, 0, len(categories)+1)
+	for _, category := range categories {
+		switch category {
+		case "all":
+			assignments = append(assignments, "clean_command_all=$3")
+			if !enabled {
+				assignments = append(assignments, "clean_command_admin=FALSE", "clean_command_user=FALSE", "clean_command_other=FALSE")
+			}
+		case "admin":
+			assignments = append(assignments, "clean_command_admin=$3")
+		case "user":
+			assignments = append(assignments, "clean_command_user=$3")
+		case "other":
+			assignments = append(assignments, "clean_command_other=$3")
+		}
+	}
+	if len(assignments) == 0 {
+		return nil
+	}
+	query += ", " + strings.Join(assignments, ", ")
+	query += ` WHERE bot_id=$1 AND chat_id=$2`
+	if _, err := s.pool.Exec(ctx, query, botID, chatID, enabled); err != nil {
+		return err
+	}
+	_, err := s.pool.Exec(ctx, `
+		UPDATE chat_settings
+		SET clean_commands = clean_command_all OR clean_command_admin OR clean_command_user OR clean_command_other,
+		    updated_at = NOW()
+		WHERE bot_id=$1 AND chat_id=$2
+	`, botID, chatID)
 	return err
 }
 

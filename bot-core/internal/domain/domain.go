@@ -33,6 +33,16 @@ type ChatSettings struct {
 	ReportsEnabled        bool
 	LogChannelID          *int64
 	CleanCommands         bool
+	CleanCommandAll       bool
+	CleanCommandAdmin     bool
+	CleanCommandUser      bool
+	CleanCommandOther     bool
+	LogCategorySettings   bool
+	LogCategoryAdmin      bool
+	LogCategoryUser       bool
+	LogCategoryAutomated  bool
+	LogCategoryReports    bool
+	LogCategoryOther      bool
 	LockWarns             bool
 	BlocklistAction       string
 	BlocklistActionSecs   int
@@ -310,4 +320,63 @@ type RuntimeBundle struct {
 	Locks            map[string]LockRule
 	LockAllowlist    []string
 	Blocklist        []BlocklistRule
+}
+
+func (s ChatSettings) CleanCommandCategoryEnabled(category string) bool {
+	if s.CleanCommandAll {
+		return true
+	}
+	switch category {
+	case "all":
+		return s.CleanCommandAll
+	case "admin":
+		return s.CleanCommandAdmin
+	case "user":
+		return s.CleanCommandUser
+	case "other":
+		return s.CleanCommandOther
+	default:
+		return false
+	}
+}
+
+func (s ChatSettings) EnabledCleanCommandCategories() []string {
+	enabled := make([]string, 0, 4)
+	for _, category := range []string{"all", "admin", "user", "other"} {
+		if s.CleanCommandCategoryEnabled(category) {
+			enabled = append(enabled, category)
+		}
+	}
+	return enabled
+}
+
+func (s ChatSettings) LogCategoryEnabled(category string) bool {
+	switch category {
+	case "settings":
+		return s.LogCategorySettings
+	case "admin":
+		return s.LogCategoryAdmin
+	case "user":
+		return s.LogCategoryUser
+	case "automated":
+		return s.LogCategoryAutomated
+	case "reports":
+		return s.LogCategoryReports
+	case "other":
+		return s.LogCategoryOther
+	case "all":
+		return s.LogCategorySettings && s.LogCategoryAdmin && s.LogCategoryUser && s.LogCategoryAutomated && s.LogCategoryReports && s.LogCategoryOther
+	default:
+		return false
+	}
+}
+
+func (s ChatSettings) EnabledLogCategories() []string {
+	enabled := make([]string, 0, 6)
+	for _, category := range []string{"settings", "admin", "user", "automated", "reports", "other"} {
+		if s.LogCategoryEnabled(category) {
+			enabled = append(enabled, category)
+		}
+	}
+	return enabled
 }

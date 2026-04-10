@@ -1354,14 +1354,14 @@ func (s *Service) applyLock(ctx context.Context, rt *runtime.Context, lock domai
 		if rt.RuntimeBundle.Settings.LockWarns {
 			return s.warnBlocklistUser(ctx, rt, reason, "lock:"+lock.LockType)
 		}
-		_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("lock: actor=%d type=%s action=delete", rt.ActorID(), lock.LockType))
+		_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAutomated, fmt.Sprintf("lock: actor=%d type=%s action=delete", rt.ActorID(), lock.LockType))
 		return nil
 	default:
 		if rt.ActorID() == 0 {
 			if rt.Message != nil {
 				_ = rt.Client.DeleteMessage(ctx, rt.ChatID(), rt.Message.MessageID)
 			}
-			_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("lock: type=%s action=%s fallback=delete", lock.LockType, lock.Action))
+			_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAutomated, fmt.Sprintf("lock: type=%s action=%s fallback=delete", lock.LockType, lock.Action))
 			return nil
 		}
 		return enforceAction(ctx, rt, lock.Action, lock.ActionDurationSeconds, reason, true)
@@ -2057,7 +2057,7 @@ func (s *Service) enforceAntiRaidJoin(ctx context.Context, rt *runtime.Context, 
 	if err := rt.Client.BanChatMember(ctx, rt.ChatID(), member.ID, &until, true); err != nil {
 		return err
 	}
-	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("antiraid: user=%d until=%s", member.ID, until.Format(time.RFC3339)))
+	_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAutomated, fmt.Sprintf("antiraid: user=%d until=%s", member.ID, until.Format(time.RFC3339)))
 	return nil
 }
 
@@ -2101,7 +2101,7 @@ func (s *Service) applyBlocklistRule(ctx context.Context, rt *runtime.Context, r
 
 	switch action.Action {
 	case "", "nothing":
-		_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("blocklist: actor=%d pattern=%s delete=%t", rt.ActorID(), rule.Pattern, deleteMessage))
+		_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAutomated, fmt.Sprintf("blocklist: actor=%d pattern=%s delete=%t", rt.ActorID(), rule.Pattern, deleteMessage))
 		return nil
 	case "warn":
 		return s.warnBlocklistUser(ctx, rt, reason, rule.Pattern)
@@ -2157,7 +2157,7 @@ func (s *Service) sendBlocklistActionMessage(ctx context.Context, rt *runtime.Co
 		text += " Reason: " + reason
 	}
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
-	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("blocklist: actor=%d action=%s reason=%s", rt.ActorID(), strings.ToLower(verb), reason))
+	_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAutomated, fmt.Sprintf("blocklist: actor=%d action=%s reason=%s", rt.ActorID(), strings.ToLower(verb), reason))
 	return err
 }
 
@@ -2171,7 +2171,7 @@ func (s *Service) sendBlocklistTimedActionMessage(ctx context.Context, rt *runti
 		text += " Reason: " + reason
 	}
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
-	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("blocklist: actor=%d action=%s duration=%d reason=%s", rt.ActorID(), strings.ToLower(verb), durationSeconds, reason))
+	_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAutomated, fmt.Sprintf("blocklist: actor=%d action=%s duration=%d reason=%s", rt.ActorID(), strings.ToLower(verb), durationSeconds, reason))
 	return err
 }
 
@@ -2212,7 +2212,7 @@ func (s *Service) warnBlocklistUser(ctx context.Context, rt *runtime.Context, re
 		}
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
-	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("blocklist: actor=%d action=warn pattern=%s count=%d reason=%s", rt.ActorID(), pattern, count, reason))
+	_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAutomated, fmt.Sprintf("blocklist: actor=%d action=warn pattern=%s count=%d reason=%s", rt.ActorID(), pattern, count, reason))
 	return err
 }
 
@@ -2357,7 +2357,7 @@ func enforceAction(ctx context.Context, rt *runtime.Context, action string, dura
 			return err
 		}
 	}
-	_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("antispam: actor=%d action=%s reason=%s", rt.ActorID(), action, reason))
+	_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategoryAutomated, fmt.Sprintf("antispam: actor=%d action=%s reason=%s", rt.ActorID(), action, reason))
 	return nil
 }
 
