@@ -39,6 +39,7 @@ type MemoryStore struct {
 	notes             map[string]map[string]domain.Note
 	filters           map[string]map[string]domain.FilterRule
 	locks             map[string]map[string]domain.LockRule
+	lockAllowlist     map[string]map[string]domain.LockAllowlistEntry
 	blocklist         map[string][]domain.BlocklistRule
 	antibioExempt     map[string]map[int64]bool
 	globalUsers       map[string]domain.GlobalBlacklistUser
@@ -88,6 +89,7 @@ func NewMemoryStore() *MemoryStore {
 		notes:            map[string]map[string]domain.Note{},
 		filters:          map[string]map[string]domain.FilterRule{},
 		locks:            map[string]map[string]domain.LockRule{},
+		lockAllowlist:    map[string]map[string]domain.LockAllowlistEntry{},
 		blocklist:        map[string][]domain.BlocklistRule{},
 		antibioExempt:    map[string]map[int64]bool{},
 		globalUsers:      map[string]domain.GlobalBlacklistUser{},
@@ -385,6 +387,7 @@ func (m *MemoryStore) LoadRuntimeBundle(_ context.Context, botID string, chatID 
 		AntiBio:          m.antibio[key],
 		DisabledCommands: map[string]struct{}{},
 		Locks:            map[string]domain.LockRule{},
+		LockAllowlist:    []string{},
 	}
 	for command := range m.disabled[key] {
 		bundle.DisabledCommands[command] = struct{}{}
@@ -392,6 +395,10 @@ func (m *MemoryStore) LoadRuntimeBundle(_ context.Context, botID string, chatID 
 	for name, lock := range m.locks[key] {
 		bundle.Locks[name] = lock
 	}
+	for item := range m.lockAllowlist[key] {
+		bundle.LockAllowlist = append(bundle.LockAllowlist, item)
+	}
+	sort.Strings(bundle.LockAllowlist)
 	bundle.Blocklist = append(bundle.Blocklist, m.blocklist[key]...)
 	return bundle, nil
 }
@@ -505,6 +512,16 @@ func (m *MemoryStore) SetAnonAdmins(_ context.Context, botID string, chatID int6
 	key := chatKey(botID, chatID)
 	settings := m.settings[key]
 	settings.AnonAdmins = enabled
+	m.settings[key] = settings
+	return nil
+}
+
+func (m *MemoryStore) SetLockWarns(_ context.Context, botID string, chatID int64, enabled bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := chatKey(botID, chatID)
+	settings := m.settings[key]
+	settings.LockWarns = enabled
 	m.settings[key] = settings
 	return nil
 }
@@ -734,7 +751,46 @@ func (m *MemoryStore) ListLocks(_ context.Context, botID string, chatID int64) (
 	for _, lock := range m.locks[chatKey(botID, chatID)] {
 		locks = append(locks, lock)
 	}
+	sort.Slice(locks, func(i, j int) bool { return locks[i].LockType < locks[j].LockType })
 	return locks, nil
+}
+
+func (m *MemoryStore) AddLockAllowlist(_ context.Context, entry domain.LockAllowlistEntry) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := chatKey(entry.BotID, entry.ChatID)
+	if _, ok := m.lockAllowlist[key]; !ok {
+		m.lockAllowlist[key] = map[string]domain.LockAllowlistEntry{}
+	}
+	entry.Item = strings.ToLower(strings.TrimSpace(entry.Item))
+	m.lockAllowlist[key][entry.Item] = entry
+	return nil
+}
+
+func (m *MemoryStore) DeleteLockAllowlist(_ context.Context, botID string, chatID int64, item string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.lockAllowlist[chatKey(botID, chatID)], strings.ToLower(strings.TrimSpace(item)))
+	return nil
+}
+
+func (m *MemoryStore) ClearLockAllowlist(_ context.Context, botID string, chatID int64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.lockAllowlist, chatKey(botID, chatID))
+	return nil
+}
+
+func (m *MemoryStore) ListLockAllowlist(_ context.Context, botID string, chatID int64) ([]domain.LockAllowlistEntry, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := chatKey(botID, chatID)
+	entries := make([]domain.LockAllowlistEntry, 0, len(m.lockAllowlist[key]))
+	for _, entry := range m.lockAllowlist[key] {
+		entries = append(entries, entry)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Item < entries[j].Item })
+	return entries, nil
 }
 
 func (m *MemoryStore) AddBlocklistRule(_ context.Context, rule domain.BlocklistRule) (domain.BlocklistRule, error) {

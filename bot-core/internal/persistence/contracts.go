@@ -42,6 +42,7 @@ type Store interface {
 	SetDisableAdmins(ctx context.Context, botID string, chatID int64, enabled bool) error
 	SetAdminErrors(ctx context.Context, botID string, chatID int64, enabled bool) error
 	SetAnonAdmins(ctx context.Context, botID string, chatID int64, enabled bool) error
+	SetLockWarns(ctx context.Context, botID string, chatID int64, enabled bool) error
 	SetWarnConfig(ctx context.Context, botID string, chatID int64, limit int, mode string) error
 	IncrementWarnings(ctx context.Context, botID string, chatID int64, userID int64, reason string) (int, error)
 	ResetWarnings(ctx context.Context, botID string, chatID int64, userID int64) error
@@ -64,6 +65,10 @@ type Store interface {
 	UpsertLock(ctx context.Context, lock domain.LockRule) error
 	DeleteLock(ctx context.Context, botID string, chatID int64, lockType string) error
 	ListLocks(ctx context.Context, botID string, chatID int64) ([]domain.LockRule, error)
+	AddLockAllowlist(ctx context.Context, entry domain.LockAllowlistEntry) error
+	DeleteLockAllowlist(ctx context.Context, botID string, chatID int64, item string) error
+	ClearLockAllowlist(ctx context.Context, botID string, chatID int64) error
+	ListLockAllowlist(ctx context.Context, botID string, chatID int64) ([]domain.LockAllowlistEntry, error)
 	AddBlocklistRule(ctx context.Context, rule domain.BlocklistRule) (domain.BlocklistRule, error)
 	DeleteBlocklistRule(ctx context.Context, botID string, chatID int64, pattern string) error
 	ListBlocklistRules(ctx context.Context, botID string, chatID int64) ([]domain.BlocklistRule, error)

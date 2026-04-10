@@ -132,10 +132,13 @@ func (s *Store) SetRules(ctx context.Context, botID string, chatID int64, text s
 
 func (s *Store) UpsertLock(ctx context.Context, lock domain.LockRule) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO locks (bot_id, chat_id, lock_type, action)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (bot_id, chat_id, lock_type) DO UPDATE SET action = EXCLUDED.action
-	`, lock.BotID, lock.ChatID, lock.LockType, lock.Action)
+		INSERT INTO locks (bot_id, chat_id, lock_type, action, action_duration_seconds, reason)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (bot_id, chat_id, lock_type) DO UPDATE SET
+			action = EXCLUDED.action,
+			action_duration_seconds = EXCLUDED.action_duration_seconds,
+			reason = EXCLUDED.reason
+	`, lock.BotID, lock.ChatID, lock.LockType, lock.Action, lock.ActionDurationSeconds, lock.Reason)
 	return err
 }
 
@@ -145,7 +148,12 @@ func (s *Store) DeleteLock(ctx context.Context, botID string, chatID int64, lock
 }
 
 func (s *Store) ListLocks(ctx context.Context, botID string, chatID int64) ([]domain.LockRule, error) {
-	rows, err := s.pool.Query(ctx, `SELECT bot_id, chat_id, lock_type, action FROM locks WHERE bot_id=$1 AND chat_id=$2 ORDER BY lock_type ASC`, botID, chatID)
+	rows, err := s.pool.Query(ctx, `
+		SELECT bot_id, chat_id, lock_type, action, action_duration_seconds, reason
+		FROM locks
+		WHERE bot_id=$1 AND chat_id=$2
+		ORDER BY lock_type ASC
+	`, botID, chatID)
 	if err != nil {
 		return nil, err
 	}
@@ -154,12 +162,54 @@ func (s *Store) ListLocks(ctx context.Context, botID string, chatID int64) ([]do
 	var locks []domain.LockRule
 	for rows.Next() {
 		var lock domain.LockRule
-		if err := rows.Scan(&lock.BotID, &lock.ChatID, &lock.LockType, &lock.Action); err != nil {
+		if err := rows.Scan(&lock.BotID, &lock.ChatID, &lock.LockType, &lock.Action, &lock.ActionDurationSeconds, &lock.Reason); err != nil {
 			return nil, err
 		}
 		locks = append(locks, lock)
 	}
 	return locks, rows.Err()
+}
+
+func (s *Store) AddLockAllowlist(ctx context.Context, entry domain.LockAllowlistEntry) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO lock_allowlist (bot_id, chat_id, item)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (bot_id, chat_id, item) DO NOTHING
+	`, entry.BotID, entry.ChatID, entry.Item)
+	return err
+}
+
+func (s *Store) DeleteLockAllowlist(ctx context.Context, botID string, chatID int64, item string) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM lock_allowlist WHERE bot_id=$1 AND chat_id=$2 AND item=$3`, botID, chatID, item)
+	return err
+}
+
+func (s *Store) ClearLockAllowlist(ctx context.Context, botID string, chatID int64) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM lock_allowlist WHERE bot_id=$1 AND chat_id=$2`, botID, chatID)
+	return err
+}
+
+func (s *Store) ListLockAllowlist(ctx context.Context, botID string, chatID int64) ([]domain.LockAllowlistEntry, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT bot_id, chat_id, item, created_at
+		FROM lock_allowlist
+		WHERE bot_id=$1 AND chat_id=$2
+		ORDER BY item ASC
+	`, botID, chatID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []domain.LockAllowlistEntry
+	for rows.Next() {
+		var entry domain.LockAllowlistEntry
+		if err := rows.Scan(&entry.BotID, &entry.ChatID, &entry.Item, &entry.CreatedAt); err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	return entries, rows.Err()
 }
 
 func (s *Store) AddBlocklistRule(ctx context.Context, rule domain.BlocklistRule) (domain.BlocklistRule, error) {

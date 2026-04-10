@@ -35,7 +35,8 @@
 
 ### Anti-Spam And Verification
 
-- `/lock`, `/unlock`, `/locks`, `/locktypes`
+- `/lock`, `/unlock`, `/locks`, `/lockwarns`, `/locktypes`
+- `/allowlist`, `/rmallowlist`, `/rmallowlistall`
 - `/addblocklist`, `/rmbl`, `/rmblocklist`, `/unblocklistall`, `/blocklist`
 - `/blocklistmode`, `/blocklistdelete`, `/setblocklistreason`, `/resetblocklistreason`
 - `/flood`, `/setflood`, `/setfloodtimer`, `/floodmode`, `/setfloodmode`, `/clearflood`
@@ -112,7 +113,6 @@
 - channel-subscription enforcement
 - private-rules toggle commands
 - join-request-specific CAPTCHA delivery
-- warn-mode locks and allowlist-based lock exemptions
 - separate admin web panel
 - full help or informational command surface beyond the current scoped live sections
 - advanced markdown helper parsing for bold/italics/spoilers/code blocks and note-button syntax in stored content

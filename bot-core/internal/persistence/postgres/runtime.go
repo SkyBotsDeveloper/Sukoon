@@ -17,7 +17,7 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 	err := s.pool.QueryRow(ctx, `
 		SELECT
 			cs.bot_id, cs.chat_id, cs.language, cs.reports_enabled, cs.log_channel_id,
-			cs.clean_commands, cs.blocklist_action, cs.blocklist_action_duration_seconds, cs.blocklist_delete, cs.blocklist_reason, cs.disabled_delete, cs.disable_admins, cs.admin_errors, cs.anon_admins, cs.clean_service_join, cs.clean_service_leave, cs.clean_service_pin, cs.clean_service_title, cs.clean_service_photo, cs.clean_service_other, cs.clean_service_videochat,
+			cs.clean_commands, cs.lock_warns, cs.blocklist_action, cs.blocklist_action_duration_seconds, cs.blocklist_delete, cs.blocklist_reason, cs.disabled_delete, cs.disable_admins, cs.admin_errors, cs.anon_admins, cs.clean_service_join, cs.clean_service_leave, cs.clean_service_pin, cs.clean_service_title, cs.clean_service_photo, cs.clean_service_other, cs.clean_service_videochat,
 			cs.welcome_enabled, cs.welcome_text, cs.goodbye_enabled, cs.goodbye_text, cs.rules_text,
 			ms.warn_limit, ms.warn_mode,
 			afs.enabled, afs.flood_limit, afs.timed_limit, afs.window_seconds, afs.action, afs.action_duration_seconds, afs.clear_all,
@@ -40,6 +40,7 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 		&bundle.Settings.ReportsEnabled,
 		&bundle.Settings.LogChannelID,
 		&bundle.Settings.CleanCommands,
+		&bundle.Settings.LockWarns,
 		&bundle.Settings.BlocklistAction,
 		&bundle.Settings.BlocklistActionSecs,
 		&bundle.Settings.BlocklistDelete,
@@ -105,7 +106,7 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 	}
 	rows.Close()
 
-	lockRows, err := s.pool.Query(ctx, `SELECT lock_type, action FROM locks WHERE bot_id=$1 AND chat_id=$2`, botID, chatID)
+	lockRows, err := s.pool.Query(ctx, `SELECT lock_type, action, action_duration_seconds, reason FROM locks WHERE bot_id=$1 AND chat_id=$2`, botID, chatID)
 	if err != nil {
 		return domain.RuntimeBundle{}, err
 	}
@@ -113,13 +114,27 @@ func (s *Store) LoadRuntimeBundle(ctx context.Context, botID string, chatID int6
 		var lock domain.LockRule
 		lock.BotID = botID
 		lock.ChatID = chatID
-		if err := lockRows.Scan(&lock.LockType, &lock.Action); err != nil {
+		if err := lockRows.Scan(&lock.LockType, &lock.Action, &lock.ActionDurationSeconds, &lock.Reason); err != nil {
 			lockRows.Close()
 			return domain.RuntimeBundle{}, err
 		}
 		bundle.Locks[lock.LockType] = lock
 	}
 	lockRows.Close()
+
+	allowRows, err := s.pool.Query(ctx, `SELECT item FROM lock_allowlist WHERE bot_id=$1 AND chat_id=$2 ORDER BY item ASC`, botID, chatID)
+	if err != nil {
+		return domain.RuntimeBundle{}, err
+	}
+	for allowRows.Next() {
+		var item string
+		if err := allowRows.Scan(&item); err != nil {
+			allowRows.Close()
+			return domain.RuntimeBundle{}, err
+		}
+		bundle.LockAllowlist = append(bundle.LockAllowlist, item)
+	}
+	allowRows.Close()
 
 	blockRows, err := s.pool.Query(ctx, `
 		SELECT id, pattern, match_mode, action, action_duration_seconds, delete_behavior, reason, created_by, created_at
@@ -197,6 +212,15 @@ func (s *Store) SetAnonAdmins(ctx context.Context, botID string, chatID int64, e
 	_, err := s.pool.Exec(ctx, `
 		UPDATE chat_settings
 		SET anon_admins=$3, updated_at=NOW()
+		WHERE bot_id=$1 AND chat_id=$2
+	`, botID, chatID, enabled)
+	return err
+}
+
+func (s *Store) SetLockWarns(ctx context.Context, botID string, chatID int64, enabled bool) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE chat_settings
+		SET lock_warns=$3, updated_at=NOW()
 		WHERE bot_id=$1 AND chat_id=$2
 	`, botID, chatID, enabled)
 	return err

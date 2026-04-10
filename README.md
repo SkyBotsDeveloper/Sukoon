@@ -21,7 +21,7 @@ Current product direction focuses on fast moderation ergonomics, strong group pr
 
 - Fast webhook ack plus async worker execution
 - Durable update idempotency by bot and `update_id`
-- Reliable moderation primitives: bans, mutes, kicks, warns, approvals, locks, blocklists, antiflood, captcha
+- Reliable moderation primitives: bans, mutes, kicks, warns, approvals, locks with custom modes and allowlists, blocklists, antiflood, captcha
 - rich help surfaces for admin, approval, bans, antiflood, blocklists, captcha, clean commands, disabling, locks, log channels, federations, filters, and formatting
 - Owner/global tooling with job-backed broadcast and global blacklist controls
 - Federation support with canonical V2 storage, owner/admin/user help pages, and safe rename/chat-status helpers

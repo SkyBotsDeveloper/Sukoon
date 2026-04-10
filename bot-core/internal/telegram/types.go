@@ -26,6 +26,7 @@ type Message struct {
 	Caption                       string                         `json:"caption,omitempty"`
 	ReplyToMessage                *Message                       `json:"reply_to_message,omitempty"`
 	Entities                      []Entity                       `json:"entities,omitempty"`
+	CaptionEntities               []Entity                       `json:"caption_entities,omitempty"`
 	NewChatMembers                []User                         `json:"new_chat_members,omitempty"`
 	LeftChatMember                *User                          `json:"left_chat_member,omitempty"`
 	PinnedMessage                 *Message                       `json:"pinned_message,omitempty"`
@@ -41,17 +42,31 @@ type Message struct {
 	VideoChatParticipantsInvited  *VideoChatParticipantsInvited  `json:"video_chat_participants_invited,omitempty"`
 	VideoChatScheduled            *VideoChatScheduled            `json:"video_chat_scheduled,omitempty"`
 	ForwardOrigin                 any                            `json:"forward_origin,omitempty"`
+	ExternalReply                 *ExternalReplyInfo             `json:"external_reply,omitempty"`
+	IsAutomaticForward            bool                           `json:"is_automatic_forward,omitempty"`
+	MediaGroupID                  string                         `json:"media_group_id,omitempty"`
 	Photo                         []PhotoSize                    `json:"photo,omitempty"`
 	Sticker                       *Sticker                       `json:"sticker,omitempty"`
 	Animation                     *Animation                     `json:"animation,omitempty"`
+	Audio                         *Audio                         `json:"audio,omitempty"`
+	Voice                         *Voice                         `json:"voice,omitempty"`
+	VideoNote                     *VideoNote                     `json:"video_note,omitempty"`
 	Video                         *Video                         `json:"video,omitempty"`
 	Document                      *Document                      `json:"document,omitempty"`
+	Contact                       *Contact                       `json:"contact,omitempty"`
+	Location                      *Location                      `json:"location,omitempty"`
+	Poll                          *Poll                          `json:"poll,omitempty"`
+	Dice                          *Dice                          `json:"dice,omitempty"`
+	Game                          *Game                          `json:"game,omitempty"`
+	ReplyMarkup                   *InlineKeyboardMarkup          `json:"reply_markup,omitempty"`
 }
 
 type Entity struct {
-	Type   string `json:"type"`
-	Offset int    `json:"offset"`
-	Length int    `json:"length"`
+	Type          string `json:"type"`
+	Offset        int    `json:"offset"`
+	Length        int    `json:"length"`
+	URL           string `json:"url,omitempty"`
+	CustomEmojiID string `json:"custom_emoji_id,omitempty"`
 }
 
 type User struct {
@@ -75,11 +90,26 @@ type PhotoSize struct {
 }
 
 type Sticker struct {
-	FileID  string `json:"file_id"`
-	SetName string `json:"set_name,omitempty"`
+	FileID     string `json:"file_id"`
+	SetName    string `json:"set_name,omitempty"`
+	IsAnimated bool   `json:"is_animated,omitempty"`
+	IsVideo    bool   `json:"is_video,omitempty"`
+	IsPremium  bool   `json:"is_premium,omitempty"`
 }
 
 type Animation struct {
+	FileID string `json:"file_id"`
+}
+
+type Audio struct {
+	FileID string `json:"file_id"`
+}
+
+type Voice struct {
+	FileID string `json:"file_id"`
+}
+
+type VideoNote struct {
 	FileID string `json:"file_id"`
 }
 
@@ -90,6 +120,29 @@ type Video struct {
 type Document struct {
 	FileID   string `json:"file_id"`
 	FileName string `json:"file_name,omitempty"`
+}
+
+type Contact struct {
+	PhoneNumber string `json:"phone_number,omitempty"`
+}
+
+type Location struct {
+	Latitude  float64 `json:"latitude,omitempty"`
+	Longitude float64 `json:"longitude,omitempty"`
+}
+
+type Poll struct {
+	ID string `json:"id,omitempty"`
+}
+
+type Dice struct {
+	Emoji string `json:"emoji,omitempty"`
+}
+
+type Game struct{}
+
+type ExternalReplyInfo struct {
+	Chat *Chat `json:"chat,omitempty"`
 }
 
 type MessageAutoDeleteTimerChanged struct {

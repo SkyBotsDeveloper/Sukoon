@@ -113,6 +113,42 @@ func TestStoreMigratesAndPersistsCanonicalContracts(t *testing.T) {
 		t.Fatalf("expected antiraid settings to persist, got %+v", bundle.AntiRaid)
 	}
 
+	if err := store.SetLockWarns(ctx, bot.ID, -100123, true); err != nil {
+		t.Fatalf("SetLockWarns() error = %v", err)
+	}
+	if err := store.UpsertLock(ctx, domain.LockRule{
+		BotID:                 bot.ID,
+		ChatID:                -100123,
+		LockType:              "invitelink",
+		Action:                "ban",
+		ActionDurationSeconds: 0,
+		Reason:                "No promos",
+	}); err != nil {
+		t.Fatalf("UpsertLock() error = %v", err)
+	}
+	if err := store.AddLockAllowlist(ctx, domain.LockAllowlistEntry{
+		BotID:  bot.ID,
+		ChatID: -100123,
+		Item:   "@trustedchannel",
+	}); err != nil {
+		t.Fatalf("AddLockAllowlist() error = %v", err)
+	}
+
+	bundle, err = store.LoadRuntimeBundle(ctx, bot.ID, -100123)
+	if err != nil {
+		t.Fatalf("LoadRuntimeBundle() after locks error = %v", err)
+	}
+	if !bundle.Settings.LockWarns {
+		t.Fatal("expected lock warnings to persist")
+	}
+	lock, ok := bundle.Locks["invitelink"]
+	if !ok || lock.Action != "ban" || lock.Reason != "No promos" {
+		t.Fatalf("expected custom lock to persist, got %+v", bundle.Locks)
+	}
+	if len(bundle.LockAllowlist) != 1 || bundle.LockAllowlist[0] != "@trustedchannel" {
+		t.Fatalf("expected lock allowlist to persist, got %+v", bundle.LockAllowlist)
+	}
+
 	job := domain.Job{
 		ID:           "job_broadcast",
 		BotID:        bot.ID,

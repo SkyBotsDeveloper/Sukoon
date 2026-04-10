@@ -3,11 +3,14 @@ package antispam
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"sukoon/bot-core/internal/domain"
 	"sukoon/bot-core/internal/runtime"
@@ -29,8 +32,16 @@ func (s *Service) HandleCommand(ctx context.Context, rt *runtime.Context) (bool,
 		return true, s.lock(ctx, rt, false)
 	case "locks":
 		return true, s.listLocks(ctx, rt)
+	case "lockwarns":
+		return true, s.lockWarns(ctx, rt)
 	case "locktypes":
 		return true, s.lockTypes(ctx, rt)
+	case "allowlist":
+		return true, s.allowlist(ctx, rt)
+	case "rmallowlist":
+		return true, s.removeAllowlist(ctx, rt)
+	case "rmallowlistall":
+		return true, s.removeAllAllowlist(ctx, rt)
 	case "addblocklist":
 		return true, s.addBlocklist(ctx, rt)
 	case "rmbl", "rmblocklist":
@@ -145,51 +156,398 @@ func (s *Service) lock(ctx context.Context, rt *runtime.Context, enable bool) er
 	if !rt.ActorPermissions.IsChatAdmin {
 		return fmt.Errorf("admin rights required")
 	}
-	if len(rt.Command.Args) == 0 {
-		return fmt.Errorf("usage: /lock <type>")
-	}
-	lockType := canonicalLockType(rt.Command.Args[0])
-	if lockType == "" || !slices.Contains(supportedLockTypes(), lockType) {
-		return fmt.Errorf("unsupported lock type")
-	}
-	if enable {
-		err := rt.Store.UpsertLock(ctx, domain.LockRule{
-			BotID:    rt.Bot.ID,
-			ChatID:   rt.ChatID(),
-			LockType: lockType,
-			Action:   "delete",
-		})
-		if err != nil {
-			return err
-		}
-		_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Locked %s.", lockType), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	config, err := parseLockCommand(rt, enable)
+	if err != nil {
 		return err
 	}
 
-	if err := rt.Store.DeleteLock(ctx, rt.Bot.ID, rt.ChatID(), lockType); err != nil {
-		return err
+	targets := config.Types
+	if slices.Contains(targets, "all") {
+		targets = supportedLockTypes()
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Unlocked %s.", lockType), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	if len(targets) == 0 {
+		return fmt.Errorf("usage: /lock <item(s)>")
+	}
+
+	changes := make([]string, 0, len(targets))
+	for _, lockType := range targets {
+		if enable {
+			rule := domain.LockRule{
+				BotID:                 rt.Bot.ID,
+				ChatID:                rt.ChatID(),
+				LockType:              lockType,
+				Action:                config.Action,
+				ActionDurationSeconds: config.ActionDurationSeconds,
+				Reason:                config.Reason,
+			}
+			if err := rt.Store.UpsertLock(ctx, rule); err != nil {
+				return err
+			}
+			rt.RuntimeBundle.Locks[lockType] = rule
+			changes = append(changes, lockType)
+			continue
+		}
+		if err := rt.Store.DeleteLock(ctx, rt.Bot.ID, rt.ChatID(), lockType); err != nil {
+			return err
+		}
+		delete(rt.RuntimeBundle.Locks, lockType)
+		changes = append(changes, lockType)
+	}
+
+	var text string
+	if enable {
+		text = fmt.Sprintf("Locked %s.", strings.Join(changes, ", "))
+		if config.Action != "delete" {
+			text += " Action: " + formatLockAction(config.Action, config.ActionDurationSeconds) + "."
+		}
+		if strings.TrimSpace(config.Reason) != "" {
+			text += " Reason: " + config.Reason
+		}
+	} else {
+		text = fmt.Sprintf("Unlocked %s.", strings.Join(changes, ", "))
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
 func (s *Service) listLocks(ctx context.Context, rt *runtime.Context) error {
-	if len(rt.RuntimeBundle.Locks) == 0 {
+	showAll := len(rt.Command.Args) > 0 && strings.EqualFold(strings.TrimSpace(rt.Command.Args[0]), "list")
+	if !showAll && len(rt.RuntimeBundle.Locks) == 0 {
 		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No active locks.", rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
-	keys := make([]string, 0, len(rt.RuntimeBundle.Locks))
-	for lockType := range rt.RuntimeBundle.Locks {
-		keys = append(keys, lockType)
+
+	lines := []string{"Locks:"}
+	if showAll {
+		lines = append(lines, fmt.Sprintf("- Lock warnings: %s", onOff(rt.RuntimeBundle.Settings.LockWarns)))
+		lines = append(lines, "")
+		for _, lockType := range supportedLockTypes() {
+			lock, ok := rt.RuntimeBundle.Locks[lockType]
+			if !ok {
+				lines = append(lines, fmt.Sprintf("- %s: off", lockType))
+				continue
+			}
+			line := fmt.Sprintf("- %s: on (%s)", lockType, formatLockAction(lock.Action, lock.ActionDurationSeconds))
+			if strings.TrimSpace(lock.Reason) != "" {
+				line += " - " + lock.Reason
+			}
+			lines = append(lines, line)
+		}
+	} else {
+		keys := make([]string, 0, len(rt.RuntimeBundle.Locks))
+		for lockType := range rt.RuntimeBundle.Locks {
+			keys = append(keys, lockType)
+		}
+		sort.Strings(keys)
+		lines = append(lines, fmt.Sprintf("- Lock warnings: %s", onOff(rt.RuntimeBundle.Settings.LockWarns)))
+		lines = append(lines, "")
+		for _, lockType := range keys {
+			lock := rt.RuntimeBundle.Locks[lockType]
+			line := fmt.Sprintf("- %s (%s)", lockType, formatLockAction(lock.Action, lock.ActionDurationSeconds))
+			if strings.TrimSpace(lock.Reason) != "" {
+				line += " - " + lock.Reason
+			}
+			lines = append(lines, line)
+		}
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Active locks: "+strings.Join(keys, ", "), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	if len(rt.RuntimeBundle.LockAllowlist) > 0 {
+		lines = append(lines, "", "Allowlist: "+strings.Join(rt.RuntimeBundle.LockAllowlist, ", "))
+	}
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), strings.Join(lines, "\n"), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
 func (s *Service) lockTypes(ctx context.Context, rt *runtime.Context) error {
-	text := "Supported lock types: links, forwards, media, sticker, gif."
+	types := append([]string{"all"}, supportedLockTypes()...)
+	text := "Supported lock types: " + strings.Join(types, ", ") + "."
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
+}
+
+func (s *Service) lockWarns(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	if len(rt.Command.Args) == 0 {
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Lock warnings are "+onOff(rt.RuntimeBundle.Settings.LockWarns)+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	enabled, err := parseAntifloodToggle(rt.Command.Args[0])
+	if err != nil {
+		return fmt.Errorf("value must be yes/no/on/off")
+	}
+	if err := rt.Store.SetLockWarns(ctx, rt.Bot.ID, rt.ChatID(), enabled); err != nil {
+		return err
+	}
+	rt.RuntimeBundle.Settings.LockWarns = enabled
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Lock warnings are now "+onOff(enabled)+".", rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) allowlist(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	items, err := parseAllowlistItems(rt)
+	if err != nil {
+		return err
+	}
+	if len(items) == 0 {
+		entries, err := rt.Store.ListLockAllowlist(ctx, rt.Bot.ID, rt.ChatID())
+		if err != nil {
+			return err
+		}
+		if len(entries) == 0 {
+			_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "The lock allowlist is empty.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+			return err
+		}
+		lines := []string{"Current allowlist:"}
+		for _, entry := range entries {
+			lines = append(lines, "- "+entry.Item)
+		}
+		_, err = rt.Client.SendMessage(ctx, rt.ChatID(), strings.Join(lines, "\n"), rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return err
+	}
+	for _, item := range items {
+		if err := rt.Store.AddLockAllowlist(ctx, domain.LockAllowlistEntry{
+			BotID:  rt.Bot.ID,
+			ChatID: rt.ChatID(),
+			Item:   item,
+		}); err != nil {
+			return err
+		}
+	}
+	rt.RuntimeBundle.LockAllowlist = uniqueStrings(append(rt.RuntimeBundle.LockAllowlist, items...))
+	sort.Strings(rt.RuntimeBundle.LockAllowlist)
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Allowlisted %d item(s): %s.", len(items), strings.Join(items, ", ")), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) removeAllowlist(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsChatAdmin {
+		return fmt.Errorf("admin rights required")
+	}
+	items, err := parseAllowlistItems(rt)
+	if err != nil {
+		return err
+	}
+	if len(items) == 0 {
+		return fmt.Errorf("usage: /rmallowlist <item>")
+	}
+	for _, item := range items {
+		if err := rt.Store.DeleteLockAllowlist(ctx, rt.Bot.ID, rt.ChatID(), item); err != nil {
+			return err
+		}
+	}
+	rt.RuntimeBundle.LockAllowlist = filterStrings(rt.RuntimeBundle.LockAllowlist, items)
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Removed %d allowlist item(s).", len(items)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) removeAllAllowlist(ctx context.Context, rt *runtime.Context) error {
+	if !rt.ActorPermissions.IsOwner && !rt.ActorPermissions.IsSudo && !rt.ActorPermissions.IsChatCreator {
+		return fmt.Errorf("chat creator rights required")
+	}
+	if err := rt.Store.ClearLockAllowlist(ctx, rt.Bot.ID, rt.ChatID()); err != nil {
+		return err
+	}
+	rt.RuntimeBundle.LockAllowlist = nil
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Removed all allowlist items.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+type lockCommandConfig struct {
+	Types                 []string
+	Action                string
+	ActionDurationSeconds int
+	Reason                string
+}
+
+func parseLockCommand(rt *runtime.Context, enable bool) (lockCommandConfig, error) {
+	raw := strings.TrimSpace(rt.Command.RawArgs)
+	if raw == "" {
+		if enable {
+			return lockCommandConfig{}, fmt.Errorf("usage: /lock <item(s)>")
+		}
+		return lockCommandConfig{}, fmt.Errorf("usage: /unlock <item(s)>")
+	}
+
+	config := lockCommandConfig{Action: "delete"}
+	if !enable {
+		types, err := parseLockTypes(raw)
+		if err != nil {
+			return lockCommandConfig{}, err
+		}
+		config.Types = types
+		return config, nil
+	}
+
+	lockPart := raw
+	metaPart := ""
+	if idx := strings.Index(raw, "###"); idx >= 0 {
+		lockPart = strings.TrimSpace(raw[:idx])
+		metaPart = strings.TrimSpace(raw[idx+3:])
+	}
+	types, err := parseLockTypes(lockPart)
+	if err != nil {
+		return lockCommandConfig{}, err
+	}
+	config.Types = types
+	metaPart, action, durationSeconds, err := extractLockAction(metaPart)
+	if err != nil {
+		return lockCommandConfig{}, err
+	}
+	config.Action = action
+	config.ActionDurationSeconds = durationSeconds
+	config.Reason = strings.TrimSpace(metaPart)
+	return config, nil
+}
+
+func parseLockTypes(raw string) ([]string, error) {
+	fields := strings.Fields(strings.TrimSpace(raw))
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("usage: /lock <item(s)>")
+	}
+	seen := map[string]struct{}{}
+	types := make([]string, 0, len(fields))
+	for _, field := range fields {
+		lockType := canonicalLockType(field)
+		if lockType == "" {
+			return nil, fmt.Errorf("unsupported lock type %q", field)
+		}
+		if _, ok := seen[lockType]; ok {
+			continue
+		}
+		seen[lockType] = struct{}{}
+		types = append(types, lockType)
+	}
+	return types, nil
+}
+
+func extractLockAction(raw string) (string, string, int, error) {
+	action := "delete"
+	durationSeconds := 0
+	re := regexp.MustCompile(`\{([^{}]+)\}`)
+	matches := re.FindAllStringSubmatch(raw, -1)
+	for _, match := range matches {
+		fields := strings.Fields(strings.ToLower(strings.TrimSpace(match[1])))
+		if len(fields) == 0 {
+			continue
+		}
+		switch fields[0] {
+		case "ban", "mute", "kick":
+			action = fields[0]
+			durationSeconds = 0
+		case "tban", "tmute":
+			if len(fields) < 2 {
+				return "", "", 0, fmt.Errorf("%s requires a duration like 6h or 5d", fields[0])
+			}
+			duration, err := parseFlexibleDuration(fields[1])
+			if err != nil || duration <= 0 {
+				return "", "", 0, fmt.Errorf("invalid %s duration", fields[0])
+			}
+			action = fields[0]
+			durationSeconds = int(duration.Seconds())
+		default:
+			return "", "", 0, fmt.Errorf("lock action must be ban, mute, kick, tban, or tmute")
+		}
+	}
+	return strings.TrimSpace(re.ReplaceAllString(raw, "")), action, durationSeconds, nil
+}
+
+func formatLockAction(action string, durationSeconds int) string {
+	action = strings.ToLower(strings.TrimSpace(action))
+	if action == "" {
+		action = "delete"
+	}
+	if (action == "tban" || action == "tmute") && durationSeconds > 0 {
+		return fmt.Sprintf("%s %s", action, humanizeFlexibleDuration(time.Duration(durationSeconds)*time.Second))
+	}
+	return action
+}
+
+func parseAllowlistItems(rt *runtime.Context) ([]string, error) {
+	raw := strings.TrimSpace(rt.Command.RawArgs)
+	if raw == "" {
+		return nil, nil
+	}
+	items := strings.Fields(raw)
+	normalized := make([]string, 0, len(items))
+	for _, item := range items {
+		value, err := normalizeAllowlistItem(item, rt.Message)
+		if err != nil {
+			return nil, err
+		}
+		if value == "" {
+			continue
+		}
+		normalized = append(normalized, value)
+	}
+	return uniqueStrings(normalized), nil
+}
+
+func normalizeAllowlistItem(raw string, message *telegram.Message) (string, error) {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	if value == "" {
+		return "", nil
+	}
+	switch value {
+	case "stickerpack:<>":
+		if message == nil || message.ReplyToMessage == nil || message.ReplyToMessage.Sticker == nil || strings.TrimSpace(message.ReplyToMessage.Sticker.SetName) == "" {
+			return "", fmt.Errorf("reply to a sticker when using stickerpack:<>")
+		}
+		return "stickerpack:" + strings.ToLower(strings.TrimSpace(message.ReplyToMessage.Sticker.SetName)), nil
+	}
+	if strings.Contains(value, "t.me/addstickers/") {
+		return "stickerpack:" + strings.ToLower(strings.TrimSpace(value[strings.LastIndex(value, "/")+1:])), nil
+	}
+	if strings.Contains(value, "addemoji/") {
+		return "emojipack:" + strings.ToLower(strings.TrimSpace(value[strings.LastIndex(value, "/")+1:])), nil
+	}
+	if strings.HasPrefix(value, "stickerpack:") || strings.HasPrefix(value, "emojipack:") {
+		return value, nil
+	}
+	if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
+		if parsed, err := url.Parse(value); err == nil && parsed.Host != "" {
+			hostPath := strings.TrimPrefix(strings.ToLower(parsed.Host+parsed.EscapedPath()), "www.")
+			if hostPath != "" {
+				return strings.TrimSuffix(hostPath, "/"), nil
+			}
+		}
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(value, "www."), "/"), nil
+}
+
+func uniqueStrings(values []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.ToLower(strings.TrimSpace(value))
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+func filterStrings(values []string, remove []string) []string {
+	removeSet := map[string]struct{}{}
+	for _, value := range remove {
+		removeSet[strings.ToLower(strings.TrimSpace(value))] = struct{}{}
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := removeSet[strings.ToLower(strings.TrimSpace(value))]; ok {
+			continue
+		}
+		out = append(out, value)
+	}
+	return out
 }
 
 func (s *Service) addBlocklist(ctx context.Context, rt *runtime.Context) error {
@@ -911,13 +1269,24 @@ func (s *Service) clearFlood(ctx context.Context, rt *runtime.Context) error {
 }
 
 func (s *Service) checkLocks(ctx context.Context, rt *runtime.Context) (bool, error) {
-	for lockType, lock := range rt.RuntimeBundle.Locks {
-		if matchesLock(lockType, rt.Message) {
-			if err := enforceAction(ctx, rt, lock.Action, 0, "lock:"+lockType, true); err != nil {
-				return false, err
-			}
-			return true, nil
+	if rt.Message == nil {
+		return false, nil
+	}
+	lockTypes := make([]string, 0, len(rt.RuntimeBundle.Locks))
+	for lockType := range rt.RuntimeBundle.Locks {
+		lockTypes = append(lockTypes, lockType)
+	}
+	sort.Strings(lockTypes)
+	for _, lockType := range lockTypes {
+		lock := rt.RuntimeBundle.Locks[lockType]
+		matched, allowed := lockMatchesMessage(lockType, rt.Message, rt.RuntimeBundle.LockAllowlist)
+		if !matched || allowed {
+			continue
 		}
+		if err := s.applyLock(ctx, rt, lock); err != nil {
+			return false, err
+		}
+		return true, nil
 	}
 	return false, nil
 }
@@ -972,40 +1341,655 @@ func (s *Service) checkFlood(ctx context.Context, rt *runtime.Context) (bool, er
 	return true, nil
 }
 
-func matchesLock(lockType string, message *telegram.Message) bool {
+func (s *Service) applyLock(ctx context.Context, rt *runtime.Context, lock domain.LockRule) error {
+	reason := strings.TrimSpace(lock.Reason)
+	if reason == "" {
+		reason = "Locked content: " + lock.LockType
+	}
+	switch strings.ToLower(strings.TrimSpace(lock.Action)) {
+	case "", "delete":
+		if rt.Message != nil {
+			_ = rt.Client.DeleteMessage(ctx, rt.ChatID(), rt.Message.MessageID)
+		}
+		if rt.RuntimeBundle.Settings.LockWarns {
+			return s.warnBlocklistUser(ctx, rt, reason, "lock:"+lock.LockType)
+		}
+		_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("lock: actor=%d type=%s action=delete", rt.ActorID(), lock.LockType))
+		return nil
+	default:
+		if rt.ActorID() == 0 {
+			if rt.Message != nil {
+				_ = rt.Client.DeleteMessage(ctx, rt.ChatID(), rt.Message.MessageID)
+			}
+			_ = serviceutil.SendLog(ctx, rt, fmt.Sprintf("lock: type=%s action=%s fallback=delete", lock.LockType, lock.Action))
+			return nil
+		}
+		return enforceAction(ctx, rt, lock.Action, lock.ActionDurationSeconds, reason, true)
+	}
+}
+
+func lockMatchesMessage(lockType string, message *telegram.Message, allowlist []string) (bool, bool) {
+	if message == nil {
+		return false, false
+	}
 	switch lockType {
-	case "links":
-		text := strings.ToLower(message.Text + " " + message.Caption)
-		return strings.Contains(text, "http://") || strings.Contains(text, "https://") || strings.Contains(text, "t.me/")
-	case "forwards":
-		return message.ForwardOrigin != nil
-	case "media":
-		return len(message.Photo) > 0 || message.Video != nil || message.Document != nil || message.Animation != nil
-	case "sticker":
-		return message.Sticker != nil
+	case "all":
+		return true, false
+	case "album":
+		return message.MediaGroupID != "", false
+	case "anonchannel":
+		if message.SenderChat == nil {
+			return false, false
+		}
+		key := chatAllowKey(message.SenderChat)
+		return true, allowlisted(key, allowlist)
+	case "audio":
+		return message.Audio != nil, false
+	case "botlink":
+		links := extractBotLinks(message)
+		return matchAnyDisallowed(links, allowlist)
+	case "button":
+		buttons := extractButtonTargets(message)
+		return matchAnyDisallowed(buttons, allowlist)
+	case "cashtag":
+		return containsCashtag(message.Text) || containsCashtag(message.Caption), false
+	case "cjk":
+		return containsScript(messageText(message), isCJK), false
+	case "command":
+		command := extractLeadingCommand(message)
+		if command == "" {
+			return false, false
+		}
+		return true, allowlisted(command, allowlist)
+	case "contact":
+		return message.Contact != nil, false
+	case "cyrillic":
+		return containsScript(messageText(message), isCyrillic), false
+	case "document":
+		return message.Document != nil, false
+	case "email":
+		return containsEmail(message), false
+	case "emoji":
+		return containsEmoji(messageText(message)), false
+	case "emojicustom":
+		return containsEntityType(message, "custom_emoji"), false
+	case "emojigame":
+		return message.Dice != nil, false
+	case "emojionly":
+		return isEmojiOnly(messageText(message)), false
+	case "externalreply":
+		if message.ExternalReply == nil || message.ExternalReply.Chat == nil {
+			return false, false
+		}
+		key := chatAllowKey(message.ExternalReply.Chat)
+		return true, allowlisted(key, allowlist)
+	case "forward":
+		keys := extractForwardKeys(message)
+		return matchAnyDisallowed(keys, allowlist)
+	case "forwardbot":
+		keys := extractTypedForwardKeys(message, "bot")
+		return matchAnyDisallowed(keys, allowlist)
+	case "forwardchannel":
+		keys := extractTypedForwardKeys(message, "channel")
+		return matchAnyDisallowed(keys, allowlist)
+	case "forwardstory":
+		keys := extractTypedForwardKeys(message, "story")
+		return matchAnyDisallowed(keys, allowlist)
+	case "forwarduser":
+		keys := extractTypedForwardKeys(message, "user")
+		return matchAnyDisallowed(keys, allowlist)
+	case "game":
+		return message.Game != nil, false
 	case "gif":
-		return message.Animation != nil
+		return message.Animation != nil, false
+	case "inline":
+		if message.ViaBot == nil {
+			return false, false
+		}
+		keys := []string{strconv.FormatInt(message.ViaBot.ID, 10)}
+		if username := usernameAllowKey(message.ViaBot.Username); username != "" {
+			keys = append(keys, username)
+		}
+		return matchAnyDisallowed(keys, allowlist)
+	case "invitelink":
+		links := extractInviteLinks(message)
+		return matchAnyDisallowed(links, allowlist)
+	case "location":
+		return message.Location != nil, false
+	case "phone":
+		return containsPhone(message), false
+	case "photo":
+		return len(message.Photo) > 0, false
+	case "poll":
+		return message.Poll != nil, false
+	case "rtl":
+		return containsScript(messageText(message), isRTL), false
+	case "spoiler":
+		return containsEntityType(message, "spoiler"), false
+	case "sticker":
+		if message.Sticker == nil {
+			return false, false
+		}
+		keys := stickerAllowKeys(message.Sticker)
+		return matchAnyDisallowed(keys, allowlist)
+	case "stickeranimated":
+		if message.Sticker == nil {
+			return false, false
+		}
+		keys := stickerAllowKeys(message.Sticker)
+		return message.Sticker.IsAnimated, allAllowlisted(keys, allowlist)
+	case "stickerpremium":
+		if message.Sticker == nil {
+			return false, false
+		}
+		keys := stickerAllowKeys(message.Sticker)
+		return message.Sticker.IsPremium, allAllowlisted(keys, allowlist)
+	case "text":
+		return strings.TrimSpace(messageText(message)) != "", false
+	case "url":
+		urls := extractURLs(message)
+		return matchAnyDisallowed(urls, allowlist)
+	case "video":
+		return message.Video != nil, false
+	case "videonote":
+		return message.VideoNote != nil, false
+	case "voice":
+		return message.Voice != nil, false
+	case "zalgo":
+		return containsZalgo(messageText(message)), false
+	default:
+		return false, false
+	}
+}
+
+func matchAnyDisallowed(values []string, allowlist []string) (bool, bool) {
+	values = uniqueStrings(values)
+	if len(values) == 0 {
+		return false, false
+	}
+	return true, allAllowlisted(values, allowlist)
+}
+
+func allAllowlisted(values []string, allowlist []string) bool {
+	if len(values) == 0 {
+		return false
+	}
+	for _, value := range values {
+		if !allowlisted(value, allowlist) {
+			return false
+		}
+	}
+	return true
+}
+
+func allowlisted(value string, allowlist []string) bool {
+	value = normalizeAllowlistLookup(value)
+	if value == "" {
+		return false
+	}
+	for _, item := range allowlist {
+		item = normalizeAllowlistLookup(item)
+		if item == "" {
+			continue
+		}
+		if matchAllowlistedURL(value, item) {
+			return true
+		}
+		switch {
+		case value == item:
+			return true
+		case strings.HasPrefix(value, "stickerpack:") || strings.HasPrefix(value, "emojipack:"):
+			if value == item {
+				return true
+			}
+		case strings.HasPrefix(value, "@"):
+			if value == item {
+				return true
+			}
+		default:
+			if value == item {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func normalizeAllowlistLookup(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return ""
+	}
+	if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
+		if parsed, err := url.Parse(value); err == nil && parsed.Host != "" {
+			return strings.TrimSuffix(strings.TrimPrefix(parsed.Host+parsed.EscapedPath(), "www."), "/")
+		}
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(value, "www."), "/")
+}
+
+func matchAllowlistedURL(candidate string, item string) bool {
+	candidate = normalizeAllowlistLookup(candidate)
+	item = normalizeAllowlistLookup(item)
+	if candidate == "" || item == "" {
+		return false
+	}
+	if candidate == item || strings.HasPrefix(candidate, item+"/") {
+		return true
+	}
+	host := candidate
+	if idx := strings.Index(candidate, "/"); idx >= 0 {
+		host = candidate[:idx]
+	}
+	if host == item || strings.HasSuffix(host, "."+item) {
+		return true
+	}
+	return false
+}
+
+func extractLeadingCommand(message *telegram.Message) string {
+	text := strings.TrimSpace(message.Text)
+	if !strings.HasPrefix(text, "/") {
+		return ""
+	}
+	fields := strings.Fields(text)
+	if len(fields) == 0 {
+		return ""
+	}
+	command := fields[0]
+	if idx := strings.Index(command, "@"); idx >= 0 {
+		command = command[:idx]
+	}
+	return strings.ToLower(command)
+}
+
+func extractButtonTargets(message *telegram.Message) []string {
+	if message == nil || message.ReplyMarkup == nil {
+		return nil
+	}
+	var items []string
+	for _, row := range message.ReplyMarkup.InlineKeyboard {
+		for _, button := range row {
+			if button.URL == "" {
+				items = append(items, "button")
+				continue
+			}
+			items = append(items, button.URL)
+		}
+	}
+	return items
+}
+
+func extractURLs(message *telegram.Message) []string {
+	var urls []string
+	urls = append(urls, entityURLs(message.Text, message.Entities)...)
+	urls = append(urls, entityURLs(message.Caption, message.CaptionEntities)...)
+	urls = append(urls, regexURLs(messageText(message))...)
+	return uniqueStrings(urls)
+}
+
+func entityURLs(text string, entities []telegram.Entity) []string {
+	var out []string
+	for _, entity := range entities {
+		switch entity.Type {
+		case "url":
+			if value := entitySlice(text, entity); value != "" {
+				out = append(out, value)
+			}
+		case "text_link":
+			if entity.URL != "" {
+				out = append(out, entity.URL)
+			}
+		}
+	}
+	return out
+}
+
+func regexURLs(text string) []string {
+	re := regexp.MustCompile(`(?i)\b(?:https?://|www\.)[^\s<>()]+`)
+	return re.FindAllString(text, -1)
+}
+
+func extractInviteLinks(message *telegram.Message) []string {
+	text := messageText(message)
+	re := regexp.MustCompile(`(?i)(?:https?://)?t\.me/(?:\+|joinchat/)?[a-z0-9_+/]+|@[a-z0-9_]{3,}`)
+	matches := re.FindAllString(text, -1)
+	var out []string
+	for _, match := range matches {
+		out = append(out, match)
+		lower := strings.ToLower(strings.TrimSpace(match))
+		if strings.HasPrefix(lower, "@") {
+			out = append(out, lower)
+			continue
+		}
+		trimmed := strings.TrimPrefix(strings.TrimPrefix(lower, "https://"), "http://")
+		trimmed = strings.TrimPrefix(trimmed, "t.me/")
+		trimmed = strings.TrimPrefix(trimmed, "joinchat/")
+		trimmed = strings.TrimPrefix(trimmed, "+")
+		if trimmed != "" && !strings.Contains(trimmed, "/") {
+			out = append(out, "@"+trimmed)
+		}
+	}
+	return uniqueStrings(out)
+}
+
+func extractBotLinks(message *telegram.Message) []string {
+	text := messageText(message)
+	re := regexp.MustCompile(`(?i)(?:https?://)?t\.me/[a-z0-9_]*bot\b|@[a-z0-9_]*bot\b`)
+	return uniqueStrings(re.FindAllString(text, -1))
+}
+
+func extractForwardKeys(message *telegram.Message) []string {
+	if message == nil {
+		return nil
+	}
+	var keys []string
+	if message.ForwardFromChat != nil {
+		keys = append(keys, chatAllowKey(message.ForwardFromChat))
+	}
+	if originMap, ok := message.ForwardOrigin.(map[string]any); ok {
+		keys = append(keys, forwardOriginKeys(originMap, "")...)
+	}
+	return uniqueStrings(keys)
+}
+
+func extractTypedForwardKeys(message *telegram.Message, kind string) []string {
+	if message == nil {
+		return nil
+	}
+	if originMap, ok := message.ForwardOrigin.(map[string]any); ok {
+		return uniqueStrings(forwardOriginKeys(originMap, kind))
+	}
+	if kind == "channel" && message.ForwardFromChat != nil {
+		return uniqueStrings([]string{chatAllowKey(message.ForwardFromChat)})
+	}
+	return nil
+}
+
+func forwardOriginKeys(originMap map[string]any, kind string) []string {
+	originType, _ := originMap["type"].(string)
+	if kind != "" && originType != kind {
+		return nil
+	}
+	var keys []string
+	if originType != "" {
+		keys = append(keys, originType)
+	}
+	if senderUser, ok := originMap["sender_user"].(map[string]any); ok {
+		if id, ok := senderUser["id"].(float64); ok {
+			keys = append(keys, strconv.FormatInt(int64(id), 10))
+		}
+		if username, ok := senderUser["username"].(string); ok {
+			keys = append(keys, usernameAllowKey(username))
+		}
+	}
+	if senderChat, ok := originMap["sender_chat"].(map[string]any); ok {
+		if id, ok := senderChat["id"].(float64); ok {
+			keys = append(keys, strconv.FormatInt(int64(id), 10))
+		}
+		if username, ok := senderChat["username"].(string); ok {
+			keys = append(keys, usernameAllowKey(username))
+		}
+	}
+	if chatMap, ok := originMap["chat"].(map[string]any); ok {
+		if id, ok := chatMap["id"].(float64); ok {
+			keys = append(keys, strconv.FormatInt(int64(id), 10))
+		}
+		if username, ok := chatMap["username"].(string); ok {
+			keys = append(keys, usernameAllowKey(username))
+		}
+	}
+	return uniqueStrings(keys)
+}
+
+func chatAllowKey(chat *telegram.Chat) string {
+	if chat == nil {
+		return ""
+	}
+	if username := usernameAllowKey(chat.Username); username != "" {
+		return username
+	}
+	return strconv.FormatInt(chat.ID, 10)
+}
+
+func usernameAllowKey(username string) string {
+	username = strings.TrimSpace(strings.TrimPrefix(strings.ToLower(username), "@"))
+	if username == "" {
+		return ""
+	}
+	return "@" + username
+}
+
+func stickerAllowKeys(sticker *telegram.Sticker) []string {
+	if sticker == nil || strings.TrimSpace(sticker.SetName) == "" {
+		return nil
+	}
+	name := strings.ToLower(strings.TrimSpace(sticker.SetName))
+	return []string{
+		"stickerpack:" + name,
+		"t.me/addstickers/" + name,
+	}
+}
+
+func containsEmail(message *telegram.Message) bool {
+	if containsEntityType(message, "email") {
+		return true
+	}
+	re := regexp.MustCompile(`(?i)\b[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}\b`)
+	return re.MatchString(messageText(message))
+}
+
+func containsPhone(message *telegram.Message) bool {
+	if containsEntityType(message, "phone_number") {
+		return true
+	}
+	re := regexp.MustCompile(`\+?[0-9][0-9 ()-]{6,}[0-9]`)
+	return re.MatchString(messageText(message))
+}
+
+func containsEmoji(text string) bool {
+	for _, r := range text {
+		if isEmojiRune(r) {
+			return true
+		}
+	}
+	return false
+}
+
+func isEmojiRune(r rune) bool {
+	switch {
+	case r >= 0x1F300 && r <= 0x1FAFF:
+		return true
+	case r >= 0x2600 && r <= 0x27BF:
+		return true
+	case r >= 0xFE00 && r <= 0xFE0F:
+		return true
 	default:
 		return false
 	}
 }
 
+func isEmojiOnly(text string) bool {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return false
+	}
+	hasEmoji := false
+	for _, r := range text {
+		switch {
+		case unicode.IsSpace(r):
+			continue
+		case isEmojiRune(r):
+			hasEmoji = true
+		default:
+			return false
+		}
+	}
+	return hasEmoji
+}
+
+func containsCashtag(text string) bool {
+	re := regexp.MustCompile(`\B\$[A-Z]{2,}\b`)
+	return re.MatchString(text)
+}
+
+func containsScript(text string, matcher func(rune) bool) bool {
+	for _, r := range text {
+		if matcher(r) {
+			return true
+		}
+	}
+	return false
+}
+
+func isCJK(r rune) bool {
+	return unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul)
+}
+
+func isCyrillic(r rune) bool {
+	return unicode.In(r, unicode.Cyrillic)
+}
+
+func isRTL(r rune) bool {
+	return unicode.In(r, unicode.Arabic, unicode.Hebrew)
+}
+
+func containsEntityType(message *telegram.Message, entityType string) bool {
+	for _, entity := range message.Entities {
+		if entity.Type == entityType {
+			return true
+		}
+	}
+	for _, entity := range message.CaptionEntities {
+		if entity.Type == entityType {
+			return true
+		}
+	}
+	return false
+}
+
+func containsZalgo(text string) bool {
+	count := 0
+	for _, r := range text {
+		if unicode.Is(unicode.Mn, r) {
+			count++
+		}
+	}
+	return count >= 4
+}
+
+func entitySlice(text string, entity telegram.Entity) string {
+	runes := []rune(text)
+	if entity.Offset < 0 || entity.Length <= 0 || entity.Offset+entity.Length > len(runes) {
+		return ""
+	}
+	return string(runes[entity.Offset : entity.Offset+entity.Length])
+}
+
+func messageText(message *telegram.Message) string {
+	if message == nil {
+		return ""
+	}
+	return strings.TrimSpace(strings.Join([]string{message.Text, message.Caption}, " "))
+}
+
 func supportedLockTypes() []string {
-	return []string{"links", "forwards", "media", "sticker", "gif"}
+	return []string{
+		"album", "anonchannel", "audio", "botlink", "button", "cashtag", "cjk", "command",
+		"contact", "cyrillic", "document", "email", "emoji", "emojicustom", "emojigame",
+		"emojionly", "externalreply", "forward", "forwardbot", "forwardchannel", "forwardstory",
+		"forwarduser", "game", "gif", "inline", "invitelink", "location", "phone", "photo",
+		"poll", "rtl", "spoiler", "sticker", "stickeranimated", "stickerpremium", "text",
+		"url", "video", "videonote", "voice", "zalgo",
+	}
 }
 
 func canonicalLockType(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "link", "links", "url", "urls":
-		return "links"
+	case "all":
+		return "all"
+	case "album", "albums":
+		return "album"
+	case "anonchannel", "anonymous", "anonymouschannel":
+		return "anonchannel"
+	case "audio":
+		return "audio"
+	case "botlink", "botlinks":
+		return "botlink"
+	case "button", "buttons":
+		return "button"
+	case "cashtag", "cashtags":
+		return "cashtag"
+	case "cjk":
+		return "cjk"
+	case "command", "commands":
+		return "command"
+	case "contact", "contacts":
+		return "contact"
+	case "cyrillic":
+		return "cyrillic"
+	case "document", "documents", "file", "files":
+		return "document"
+	case "email", "emails":
+		return "email"
+	case "emoji":
+		return "emoji"
+	case "emojicustom", "customemoji":
+		return "emojicustom"
+	case "emojigame", "dice", "dices":
+		return "emojigame"
+	case "emojionly":
+		return "emojionly"
+	case "externalreply":
+		return "externalreply"
 	case "forward", "forwards":
-		return "forwards"
-	case "media":
-		return "media"
-	case "sticker", "stickers":
-		return "sticker"
+		return "forward"
+	case "forwardbot":
+		return "forwardbot"
+	case "forwardchannel":
+		return "forwardchannel"
+	case "forwardstory":
+		return "forwardstory"
+	case "forwarduser":
+		return "forwarduser"
+	case "game":
+		return "game"
 	case "gif", "gifs", "animation", "animations":
 		return "gif"
+	case "inline":
+		return "inline"
+	case "invitelink", "invite", "invites":
+		return "invitelink"
+	case "location":
+		return "location"
+	case "phone":
+		return "phone"
+	case "photo", "photos", "picture", "pictures":
+		return "photo"
+	case "poll", "polls":
+		return "poll"
+	case "rtl":
+		return "rtl"
+	case "spoiler", "spoilers":
+		return "spoiler"
+	case "sticker", "stickers":
+		return "sticker"
+	case "stickeranimated":
+		return "stickeranimated"
+	case "stickerpremium":
+		return "stickerpremium"
+	case "text":
+		return "text"
+	case "url", "urls", "link", "links":
+		return "url"
+	case "video", "videos":
+		return "video"
+	case "videonote", "videonotes":
+		return "videonote"
+	case "voice":
+		return "voice"
+	case "zalgo":
+		return "zalgo"
 	default:
 		return ""
 	}

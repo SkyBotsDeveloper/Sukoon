@@ -33,6 +33,7 @@ type ChatSettings struct {
 	ReportsEnabled        bool
 	LogChannelID          *int64
 	CleanCommands         bool
+	LockWarns             bool
 	BlocklistAction       string
 	BlocklistActionSecs   int
 	BlocklistDelete       bool
@@ -96,10 +97,19 @@ type CaptchaSettings struct {
 }
 
 type LockRule struct {
-	BotID    string
-	ChatID   int64
-	LockType string
-	Action   string
+	BotID                 string
+	ChatID                int64
+	LockType              string
+	Action                string
+	ActionDurationSeconds int
+	Reason                string
+}
+
+type LockAllowlistEntry struct {
+	BotID     string
+	ChatID    int64
+	Item      string
+	CreatedAt time.Time
 }
 
 type BlocklistRule struct {
@@ -298,5 +308,6 @@ type RuntimeBundle struct {
 	AntiBio          AntiBioSettings
 	DisabledCommands map[string]struct{}
 	Locks            map[string]LockRule
+	LockAllowlist    []string
 	Blocklist        []BlocklistRule
 }

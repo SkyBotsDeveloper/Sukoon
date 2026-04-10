@@ -831,6 +831,101 @@ func TestAntiRaidHelpPageUsesBackOnlyMarkup(t *testing.T) {
 	assertNoButtonText(t, markup, "Add to Group")
 }
 
+func TestLocksHelpPageUsesExamplesDescriptionsAndBack(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: 66, Type: "private"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 70,
+			From:      &telegram.User{ID: 66, FirstName: "User"},
+			Chat:      chat,
+			Text:      "/help",
+		},
+	}); err != nil {
+		t.Fatalf("help failed: %v", err)
+	}
+
+	root := h.Client.Messages[len(h.Client.Messages)-1]
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-help-locks",
+			From: telegram.User{ID: 66, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: root.MessageID,
+				Chat:      chat,
+			},
+			Data: "ux:help:locks",
+		},
+	}); err != nil {
+		t.Fatalf("locks help callback failed: %v", err)
+	}
+
+	page := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	if !strings.Contains(page.Text, "/lockwarns <yes/no/on/off>") || !strings.Contains(page.Text, "/allowlist <url/id/command/@username(s)>") || !strings.Contains(page.Text, "/rmallowlistall") {
+		t.Fatalf("expected locks help copy, got %q", page.Text)
+	}
+	markup := requireEditedMarkup(t, page)
+	assertButton(t, markup, 0, 0, "Example Commands", "ux:help:locks_examples", "")
+	assertButton(t, markup, 0, 1, "Lock descriptions", "ux:help:locks_descriptions", "")
+	assertButton(t, markup, 1, 0, "Back", "ux:help:root", "")
+	assertNoButtonText(t, markup, "Website")
+	assertNoButtonText(t, markup, "Add to Group")
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 3,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-help-locks-examples",
+			From: telegram.User{ID: 66, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: root.MessageID,
+				Chat:      chat,
+			},
+			Data: "ux:help:locks_examples",
+		},
+	}); err != nil {
+		t.Fatalf("locks examples callback failed: %v", err)
+	}
+
+	examples := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	if !strings.Contains(examples.Text, "/lock invitelink ### no promoting other chats {ban}") || !strings.Contains(examples.Text, "/allowlist t.me/addstickers/Pinup_Girl") {
+		t.Fatalf("expected lock examples copy, got %q", examples.Text)
+	}
+	if !examples.Options.DisableWebPagePreview {
+		t.Fatalf("expected lock examples page to disable previews, got %+v", examples.Options)
+	}
+	exampleMarkup := requireEditedMarkup(t, examples)
+	assertButton(t, exampleMarkup, 0, 0, "Back", "ux:help:locks", "")
+	assertNoButtonText(t, exampleMarkup, "Website")
+	assertNoButtonText(t, exampleMarkup, "Add to Group")
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 4,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-help-locks-descriptions",
+			From: telegram.User{ID: 66, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: root.MessageID,
+				Chat:      chat,
+			},
+			Data: "ux:help:locks_descriptions",
+		},
+	}); err != nil {
+		t.Fatalf("locks descriptions callback failed: %v", err)
+	}
+
+	descriptions := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	if !strings.Contains(descriptions.Text, "- invitelink: Messages containing Telegram group or channel links.") || !strings.Contains(descriptions.Text, "- sticker / stickeranimated / stickerpremium:") {
+		t.Fatalf("expected lock descriptions copy, got %q", descriptions.Text)
+	}
+	descriptionMarkup := requireEditedMarkup(t, descriptions)
+	assertButton(t, descriptionMarkup, 0, 0, "Back", "ux:help:locks", "")
+	assertNoButtonText(t, descriptionMarkup, "Website")
+	assertNoButtonText(t, descriptionMarkup, "Add to Group")
+}
+
 func TestGroupPMGuidanceUsesButtonsForHelpAndPrivacy(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	group := telegram.Chat{ID: -100990, Type: "supergroup", Title: "Help"}

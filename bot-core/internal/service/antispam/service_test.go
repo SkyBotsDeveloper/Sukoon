@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 
@@ -275,5 +276,123 @@ func TestAutoAntiRaidTriggersAfterJoinBurst(t *testing.T) {
 	}
 	if !strings.Contains(h.Client.Messages[len(h.Client.Messages)-1].Text, "AntiRaid auto-enabled") {
 		t.Fatalf("expected auto antiraid notification, got %q", h.Client.Messages[len(h.Client.Messages)-1].Text)
+	}
+}
+
+func TestLockCommandsSupportModesAllowlistAndListing(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100305, Type: "supergroup", Title: "Locks"}
+
+	for idx, text := range []string{
+		"/lockwarns on",
+		"/lock sticker photo gif video",
+		"/lock invitelink ### no promoting other chats {ban}",
+		"/allowlist @channelusername t.me/addstickers/FriendlyPack /start",
+		"/locks list",
+		"/locktypes",
+	} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(500 + idx),
+			Message: &telegram.Message{
+				MessageID: int64(5000 + idx),
+				From:      &telegram.User{ID: 1, FirstName: "Owner"},
+				Chat:      chat,
+				Text:      text,
+			},
+		}); err != nil {
+			t.Fatalf("command %q failed: %v", text, err)
+		}
+	}
+
+	bundle, err := h.Store.LoadRuntimeBundle(context.Background(), h.Bot.ID, chat.ID)
+	if err != nil {
+		t.Fatalf("load runtime bundle failed: %v", err)
+	}
+	if !bundle.Settings.LockWarns {
+		t.Fatalf("expected lockwarns to persist")
+	}
+	for _, lockType := range []string{"sticker", "photo", "gif", "video"} {
+		if _, ok := bundle.Locks[lockType]; !ok {
+			t.Fatalf("expected %s lock to be active, got %+v", lockType, bundle.Locks)
+		}
+	}
+	inviteLock, ok := bundle.Locks["invitelink"]
+	if !ok {
+		t.Fatalf("expected invitelink lock to exist, got %+v", bundle.Locks)
+	}
+	if inviteLock.Action != "ban" || inviteLock.Reason != "no promoting other chats" {
+		t.Fatalf("expected custom invitelink lock action/reason, got %+v", inviteLock)
+	}
+	if !slices.Contains(bundle.LockAllowlist, "@channelusername") || !slices.Contains(bundle.LockAllowlist, "stickerpack:friendlypack") || !slices.Contains(bundle.LockAllowlist, "/start") {
+		t.Fatalf("expected allowlist entries to persist, got %+v", bundle.LockAllowlist)
+	}
+
+	locksStatus := h.Client.Messages[4].Text
+	if !strings.Contains(locksStatus, "- Lock warnings: on") || !strings.Contains(locksStatus, "- invitelink: on (ban) - no promoting other chats") {
+		t.Fatalf("unexpected /locks list output: %q", locksStatus)
+	}
+	lockTypes := h.Client.Messages[5].Text
+	if !strings.Contains(lockTypes, "stickerpremium") || !strings.Contains(lockTypes, "url") || !strings.Contains(lockTypes, "all") {
+		t.Fatalf("unexpected /locktypes output: %q", lockTypes)
+	}
+}
+
+func TestLockWarningsAndAllowlistsAffectEnforcement(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100306, Type: "supergroup", Title: "Lock Match"}
+
+	for idx, text := range []string{
+		"/lockwarns on",
+		"/lock url",
+		"/allowlist example.com",
+	} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(600 + idx),
+			Message: &telegram.Message{
+				MessageID: int64(6000 + idx),
+				From:      &telegram.User{ID: 1, FirstName: "Owner"},
+				Chat:      chat,
+				Text:      text,
+			},
+		}); err != nil {
+			t.Fatalf("setup command %q failed: %v", text, err)
+		}
+	}
+
+	deletedBefore := len(h.Client.DeletedMessages)
+	messagesBefore := len(h.Client.Messages)
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 700,
+		Message: &telegram.Message{
+			MessageID: 7000,
+			From:      &telegram.User{ID: 20, FirstName: "Allowed"},
+			Chat:      chat,
+			Text:      "read https://example.com/docs first",
+		},
+	}); err != nil {
+		t.Fatalf("allowed url message failed: %v", err)
+	}
+	if len(h.Client.DeletedMessages) != deletedBefore || len(h.Client.Messages) != messagesBefore {
+		t.Fatalf("expected allowlisted url to bypass locks, deleted=%+v messages=%+v", h.Client.DeletedMessages, h.Client.Messages)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 701,
+		Message: &telegram.Message{
+			MessageID: 7001,
+			From:      &telegram.User{ID: 20, FirstName: "Blocked"},
+			Chat:      chat,
+			Text:      "read https://bad.example right now",
+		},
+	}); err != nil {
+		t.Fatalf("blocked url message failed: %v", err)
+	}
+	if len(h.Client.DeletedMessages) != deletedBefore+1 || h.Client.DeletedMessages[len(h.Client.DeletedMessages)-1].MessageID != 7001 {
+		t.Fatalf("expected bad url to be deleted, got %+v", h.Client.DeletedMessages)
+	}
+	lastMessage := h.Client.Messages[len(h.Client.Messages)-1].Text
+	if !strings.Contains(lastMessage, "1 warning") || !strings.Contains(lastMessage, "Locked content: url") {
+		t.Fatalf("expected lock warning response, got %q", lastMessage)
 	}
 }

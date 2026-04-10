@@ -535,42 +535,98 @@ var helpPages = map[string]helpPage{
 	helpLocks: {
 		Title: "Locks",
 		Lines: []string{
-			"Locks delete matching content types automatically for non-admin users.",
+			"Do stickers annoy you? or want to avoid people sharing links? or pictures? You're in the right place!",
 			"",
-			"/lock <type>",
-			"/unlock <type>",
-			"/locks",
-			"/locktypes",
+			"The locks module allows you to lock away some common items in the Telegram world; the bot will automatically delete them!",
 			"",
-			"Open the descriptions and examples pages below for the live lock set.",
-			"Warn-mode locks and allowlist commands are still deferred.",
+			"Admin commands:",
+			"- /lock <item(s)>: Lock one or more items. Now, only admins can use this type!",
+			"- /unlock <item(s)>: Unlock one or more items. Everyone can use this type again!",
+			"- /locks: List currently locked items.",
+			"- /lockwarns <yes/no/on/off>: Enable or disable whether a user should be warned when using a locked item.",
+			"- /locktypes: Show the list of all lockable items.",
+			"- /allowlist <url/id/command/@username(s)>: Allowlist a URL, group ID, channel @, bot @, command, or stickerpack link to stop it being deleted by relevant locks. Separate entries with a space. If no arguments are given, returns the current allowlist.",
+			"- /rmallowlist <url/id/@channelname(s)>: Remove one or more allowlist items.",
+			"- /rmallowlistall: Remove all allowlisted items.",
 		},
 	},
 	helpLockDescriptions: {
 		Title: "Lock Descriptions",
 		Lines: []string{
-			"Supported lock types in the current build:",
+			"There are lots of different locks, and some of them might not be super clear; this section aims to explain each kind of supported lock.",
 			"",
-			"links: deletes messages containing URLs or t.me links",
-			"forwards: deletes forwarded messages",
-			"media: deletes photos, videos, documents, and animations",
-			"sticker: deletes stickers",
-			"gif: deletes animation/GIF posts",
+			"Types:",
+			"- all: Every supported lock type at once.",
+			"- album: Media albums such as grouped photos.",
+			"- anonchannel: Messages sent through anonymous channels.",
+			"- audio: Audio media messages.",
+			"- botlink: Messages containing links or usernames to Telegram bots.",
+			"- button: Messages which contain inline buttons.",
+			"- cashtag: Messages containing cash tags such as '$CASH'.",
+			"- cjk: Messages containing Chinese, Japanese, or Korean characters.",
+			"- command: Messages that start with a Telegram command.",
+			"- contact: Contact media messages.",
+			"- cyrillic: Messages containing Cyrillic characters.",
+			"- document: Document media messages.",
+			"- email: Messages which contain emails.",
+			"- emoji: Messages containing emoji.",
+			"- emojicustom: Messages containing custom Telegram emoji.",
+			"- emojigame: Telegram mini games like dice, football, or darts.",
+			"- emojionly: Messages which contain only emoji.",
+			"- externalreply: Replies to messages from other chats.",
+			"- forward / forwarduser / forwardbot / forwardchannel / forwardstory: Forwarded messages and their typed variants.",
+			"- game: Bot API game messages.",
+			"- gif: GIF media messages.",
+			"- inline: Messages sent through inline bots, like @gif or @pic.",
+			"- invitelink: Messages containing Telegram group or channel links.",
+			"- location: Location messages.",
+			"- phone: Messages containing phone numbers.",
+			"- photo: Messages containing a photo.",
+			"- poll: Poll messages.",
+			"- rtl: Messages containing right-to-left characters.",
+			"- spoiler: Messages containing Telegram spoiler entities.",
+			"- sticker / stickeranimated / stickerpremium: Sticker messages and their animated/premium variants.",
+			"- text: Messages containing text or captions.",
+			"- url: Messages containing website links.",
+			"- video: Video media messages.",
+			"- videonote: Telegram video notes.",
+			"- voice: Voice messages.",
+			"- zalgo: Messages containing excessive formatting characters.",
 			"",
-			"Aliases like url, urls, forward, stickers, gifs, and animations map to the same canonical lock types.",
+			"Comment, checklist, and bot-add locks are still deferred until the runtime has clean Telegram coverage for them.",
 		},
 	},
 	helpLockExamples: {
-		Title: "Lock Examples",
+		Title: "Example Commands",
 		Lines: []string{
-			"Example commands for the supported lock set:",
+			"Locks are a powerful tool, with lots of different options. So here are a few examples to get you started and familiar with how to use them.",
 			"",
-			"/lock links",
-			"/lock forwards",
-			"/lock media",
-			"/lock gifs",
-			"/unlock sticker",
-			"/locks",
+			"Examples:",
+			"- Stop all users from sending stickers with:",
+			"-> /lock sticker",
+			"",
+			"- You can lock/unlock multiple items by chaining them:",
+			"-> /lock sticker photo gif video",
+			"",
+			"- Want a harsher punishment for certain actions? Set a custom lock action for it! Separate the types from your reason with ###:",
+			"-> /lock invitelink ### no promoting other chats {ban}",
+			"",
+			"- Reset the custom lock action and reason for a single item:",
+			"-> /lock emoji ###",
+			"",
+			"- Reset all custom lock actions and reasons; remember to unlock again after:",
+			"-> /lock all ###",
+			"",
+			"- List all locks at once:",
+			"-> /locks list",
+			"",
+			"- To allow forwards from a specific channel, use its username or ID:",
+			"-> /allowlist @channelusername",
+			"",
+			"- If you've locked stickers but want to allow a specific sticker pack, allowlist the pack share link:",
+			"-> /allowlist t.me/addstickers/Pinup_Girl",
+			"",
+			"- Emoji-pack allowlisting is still deferred in Sukoon's current runtime.",
 		},
 	},
 	helpLogChannels: {
@@ -834,7 +890,7 @@ func helpSectionOptions(section string) (string, bool) {
 		return "HTML", true
 	}
 	switch section {
-	case helpBlocklistExamples:
+	case helpBlocklistExamples, helpLockExamples:
 		return "", true
 	}
 	return "", false
@@ -1070,15 +1126,11 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 	case helpLocks:
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
-				{Text: "Lock Descriptions", CallbackData: helpCallback(helpLockDescriptions)},
 				{Text: "Example Commands", CallbackData: helpCallback(helpLockExamples)},
+				{Text: "Lock descriptions", CallbackData: helpCallback(helpLockDescriptions)},
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},
-			},
-			[]telegram.InlineKeyboardButton{
-				{Text: "Website", URL: serviceutil.WebsiteURL},
-				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
 			},
 		)
 	case helpBlocklistExamples:
@@ -1107,7 +1159,11 @@ func helpSectionMarkup(page string, username string) *telegram.InlineKeyboardMar
 	case helpFormattingFillings, helpFormattingRandom, helpFormattingButtons:
 		return helpSubsectionMarkup(username, helpFormatting)
 	case helpLockDescriptions, helpLockExamples:
-		return helpSubsectionMarkup(username, helpLocks)
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: helpCallback(helpLocks)},
+			},
+		)
 	default:
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
@@ -1260,7 +1316,7 @@ func normalizeHelpSection(value string) string {
 		return helpImportExport
 	case "languages", "language", "setlang", "lang":
 		return helpLanguages
-	case "locks", "lock", "unlock", "locktypes":
+	case "locks", "lock", "unlock", "locktypes", "lockwarns", "allowlist", "rmallowlist", "rmallowlistall":
 		return helpLocks
 	case "locks_descriptions", "lockdescriptions", "lock_descriptions":
 		return helpLockDescriptions
