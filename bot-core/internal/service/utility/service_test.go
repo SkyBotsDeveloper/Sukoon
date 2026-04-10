@@ -2,8 +2,10 @@ package utility_test
 
 import (
 	"context"
+	"html"
 	"io"
 	"log/slog"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -11,6 +13,8 @@ import (
 	"sukoon/bot-core/internal/telegram"
 	"sukoon/bot-core/internal/testsupport"
 )
+
+var htmlTagPattern = regexp.MustCompile(`<[^>]+>`)
 
 func TestLanguageSelectionUpdatesChatLanguage(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -106,10 +110,11 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	}
 
 	startMessage := h.Client.Messages[len(h.Client.Messages)-1]
-	if !strings.Contains(startMessage.Text, "Hey there! My name is Sukoon") {
+	startRendered := renderedText(startMessage.Text)
+	if !strings.Contains(startRendered, "Hey there! My name is Sukoon") {
 		t.Fatalf("expected /start response to introduce Sukoon, got %q", startMessage.Text)
 	}
-	if !strings.Contains(startMessage.Text, "Use /help") || !strings.Contains(startMessage.Text, "/privacy") {
+	if !strings.Contains(startRendered, "Use /help") || !strings.Contains(startRendered, "/privacy") {
 		t.Fatalf("expected /start response to guide help and privacy, got %q", startMessage.Text)
 	}
 	if !strings.Contains(startMessage.Text, "https://t.me/VivaanUpdates") {
@@ -150,10 +155,11 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 		t.Fatalf("expected /help to send one additional message, got %+v", h.Client.Messages)
 	}
 	helpMessage := h.Client.Messages[len(h.Client.Messages)-1]
-	if !strings.Contains(helpMessage.Text, "Sukoon Help") {
+	helpRendered := renderedText(helpMessage.Text)
+	if !strings.Contains(helpRendered, "Sukoon Help") {
 		t.Fatalf("expected help landing page, got %q", helpMessage.Text)
 	}
-	if !strings.Contains(helpMessage.Text, "/donate: Gives you info on how to support me and my creator.") {
+	if !strings.Contains(helpRendered, "/donate: Gives you info on how to support me and my creator.") {
 		t.Fatalf("expected updated helpful commands copy, got %q", helpMessage.Text)
 	}
 	if !strings.Contains(helpMessage.Text, "https://t.me/VivaanUpdates") || !strings.Contains(helpMessage.Text, serviceutil.WebsiteURL) {
@@ -222,7 +228,8 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	}
 
 	sectionMessage := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(sectionMessage.Text, "/blocklistmode <blocklist mode>") || !strings.Contains(sectionMessage.Text, "/blocklistdelete <yes/no/on/off>") || !strings.Contains(sectionMessage.Text, "/setblocklistreason <reason>") {
+	sectionRendered := renderedText(sectionMessage.Text)
+	if !strings.Contains(sectionRendered, "/blocklistmode <blocklist mode>") || !strings.Contains(sectionRendered, "/blocklistdelete <yes/no/on/off>") || !strings.Contains(sectionRendered, "/setblocklistreason <reason>") {
 		t.Fatalf("expected blocklist help page, got %q", sectionMessage.Text)
 	}
 	sectionMarkup := requireEditedMarkup(t, sectionMessage)
@@ -249,7 +256,8 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	}
 
 	examplesMessage := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(examplesMessage.Text, "/blocklistmode warn") || !strings.Contains(examplesMessage.Text, "\"bit.ly/???\"") || !strings.Contains(examplesMessage.Text, "stickerpack:<>") {
+	examplesRendered := renderedText(examplesMessage.Text)
+	if !strings.Contains(examplesRendered, "/blocklistmode warn") || !strings.Contains(examplesRendered, "\"bit.ly/???\"") || !strings.Contains(examplesRendered, "stickerpack:<>") {
 		t.Fatalf("expected blocklist examples help page, got %q", examplesMessage.Text)
 	}
 	examplesMarkup := requireEditedMarkup(t, examplesMessage)
@@ -278,7 +286,8 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	}
 
 	backMessage := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(backMessage.Text, "Blocklists") || !strings.Contains(backMessage.Text, "/blocklistmode <blocklist mode>") {
+	backRendered := renderedText(backMessage.Text)
+	if !strings.Contains(backRendered, "Blocklists") || !strings.Contains(backRendered, "/blocklistmode <blocklist mode>") {
 		t.Fatalf("expected blocklists page after back, got %q", backMessage.Text)
 	}
 
@@ -298,7 +307,8 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	}
 
 	homeMessage := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(homeMessage.Text, "Hey there! My name is Sukoon") {
+	homeRendered := renderedText(homeMessage.Text)
+	if !strings.Contains(homeRendered, "Hey there! My name is Sukoon") {
 		t.Fatalf("expected home callback to restore the start page, got %q", homeMessage.Text)
 	}
 	if homeMessage.Options.ParseMode != "HTML" {
@@ -435,13 +445,14 @@ func TestStartCloneGuideUsesInPlaceCallbackUX(t *testing.T) {
 	if cloneGuide.MessageID != startMessage.MessageID {
 		t.Fatalf("expected clone guide to edit the start message, got %+v", cloneGuide)
 	}
-	if !strings.Contains(cloneGuide.Text, "Get your own Sukoon") || !strings.Contains(cloneGuide.Text, "/clone <bot_token>") {
+	cloneRendered := renderedText(cloneGuide.Text)
+	if !strings.Contains(cloneRendered, "Get your own Sukoon") || !strings.Contains(cloneRendered, "/clone <bot_token>") {
 		t.Fatalf("expected clone guide instructions, got %q", cloneGuide.Text)
 	}
-	if !strings.Contains(cloneGuide.Text, "@BotFather") || strings.Contains(cloneGuide.Text, "PUBLIC_WEBHOOK_BASE_URL") {
+	if !strings.Contains(cloneRendered, "@BotFather") || strings.Contains(cloneRendered, "PUBLIC_WEBHOOK_BASE_URL") {
 		t.Fatalf("expected BotFather mention without server-internal webhook note, got %q", cloneGuide.Text)
 	}
-	if strings.Contains(cloneGuide.Text, "/clone sync <clone>") || strings.Contains(cloneGuide.Text, "/clones") {
+	if strings.Contains(cloneRendered, "/clone sync <clone>") || strings.Contains(cloneRendered, "/clones") {
 		t.Fatalf("expected clone guide to avoid operator-heavy commands, got %q", cloneGuide.Text)
 	}
 	cloneMarkup := requireEditedMarkup(t, cloneGuide)
@@ -468,7 +479,7 @@ func TestStartCloneGuideUsesInPlaceCallbackUX(t *testing.T) {
 	}
 
 	home := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(home.Text, "Hey there! My name is Sukoon") {
+	if !strings.Contains(renderedText(home.Text), "Hey there! My name is Sukoon") {
 		t.Fatalf("expected back to restore the start landing page, got %q", home.Text)
 	}
 	if len(h.Client.CallbackAnswers) != 2 {
@@ -536,45 +547,45 @@ func TestHelpNavigationSupportsNestedHelpBatchPages(t *testing.T) {
 		if last.MessageID != root.MessageID {
 			t.Fatalf("expected in-place edit for %q, got %+v", step.data, last)
 		}
-		if !strings.Contains(last.Text, step.want) {
+		if !strings.Contains(renderedText(last.Text), step.want) {
 			t.Fatalf("expected page %q to contain %q, got %q", step.data, step.want, last.Text)
 		}
 	}
 
-	if !strings.Contains(h.Client.EditedMessages[1].Text, "/renamefed") || !strings.Contains(h.Client.EditedMessages[1].Text, "/fedtransfer") {
+	if !strings.Contains(renderedText(h.Client.EditedMessages[1].Text), "/renamefed") || !strings.Contains(renderedText(h.Client.EditedMessages[1].Text), "/fedtransfer") {
 		t.Fatalf("expected federation owner page to list live owner commands, got %q", h.Client.EditedMessages[1].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[4].Text, "/filter \"buy now\"") || !strings.Contains(h.Client.EditedMessages[4].Text, "/stop hello | buy now") {
+	if !strings.Contains(renderedText(h.Client.EditedMessages[4].Text), "/filter \"buy now\"") || !strings.Contains(renderedText(h.Client.EditedMessages[4].Text), "/stop hello | buy now") {
 		t.Fatalf("expected filter examples page, got %q", h.Client.EditedMessages[4].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[7].Text, "full markdown helper set") {
+	if !strings.Contains(renderedText(h.Client.EditedMessages[7].Text), "full markdown helper set") {
 		t.Fatalf("expected truthful markdown page, got %q", h.Client.EditedMessages[7].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[8].Text, "buttonurl:https://misssukoon.vercel.app/") {
+	if !strings.Contains(renderedText(h.Client.EditedMessages[8].Text), "buttonurl:https://misssukoon.vercel.app/") {
 		t.Fatalf("expected buttons page to show live syntax, got %q", h.Client.EditedMessages[8].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[10].Text, "/disabledel [on|off]") {
+	if !strings.Contains(renderedText(h.Client.EditedMessages[10].Text), "/disabledel [on|off]") {
 		t.Fatalf("expected disabling page, got %q", h.Client.EditedMessages[10].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[11].Text, "does not expose remote chat connections") {
+	if !strings.Contains(renderedText(h.Client.EditedMessages[11].Text), "does not expose remote chat connections") {
 		t.Fatalf("expected truthful connections placeholder, got %q", h.Client.EditedMessages[11].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[12].Text, "/raidtime <time>") || !strings.Contains(h.Client.EditedMessages[12].Text, "/autoantiraid <number/off/no>") {
+	if !strings.Contains(renderedText(h.Client.EditedMessages[12].Text), "/raidtime <time>") || !strings.Contains(renderedText(h.Client.EditedMessages[12].Text), "/autoantiraid <number/off/no>") {
 		t.Fatalf("expected live antiraid help page, got %q", h.Client.EditedMessages[12].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[13].Text, "/mods") || !strings.Contains(h.Client.EditedMessages[13].Text, "/muter") {
+	if !strings.Contains(renderedText(h.Client.EditedMessages[13].Text), "/mods") || !strings.Contains(renderedText(h.Client.EditedMessages[13].Text), "/muter") {
 		t.Fatalf("expected silent power page, got %q", h.Client.EditedMessages[13].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[14].Text, "/donate") || !strings.Contains(h.Client.EditedMessages[14].Text, "/mybot") {
+	if !strings.Contains(renderedText(h.Client.EditedMessages[14].Text), "/donate") || !strings.Contains(renderedText(h.Client.EditedMessages[14].Text), "/mybot") {
 		t.Fatalf("expected extra page, got %q", h.Client.EditedMessages[14].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[15].Text, "/antiabuse <on|off>") {
+	if !strings.Contains(renderedText(h.Client.EditedMessages[15].Text), "/antiabuse <on|off>") {
 		t.Fatalf("expected antiabuse page, got %q", h.Client.EditedMessages[15].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[16].Text, "/freelist") || !strings.Contains(h.Client.EditedMessages[16].Text, "Approved users and freed users bypass") {
+	if !strings.Contains(renderedText(h.Client.EditedMessages[16].Text), "/freelist") || !strings.Contains(renderedText(h.Client.EditedMessages[16].Text), "Approved users and freed users bypass") {
 		t.Fatalf("expected bio check page, got %q", h.Client.EditedMessages[16].Text)
 	}
-	if !strings.Contains(h.Client.EditedMessages[17].Text, "/mybot") || !strings.Contains(h.Client.EditedMessages[17].Text, "one active clone") {
+	if !strings.Contains(renderedText(h.Client.EditedMessages[17].Text), "/mybot") || !strings.Contains(renderedText(h.Client.EditedMessages[17].Text), "one active clone") {
 		t.Fatalf("expected custom instances page, got %q", h.Client.EditedMessages[17].Text)
 	}
 }
@@ -612,7 +623,8 @@ func TestAdminHelpPageUsesBackOnlyMarkup(t *testing.T) {
 	}
 
 	adminPage := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(adminPage.Text, "/promote <reply/username/userid>") || !strings.Contains(adminPage.Text, "/anonadmin <yes/no/on/off>") || !strings.Contains(adminPage.Text, "/adminerror <yes/no/on/off>") {
+	adminRendered := renderedText(adminPage.Text)
+	if !strings.Contains(adminRendered, "/promote <reply/username/userid>") || !strings.Contains(adminRendered, "/anonadmin <yes/no/on/off>") || !strings.Contains(adminRendered, "/adminerror <yes/no/on/off>") {
 		t.Fatalf("expected admin help page copy, got %q", adminPage.Text)
 	}
 	adminMarkup := requireEditedMarkup(t, adminPage)
@@ -654,7 +666,8 @@ func TestAntifloodHelpPageUsesBackOnlyMarkup(t *testing.T) {
 	}
 
 	page := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(page.Text, "/setfloodtimer <count> <duration>") || !strings.Contains(page.Text, "/clearflood <yes/no/on/off>") || !strings.Contains(page.Text, "/floodmode tban 3d") {
+	pageRendered := renderedText(page.Text)
+	if !strings.Contains(pageRendered, "/setfloodtimer <count> <duration>") || !strings.Contains(pageRendered, "/clearflood <yes/no/on/off>") || !strings.Contains(pageRendered, "/floodmode tban 3d") {
 		t.Fatalf("expected antiflood help copy, got %q", page.Text)
 	}
 	markup := requireEditedMarkup(t, page)
@@ -696,7 +709,8 @@ func TestApprovalHelpPageUsesBackOnlyMarkup(t *testing.T) {
 	}
 
 	page := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(page.Text, "User commands:") || !strings.Contains(page.Text, "/approval") || !strings.Contains(page.Text, "/unapproveall") {
+	pageRendered := renderedText(page.Text)
+	if !strings.Contains(pageRendered, "User commands:") || !strings.Contains(pageRendered, "/approval") || !strings.Contains(pageRendered, "/unapproveall") {
 		t.Fatalf("expected approval help copy, got %q", page.Text)
 	}
 	markup := requireEditedMarkup(t, page)
@@ -738,7 +752,8 @@ func TestCaptchaHelpPageUsesBackOnlyMarkup(t *testing.T) {
 	}
 
 	page := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(page.Text, "/captcharules <yes/no/on/off>") || !strings.Contains(page.Text, "/captchamutetime <Xw/d/h/m>") || !strings.Contains(page.Text, "/setcaptchatext <text>") {
+	pageRendered := renderedText(page.Text)
+	if !strings.Contains(pageRendered, "/captcharules <yes/no/on/off>") || !strings.Contains(pageRendered, "/captchamutetime <Xw/d/h/m>") || !strings.Contains(pageRendered, "/setcaptchatext <text>") {
 		t.Fatalf("expected captcha help copy, got %q", page.Text)
 	}
 	markup := requireEditedMarkup(t, page)
@@ -780,7 +795,8 @@ func TestBansHelpPageUsesBackOnlyMarkup(t *testing.T) {
 	}
 
 	page := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(page.Text, "/kickme") || !strings.Contains(page.Text, "/dban") || !strings.Contains(page.Text, "/tmute") || !strings.Contains(page.Text, "4m = 4 minutes") {
+	pageRendered := renderedText(page.Text)
+	if !strings.Contains(pageRendered, "/kickme") || !strings.Contains(pageRendered, "/dban") || !strings.Contains(pageRendered, "/tmute") || !strings.Contains(pageRendered, "4m = 4 minutes") {
 		t.Fatalf("expected bans help copy, got %q", page.Text)
 	}
 	markup := requireEditedMarkup(t, page)
@@ -822,7 +838,8 @@ func TestAntiRaidHelpPageUsesBackOnlyMarkup(t *testing.T) {
 	}
 
 	page := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(page.Text, "/antiraid <optional time/off/no>") || !strings.Contains(page.Text, "/raidactiontime <time>") || !strings.Contains(page.Text, "-> /autoantiraid off") {
+	pageRendered := renderedText(page.Text)
+	if !strings.Contains(pageRendered, "/antiraid <optional time/off/no>") || !strings.Contains(pageRendered, "/raidactiontime <time>") || !strings.Contains(pageRendered, "-> /autoantiraid off") {
 		t.Fatalf("expected antiraid help copy, got %q", page.Text)
 	}
 	markup := requireEditedMarkup(t, page)
@@ -864,7 +881,8 @@ func TestLocksHelpPageUsesExamplesDescriptionsAndBack(t *testing.T) {
 	}
 
 	page := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(page.Text, "/lockwarns <yes/no/on/off>") || !strings.Contains(page.Text, "/allowlist <url/id/command/@username(s)>") || !strings.Contains(page.Text, "/rmallowlistall") {
+	pageRendered := renderedText(page.Text)
+	if !strings.Contains(pageRendered, "/lockwarns <yes/no/on/off>") || !strings.Contains(pageRendered, "/allowlist <url/id/command/@username(s)>") || !strings.Contains(pageRendered, "/rmallowlistall") {
 		t.Fatalf("expected locks help copy, got %q", page.Text)
 	}
 	markup := requireEditedMarkup(t, page)
@@ -890,7 +908,8 @@ func TestLocksHelpPageUsesExamplesDescriptionsAndBack(t *testing.T) {
 	}
 
 	examples := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(examples.Text, "/lock invitelink ### no promoting other chats {ban}") || !strings.Contains(examples.Text, "/allowlist t.me/addstickers/Pinup_Girl") {
+	examplesRendered := renderedText(examples.Text)
+	if !strings.Contains(examplesRendered, "/lock invitelink ### no promoting other chats {ban}") || !strings.Contains(examplesRendered, "/allowlist t.me/addstickers/Pinup_Girl") {
 		t.Fatalf("expected lock examples copy, got %q", examples.Text)
 	}
 	if !examples.Options.DisableWebPagePreview {
@@ -917,7 +936,8 @@ func TestLocksHelpPageUsesExamplesDescriptionsAndBack(t *testing.T) {
 	}
 
 	descriptions := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(descriptions.Text, "- invitelink: Messages containing Telegram group or channel links.") || !strings.Contains(descriptions.Text, "- sticker / stickeranimated / stickerpremium:") {
+	descriptionsRendered := renderedText(descriptions.Text)
+	if !strings.Contains(descriptionsRendered, "- invitelink: Messages containing Telegram group or channel links.") || !strings.Contains(descriptionsRendered, "- sticker / stickeranimated / stickerpremium:") {
 		t.Fatalf("expected lock descriptions copy, got %q", descriptions.Text)
 	}
 	descriptionMarkup := requireEditedMarkup(t, descriptions)
@@ -1011,4 +1031,8 @@ func assertNoButtonText(t *testing.T, markup *telegram.InlineKeyboardMarkup, tex
 			}
 		}
 	}
+}
+
+func renderedText(value string) string {
+	return html.UnescapeString(htmlTagPattern.ReplaceAllString(value, ""))
 }

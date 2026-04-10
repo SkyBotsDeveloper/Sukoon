@@ -61,11 +61,11 @@ func (s *Service) HandleCallback(ctx context.Context, rt *runtime.Context) (bool
 	case callbackStartHome:
 		err = s.sendCallbackPageWithOptions(ctx, rt, startLandingText(), startLandingMarkup(rt.Bot.Username), "HTML", true)
 	case callbackStartClone:
-		err = s.sendCallbackPage(ctx, rt, cloneLandingText(), cloneLandingMarkup(rt.Bot.Username))
+		err = s.sendCallbackPageWithOptions(ctx, rt, cloneLandingText(), cloneLandingMarkup(rt.Bot.Username), "HTML", false)
 	case callbackHelpMain:
 		err = s.sendHelpCallbackPage(ctx, rt, helpRoot)
 	case callbackPrivacy:
-		err = s.sendCallbackPage(ctx, rt, privacyText(), privacyMarkup(rt.Bot.Username))
+		err = s.sendCallbackPageWithOptions(ctx, rt, privacyText(), privacyMarkup(rt.Bot.Username), "HTML", false)
 	case callbackRulesShow:
 		if strings.TrimSpace(rt.RuntimeBundle.Settings.RulesText) == "" {
 			err = fmt.Errorf("rules are not set")
@@ -125,6 +125,7 @@ func (s *Service) start(ctx context.Context, rt *runtime.Context) error {
 		return s.startRules(ctx, rt, strings.TrimPrefix(payload, "rules_"))
 	case payload == "privacy":
 		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), privacyText(), rt.ReplyOptions(telegram.SendMessageOptions{
+			ParseMode:   "HTML",
 			ReplyMarkup: privacyMarkup(rt.Bot.Username),
 		}))
 		return err
@@ -199,6 +200,7 @@ func (s *Service) privacy(ctx context.Context, rt *runtime.Context) error {
 		)
 	}
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), privacyText(), rt.ReplyOptions(telegram.SendMessageOptions{
+		ParseMode:   "HTML",
 		ReplyMarkup: privacyMarkup(rt.Bot.Username),
 	}))
 	return err

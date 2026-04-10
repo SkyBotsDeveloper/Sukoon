@@ -2,6 +2,8 @@ package utility
 
 import (
 	"fmt"
+	"html"
+	"regexp"
 	"strings"
 
 	"sukoon/bot-core/internal/serviceutil"
@@ -69,6 +71,9 @@ type helpPage struct {
 	Lines []string
 }
 
+var inlineSlashCommandPattern = regexp.MustCompile(`/[A-Za-z][A-Za-z0-9_]*`)
+var inlinePlaceholderPattern = regexp.MustCompile(`\{[A-Za-z][A-Za-z0-9_:]*\}`)
+
 var helpPages = map[string]helpPage{
 	helpAdmin: {
 		Title: "Admin",
@@ -86,7 +91,7 @@ var helpPages = map[string]helpPage{
 			"Sukoon maps Telegram admin permissions to bot actions so admins cannot escalate beyond what Telegram already allows.",
 			"Promoted users receive the overlap of the caller's Telegram admin rights, minus add-admins permission.",
 			"Anonymous admins stay hidden from /adminlist to preserve anonymity.",
-			"/admincache forces a fresh Telegram admin lookup if permissions were changed recently.",
+			"Use /admincache to force a fresh Telegram admin lookup if permissions were changed recently.",
 		},
 	},
 	helpAntiflood: {
@@ -858,11 +863,11 @@ func helpCallback(page string) string {
 
 func startLandingText() string {
 	return strings.Join([]string{
-		"Hey there! My name is Sukoon - I'm here to help you manage your groups! Use /help to find out how to use me to my full potential.",
+		"Hey there! My name is Sukoon - I'm here to help you manage your groups! Use <code>/help</code> to find out how to use me to my full potential.",
 		"",
 		"Join my <a href=\"https://t.me/VivaanUpdates\">support channel</a> to get information on all the latest updates.",
 		"",
-		"Check /privacy to view the privacy policy, and interact with your data.",
+		"Check <code>/privacy</code> to view the privacy policy, and interact with your data.",
 	}, "\n")
 }
 
@@ -875,9 +880,9 @@ func helpLandingText() string {
 		"Browse the moderation, protection, AntiAbuse, and Bio Check sections below.",
 		"",
 		"Helpful commands:",
-		"- /start: Starts me! You've probably already used this.",
-		"- /help: Sends this message; I'll tell you more about myself!",
-		"- /donate: Gives you info on how to support me and my creator.",
+		"- <code>/start</code>: Starts me! You've probably already used this.",
+		"- <code>/help</code>: Sends this message; I'll tell you more about myself!",
+		"- <code>/donate</code>: Gives you info on how to support me and my creator.",
 		"",
 		"Need updates or support? Join the <a href=\"https://t.me/VivaanUpdates\">support channel</a> or visit the <a href=\"" + serviceutil.WebsiteURL + "\">website</a>.",
 		"",
@@ -891,9 +896,9 @@ func helpSectionOptions(section string) (string, bool) {
 	}
 	switch section {
 	case helpBlocklistExamples, helpLockExamples:
-		return "", true
+		return "HTML", true
 	}
-	return "", false
+	return "HTML", false
 }
 
 func helpPageText(section string) string {
@@ -904,8 +909,82 @@ func helpPageText(section string) string {
 	if !ok {
 		return helpLandingText()
 	}
-	lines := append([]string{page.Title, ""}, page.Lines...)
+	lines := []string{"<b>" + html.EscapeString(page.Title) + "</b>", ""}
+	for _, line := range page.Lines {
+		lines = append(lines, formatHelpLine(line))
+	}
 	return strings.Join(lines, "\n")
+}
+
+func formatHelpLine(line string) string {
+	if line == "" {
+		return ""
+	}
+	switch {
+	case strings.HasPrefix(line, "-> "):
+		return "-> " + helpCode(line[3:])
+	case strings.HasPrefix(line, "/"):
+		return helpCode(line)
+	case strings.HasPrefix(line, "{") && strings.HasSuffix(line, "}"):
+		return helpCode(line)
+	case strings.HasPrefix(line, "[") && strings.Contains(line, "]("):
+		return helpCode(line)
+	case strings.HasPrefix(line, "- "):
+		return formatHelpBullet(line[2:])
+	default:
+		return formatInlineCode(html.EscapeString(line))
+	}
+}
+
+func formatHelpBullet(body string) string {
+	if body == "" {
+		return "- "
+	}
+	if idx := strings.Index(body, ":"); idx > 0 {
+		head := strings.TrimSpace(body[:idx])
+		tail := body[idx+1:]
+		if shouldCodeWrap(head) {
+			return "- " + helpCode(head) + ":" + formatInlineCode(html.EscapeString(tail))
+		}
+	}
+	if shouldCodeWrap(strings.TrimSpace(body)) {
+		return "- " + helpCode(strings.TrimSpace(body))
+	}
+	return "- " + formatInlineCode(html.EscapeString(body))
+}
+
+func shouldCodeWrap(value string) bool {
+	value = strings.TrimSpace(value)
+	switch {
+	case value == "":
+		return false
+	case strings.HasPrefix(value, "/"):
+		return true
+	case strings.HasPrefix(value, "{") && strings.HasSuffix(value, "}"):
+		return true
+	case strings.HasPrefix(value, "[") && strings.Contains(value, "]("):
+		return true
+	case strings.Contains(value, " / "):
+		return true
+	case !strings.Contains(value, " "):
+		return true
+	default:
+		return false
+	}
+}
+
+func helpCode(value string) string {
+	return "<code>" + html.EscapeString(value) + "</code>"
+}
+
+func formatInlineCode(value string) string {
+	value = inlineSlashCommandPattern.ReplaceAllStringFunc(value, func(match string) string {
+		return "<code>" + match + "</code>"
+	})
+	value = inlinePlaceholderPattern.ReplaceAllStringFunc(value, func(match string) string {
+		return "<code>" + match + "</code>"
+	})
+	return strings.ReplaceAll(value, "%%%", "<code>%%%</code>")
 }
 
 func privacyText() string {
@@ -914,7 +993,7 @@ func privacyText() string {
 		"",
 		"Sukoon stores only the operational data it needs for moderation, automation, safety, and owner-requested workflows.",
 		"",
-		"Use /mydata to export your stored data and /forgetme confirm to delete eligible personal data for this bot instance.",
+		"Use <code>/mydata</code> to export your stored data and <code>/forgetme confirm</code> to delete eligible personal data for this bot instance.",
 	}, "\n")
 }
 
@@ -942,11 +1021,11 @@ func cloneLandingText() string {
 		"If you want a private Sukoon instance for your own groups, create a bot in @BotFather first and then attach it to this runtime.",
 		"",
 		"Quick flow:",
-		"1. Open @BotFather and use /newbot.",
+		"1. Open @BotFather and use <code>/newbot</code>.",
 		"2. Copy the bot token BotFather gives you.",
-		"3. Run /clone <bot_token> from an owner or sudo account.",
+		"3. Run <code>/clone &lt;bot_token&gt;</code> from an owner or sudo account.",
 		"4. Start using your clone in your groups.",
-		"5. Use /mybot later if you want to restart or remove it.",
+		"5. Use <code>/mybot</code> later if you want to restart or remove it.",
 		"",
 		"Each account can create only one Sukoon clone.",
 		"If an old clone token was revoked, Sukoon clears the stale clone entry when you create a replacement.",
