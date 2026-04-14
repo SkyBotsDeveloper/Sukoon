@@ -27,6 +27,8 @@ type Context struct {
 	RuntimeBundle    domain.RuntimeBundle
 	KnownChatAdmins  map[int64]struct{}
 	ActorPermissions ActorPermissions
+	TargetChatID     int64
+	TargetChat       *telegram.Chat
 }
 
 type ActorPermissions struct {

@@ -21,8 +21,7 @@
 - `/logchannel`, `/setlog`, `/unsetlog`, `/log`, `/nolog`, `/logcategories`
 - `/reports`, `/report`
 - `/cleancommands`, `/cleancommand`, `/keepcommand`, `/cleancommandtypes`
-- `/cleanservice`
-- `/nocleanservice`
+- `/cleanservice`, `/keepservice`, `/nocleanservice`
 - `/cleanservicetypes`
 - `/purge`, `/del`
 - `/pin`, `/unpin`, `/unpinall`
@@ -50,6 +49,7 @@
 - `/setwelcome`, `/welcome`
 - `/setgoodbye`, `/goodbye`
 - `/setrules`, `/resetrules`, `/rules`
+- `/connect`, `/disconnect`, `/reconnect`, `/connection`
 - `/afk`
 - quoted multi-word filter triggers
 - contextual fillings for stored content:
@@ -102,11 +102,11 @@
 - metrics:
   observability seam exists, but no external metrics backend is wired by default
 - help and command-surface parity:
-  core moderation, rules, saved content, approvals, PM-guidance UX, and the structured help batches through disabling / federations / filters / formatting are now live, but several long-tail utility families are still intentionally deferred
+  core moderation, rules, saved content, approvals, connections, PM-guidance UX, and the structured help batches through disabling / federations / filters / formatting are now live, but several long-tail utility families are still intentionally deferred
 
 ## Deferred Or Intentionally Not Claimed
 
-- chat connections / remote management
+- advanced connection features beyond PM management of connected chat content
 - anti-porn
 - night mode
 - recurring timed messages

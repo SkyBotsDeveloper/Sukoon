@@ -512,6 +512,101 @@ func TestCleanServiceCommandsAndKeepAlias(t *testing.T) {
 	}
 }
 
+func TestConnectionsManageGroupContentFromPM(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	group := telegram.Chat{ID: -100730, Type: "supergroup", Title: "Connected Chat", Username: "connectedchat"}
+	pm := telegram.Chat{ID: 10, Type: "private"}
+	h.Client.AdminsByChat[group.ID] = []telegram.ChatAdministrator{
+		{
+			User:              telegram.User{ID: 10, FirstName: "Admin", Username: "admin"},
+			Status:            "administrator",
+			CanDeleteMessages: true,
+			CanChangeInfo:     true,
+		},
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 10,
+			From:      &telegram.User{ID: 10, FirstName: "Admin", Username: "admin"},
+			Chat:      group,
+			Text:      "/connect",
+		},
+	}); err != nil {
+		t.Fatalf("group connect failed: %v", err)
+	}
+	connection, err := h.Store.GetChatConnection(context.Background(), h.Bot.ID, 10)
+	if err != nil {
+		t.Fatalf("expected active connection: %v", err)
+	}
+	if connection.ChatID != group.ID {
+		t.Fatalf("expected connection to group %d, got %+v", group.ID, connection)
+	}
+
+	for idx, text := range []string{
+		"/connection",
+		"/save hello Hi there",
+		"/notes",
+		"/disconnect",
+		"/reconnect",
+		"/connect @connectedchat",
+		"/connect",
+	} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(20 + idx),
+			Message: &telegram.Message{
+				MessageID: int64(30 + idx),
+				From:      &telegram.User{ID: 10, FirstName: "Admin", Username: "admin"},
+				Chat:      pm,
+				Text:      text,
+			},
+		}); err != nil {
+			t.Fatalf("pm command %q failed: %v", text, err)
+		}
+	}
+
+	note, err := h.Store.GetNote(context.Background(), h.Bot.ID, group.ID, "hello")
+	if err != nil {
+		t.Fatalf("expected note saved in connected group: %v", err)
+	}
+	if note.Text != "Hi there" {
+		t.Fatalf("unexpected connected note text: %+v", note)
+	}
+	last := h.Client.Messages[len(h.Client.Messages)-1].Text
+	if !strings.Contains(last, "Recent chats") || !strings.Contains(last, "Connected Chat") {
+		t.Fatalf("expected recent connection listing, got %q", last)
+	}
+}
+
+func TestConnectRequiresTargetChatAdmin(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	group := telegram.Chat{ID: -100731, Type: "supergroup", Title: "Denied Chat", Username: "deniedchat"}
+	pm := telegram.Chat{ID: 20, Type: "private"}
+	if err := h.Store.EnsureChat(context.Background(), h.Bot.ID, group); err != nil {
+		t.Fatalf("ensure chat failed: %v", err)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 10,
+			From:      &telegram.User{ID: 20, FirstName: "Member"},
+			Chat:      pm,
+			Text:      "/connect @deniedchat",
+		},
+	}); err != nil {
+		t.Fatalf("connect denial should be handled without router error: %v", err)
+	}
+
+	if _, err := h.Store.GetChatConnection(context.Background(), h.Bot.ID, 20); err == nil {
+		t.Fatalf("expected non-admin connection to be denied")
+	}
+	if got := h.Client.Messages[len(h.Client.Messages)-1].Text; !strings.Contains(got, "admin in the target chat") {
+		t.Fatalf("expected target admin warning, got %q", got)
+	}
+}
+
 func TestCleanCommandTypeSelection(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	chat := telegram.Chat{ID: -100717, Type: "supergroup", Title: "Clean Commands"}

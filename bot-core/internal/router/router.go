@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"sukoon/bot-core/internal/commands"
 	"sukoon/bot-core/internal/domain"
 	"sukoon/bot-core/internal/permissions"
@@ -214,6 +216,11 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 		rt.ActorPermissions.CanPinMessages = true
 		rt.ActorPermissions.CanPromoteMembers = true
 	}
+	if message != nil && chat.Type == "private" && commandOK && isConnectionAwareCommand(parsed.Name) {
+		if err := r.applyConnectedChatTarget(ctx, bot, client, rt); err != nil {
+			return err
+		}
+	}
 
 	if callback != nil {
 		handled, err := r.captcha.HandleCallback(ctx, rt)
@@ -379,6 +386,36 @@ func (r *Router) ensureChatIfNeeded(ctx context.Context, botID string, chat tele
 		return err
 	}
 	r.markChatRefreshed(key)
+	return nil
+}
+
+func (r *Router) applyConnectedChatTarget(ctx context.Context, bot domain.BotInstance, client telegram.Client, rt *runtime.Context) error {
+	connection, err := r.store.GetChatConnection(ctx, bot.ID, rt.ActorID())
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	target := telegram.Chat{
+		ID:       connection.ChatID,
+		Type:     connection.ChatType,
+		Title:    connection.ChatTitle,
+		Username: connection.ChatUsername,
+	}
+	bundle, err := r.store.LoadRuntimeBundle(ctx, bot.ID, target.ID)
+	if err != nil {
+		return err
+	}
+	perms, err := r.permissions.Load(ctx, bot.ID, rt.ActorID(), target.ID, target.Type, client)
+	if err != nil {
+		return err
+	}
+	rt.TargetChatID = target.ID
+	rt.TargetChat = &target
+	rt.RuntimeBundle = bundle
+	rt.ActorPermissions = perms
+	rt.Logger = rt.Logger.With("target_chat_id", target.ID)
 	return nil
 }
 

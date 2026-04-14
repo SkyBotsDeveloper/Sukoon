@@ -66,6 +66,16 @@ type ChatSettings struct {
 	RulesText             string
 }
 
+type ChatConnection struct {
+	BotID        string
+	UserID       int64
+	ChatID       int64
+	ChatType     string
+	ChatTitle    string
+	ChatUsername string
+	ConnectedAt  time.Time
+}
+
 type ModerationSettings struct {
 	BotID     string
 	ChatID    int64

@@ -42,3 +42,15 @@ func shouldCleanUnhandledCommandMessage(text string, settings domain.ChatSetting
 	text = strings.TrimSpace(text)
 	return text != "" && strings.HasPrefix(text, "/")
 }
+
+func isConnectionAwareCommand(name string) bool {
+	switch name {
+	case "save", "notes", "saved", "get", "clear",
+		"filter", "filters", "stop", "stopall",
+		"welcome", "setwelcome", "goodbye", "setgoodbye",
+		"setrules", "resetrules", "rules":
+		return true
+	default:
+		return false
+	}
+}

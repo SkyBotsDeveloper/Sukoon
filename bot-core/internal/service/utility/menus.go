@@ -353,17 +353,31 @@ var helpPages = map[string]helpPage{
 	helpConnections: {
 		Title: "Connections",
 		Lines: []string{
-			"Connections let admins manage one chat from another place without switching contexts.",
+			"Sometimes, you just want to add some notes and filters to a group chat, but you don't want everyone to see; this is where connections come in.",
 			"",
-			"Live runtime status: Sukoon does not expose remote chat connections in production yet.",
+			"Connections allow you to connect to a chat's database, and add things to it without the chat knowing about it.",
+			"For obvious reasons, you need to be an admin to edit connected chat data; members can view public data.",
 			"",
-			"Planned surface:",
-			"/connect <chatid/username>",
-			"/disconnect",
-			"/reconnect",
-			"/connection",
+			"Admin commands:",
+			"- /connect <chatid/username>: Connect to the specified chat, allowing you to view/edit contents.",
+			"- /disconnect: Disconnect from the current chat.",
+			"- /reconnect: Reconnect to the previously connected chat.",
+			"- /connection: See information about the currently connected chat.",
 			"",
-			"This button is here so the help tree stays complete while the safe connection runtime is still deferred.",
+			"Tips:",
+			"- Connect to a chat by ID:",
+			"-> /connect -1001235155926",
+			"",
+			"- Connect to a chat by username:",
+			"-> /connect @SukoonSupportChat",
+			"",
+			"- When in a group, connect to the current chat:",
+			"-> /connect",
+			"",
+			"- When in private, list recently connected chats:",
+			"-> /connect",
+			"",
+			"You can retrieve the chat id from Telegram chat info or an id helper. Supergroup ids are usually negative.",
 		},
 	},
 	helpDisabling: {
@@ -1179,6 +1193,12 @@ func helpSectionMarkup(page string, username string, parent string) *telegram.In
 			},
 		)
 	case helpCleanService:
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: callbackHelpMain},
+			},
+		)
+	case helpConnections:
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},

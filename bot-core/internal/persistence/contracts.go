@@ -54,6 +54,11 @@ type Store interface {
 	SetCleanCommandTypes(ctx context.Context, botID string, chatID int64, categories []string, enabled bool) error
 	SetCleanService(ctx context.Context, botID string, chatID int64, target string, enabled bool) error
 	SetLanguage(ctx context.Context, botID string, chatID int64, language string) error
+	SetChatConnection(ctx context.Context, botID string, userID int64, chatID int64) error
+	ClearChatConnection(ctx context.Context, botID string, userID int64) error
+	GetChatConnection(ctx context.Context, botID string, userID int64) (domain.ChatConnection, error)
+	GetLastChatConnection(ctx context.Context, botID string, userID int64) (domain.ChatConnection, error)
+	ListChatConnections(ctx context.Context, botID string, userID int64, limit int) ([]domain.ChatConnection, error)
 	UpsertNote(ctx context.Context, note domain.Note) error
 	GetNote(ctx context.Context, botID string, chatID int64, name string) (domain.Note, error)
 	ListNotes(ctx context.Context, botID string, chatID int64) ([]domain.Note, error)

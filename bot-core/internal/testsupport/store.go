@@ -26,6 +26,8 @@ type MemoryStore struct {
 	chats             map[string]telegram.Chat
 	users             map[int64]domain.UserProfile
 	settings          map[string]domain.ChatSettings
+	connections       map[string]domain.ChatConnection
+	connectionHistory map[string]map[int64]domain.ChatConnection
 	moderation        map[string]domain.ModerationSettings
 	antiflood         map[string]domain.AntifloodSettings
 	antiraid          map[string]domain.AntiRaidSettings
@@ -70,38 +72,40 @@ type updateState struct {
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		botsByID:         map[string]domain.BotInstance{},
-		botsByWebhookKey: map[string]string{},
-		updateStates:     map[int64]*updateState{},
-		chats:            map[string]telegram.Chat{},
-		users:            map[int64]domain.UserProfile{},
-		settings:         map[string]domain.ChatSettings{},
-		moderation:       map[string]domain.ModerationSettings{},
-		antiflood:        map[string]domain.AntifloodSettings{},
-		antiraid:         map[string]domain.AntiRaidSettings{},
-		captchaSettings:  map[string]domain.CaptchaSettings{},
-		antiabuse:        map[string]domain.AntiAbuseSettings{},
-		antibio:          map[string]domain.AntiBioSettings{},
-		roles:            map[string]map[int64][]string{},
-		chatRoles:        map[string]map[int64][]string{},
-		approvals:        map[string]map[int64]domain.Approval{},
-		disabled:         map[string]map[string]struct{}{},
-		warnings:         map[string]int{},
-		notes:            map[string]map[string]domain.Note{},
-		filters:          map[string]map[string]domain.FilterRule{},
-		locks:            map[string]map[string]domain.LockRule{},
-		lockAllowlist:    map[string]map[string]domain.LockAllowlistEntry{},
-		blocklist:        map[string][]domain.BlocklistRule{},
-		antibioExempt:    map[string]map[int64]bool{},
-		globalUsers:      map[string]domain.GlobalBlacklistUser{},
-		globalChats:      map[string]domain.GlobalBlacklistChat{},
-		federations:      map[string]domain.Federation{},
-		federationChats:  map[string][]string{},
-		federationAdmins: map[string]map[int64]domain.FederationAdmin{},
-		federationBans:   map[string]map[int64]domain.FederationBan{},
-		challenges:       map[string]domain.CaptchaChallenge{},
-		afk:              map[string]domain.AFKState{},
-		jobs:             map[string]domain.Job{},
+		botsByID:          map[string]domain.BotInstance{},
+		botsByWebhookKey:  map[string]string{},
+		updateStates:      map[int64]*updateState{},
+		chats:             map[string]telegram.Chat{},
+		users:             map[int64]domain.UserProfile{},
+		settings:          map[string]domain.ChatSettings{},
+		connections:       map[string]domain.ChatConnection{},
+		connectionHistory: map[string]map[int64]domain.ChatConnection{},
+		moderation:        map[string]domain.ModerationSettings{},
+		antiflood:         map[string]domain.AntifloodSettings{},
+		antiraid:          map[string]domain.AntiRaidSettings{},
+		captchaSettings:   map[string]domain.CaptchaSettings{},
+		antiabuse:         map[string]domain.AntiAbuseSettings{},
+		antibio:           map[string]domain.AntiBioSettings{},
+		roles:             map[string]map[int64][]string{},
+		chatRoles:         map[string]map[int64][]string{},
+		approvals:         map[string]map[int64]domain.Approval{},
+		disabled:          map[string]map[string]struct{}{},
+		warnings:          map[string]int{},
+		notes:             map[string]map[string]domain.Note{},
+		filters:           map[string]map[string]domain.FilterRule{},
+		locks:             map[string]map[string]domain.LockRule{},
+		lockAllowlist:     map[string]map[string]domain.LockAllowlistEntry{},
+		blocklist:         map[string][]domain.BlocklistRule{},
+		antibioExempt:     map[string]map[int64]bool{},
+		globalUsers:       map[string]domain.GlobalBlacklistUser{},
+		globalChats:       map[string]domain.GlobalBlacklistChat{},
+		federations:       map[string]domain.Federation{},
+		federationChats:   map[string][]string{},
+		federationAdmins:  map[string]map[int64]domain.FederationAdmin{},
+		federationBans:    map[string]map[int64]domain.FederationBan{},
+		challenges:        map[string]domain.CaptchaChallenge{},
+		afk:               map[string]domain.AFKState{},
+		jobs:              map[string]domain.Job{},
 	}
 }
 

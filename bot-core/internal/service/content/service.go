@@ -63,7 +63,7 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 	if strings.HasPrefix(text, "#") {
 		name := strings.TrimPrefix(strings.Fields(text)[0], "#")
 		if name != "" {
-			note, err := rt.Store.GetNote(ctx, rt.Bot.ID, rt.ChatID(), strings.ToLower(name))
+			note, err := rt.Store.GetNote(ctx, rt.Bot.ID, dataChatID(rt), strings.ToLower(name))
 			if err == nil {
 				replyMarkup, err := buttonsFromJSON(note.ButtonsJSON)
 				if err != nil {
@@ -73,7 +73,7 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 				if message.From != nil {
 					user = *message.From
 				}
-				_, err = rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(note.Text, user, message.Chat, rt.RuntimeBundle.Settings.RulesText), telegram.SendMessageOptions{ParseMode: note.ParseMode, ReplyMarkup: replyMarkup})
+				_, err = rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(note.Text, user, dataChat(rt), rt.RuntimeBundle.Settings.RulesText), telegram.SendMessageOptions{ParseMode: note.ParseMode, ReplyMarkup: replyMarkup})
 				return true, err
 			}
 			if err != pgx.ErrNoRows {
@@ -82,7 +82,7 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 		}
 	}
 
-	filters, err := rt.Store.ListFilters(ctx, rt.Bot.ID, rt.ChatID())
+	filters, err := rt.Store.ListFilters(ctx, rt.Bot.ID, dataChatID(rt))
 	if err != nil {
 		return false, err
 	}
@@ -98,7 +98,7 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 			if message.From != nil {
 				user = *message.From
 			}
-			_, err = rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(filter.ResponseText, user, message.Chat, rt.RuntimeBundle.Settings.RulesText), telegram.SendMessageOptions{ParseMode: filter.ParseMode, ReplyMarkup: replyMarkup})
+			_, err = rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(filter.ResponseText, user, dataChat(rt), rt.RuntimeBundle.Settings.RulesText), telegram.SendMessageOptions{ParseMode: filter.ParseMode, ReplyMarkup: replyMarkup})
 			return true, err
 		}
 	}
@@ -136,7 +136,7 @@ func (s *Service) save(ctx context.Context, rt *runtime.Context) error {
 	}
 	if err := rt.Store.UpsertNote(ctx, domain.Note{
 		BotID:       rt.Bot.ID,
-		ChatID:      rt.ChatID(),
+		ChatID:      dataChatID(rt),
 		Name:        strings.ToLower(name),
 		Text:        text,
 		ParseMode:   "",
@@ -150,7 +150,7 @@ func (s *Service) save(ctx context.Context, rt *runtime.Context) error {
 }
 
 func (s *Service) notes(ctx context.Context, rt *runtime.Context) error {
-	notes, err := rt.Store.ListNotes(ctx, rt.Bot.ID, rt.ChatID())
+	notes, err := rt.Store.ListNotes(ctx, rt.Bot.ID, dataChatID(rt))
 	if err != nil {
 		return err
 	}
@@ -170,7 +170,7 @@ func (s *Service) get(ctx context.Context, rt *runtime.Context) error {
 	if len(rt.Command.Args) == 0 {
 		return fmt.Errorf("usage: /get <name>")
 	}
-	note, err := rt.Store.GetNote(ctx, rt.Bot.ID, rt.ChatID(), strings.ToLower(rt.Command.Args[0]))
+	note, err := rt.Store.GetNote(ctx, rt.Bot.ID, dataChatID(rt), strings.ToLower(rt.Command.Args[0]))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return fmt.Errorf("note not found")
@@ -185,7 +185,7 @@ func (s *Service) get(ctx context.Context, rt *runtime.Context) error {
 	if rt.Message != nil && rt.Message.From != nil {
 		user = *rt.Message.From
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(note.Text, user, rt.Message.Chat, rt.RuntimeBundle.Settings.RulesText), rt.ReplyOptions(telegram.SendMessageOptions{ParseMode: note.ParseMode, ReplyMarkup: replyMarkup}))
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(note.Text, user, dataChat(rt), rt.RuntimeBundle.Settings.RulesText), rt.ReplyOptions(telegram.SendMessageOptions{ParseMode: note.ParseMode, ReplyMarkup: replyMarkup}))
 	return err
 }
 
@@ -196,7 +196,7 @@ func (s *Service) clear(ctx context.Context, rt *runtime.Context) error {
 	if len(rt.Command.Args) == 0 {
 		return fmt.Errorf("usage: /clear <name>")
 	}
-	if err := rt.Store.DeleteNote(ctx, rt.Bot.ID, rt.ChatID(), strings.ToLower(rt.Command.Args[0])); err != nil {
+	if err := rt.Store.DeleteNote(ctx, rt.Bot.ID, dataChatID(rt), strings.ToLower(rt.Command.Args[0])); err != nil {
 		return err
 	}
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Note removed.", rt.ReplyOptions(telegram.SendMessageOptions{}))
@@ -217,7 +217,7 @@ func (s *Service) filter(ctx context.Context, rt *runtime.Context) error {
 	}
 	if err := rt.Store.UpsertFilter(ctx, domain.FilterRule{
 		BotID:        rt.Bot.ID,
-		ChatID:       rt.ChatID(),
+		ChatID:       dataChatID(rt),
 		Trigger:      strings.ToLower(trigger),
 		MatchMode:    "contains",
 		ResponseText: response,
@@ -240,7 +240,7 @@ func (s *Service) stop(ctx context.Context, rt *runtime.Context) error {
 		return fmt.Errorf("usage: /stop <trigger>")
 	}
 	for _, item := range items {
-		if err := rt.Store.DeleteFilter(ctx, rt.Bot.ID, rt.ChatID(), strings.ToLower(item)); err != nil {
+		if err := rt.Store.DeleteFilter(ctx, rt.Bot.ID, dataChatID(rt), strings.ToLower(item)); err != nil {
 			return err
 		}
 	}
@@ -252,7 +252,7 @@ func (s *Service) stopAll(ctx context.Context, rt *runtime.Context) error {
 	if !rt.ActorPermissions.IsChatAdmin {
 		return fmt.Errorf("admin rights required")
 	}
-	filters, err := rt.Store.ListFilters(ctx, rt.Bot.ID, rt.ChatID())
+	filters, err := rt.Store.ListFilters(ctx, rt.Bot.ID, dataChatID(rt))
 	if err != nil {
 		return err
 	}
@@ -261,7 +261,7 @@ func (s *Service) stopAll(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	for _, filter := range filters {
-		if err := rt.Store.DeleteFilter(ctx, rt.Bot.ID, rt.ChatID(), strings.ToLower(filter.Trigger)); err != nil {
+		if err := rt.Store.DeleteFilter(ctx, rt.Bot.ID, dataChatID(rt), strings.ToLower(filter.Trigger)); err != nil {
 			return err
 		}
 	}
@@ -273,7 +273,7 @@ func (s *Service) filters(ctx context.Context, rt *runtime.Context) error {
 	if !rt.ActorPermissions.IsChatAdmin {
 		return fmt.Errorf("admin rights required")
 	}
-	filters, err := rt.Store.ListFilters(ctx, rt.Bot.ID, rt.ChatID())
+	filters, err := rt.Store.ListFilters(ctx, rt.Bot.ID, dataChatID(rt))
 	if err != nil {
 		return err
 	}
@@ -309,7 +309,7 @@ func (s *Service) welcome(ctx context.Context, rt *runtime.Context) error {
 	if len(rt.Command.Args) > 1 {
 		text = strings.TrimSpace(strings.Join(rt.Command.Args[1:], " "))
 	}
-	if err := rt.Store.SetWelcome(ctx, rt.Bot.ID, rt.ChatID(), enabled, text); err != nil {
+	if err := rt.Store.SetWelcome(ctx, rt.Bot.ID, dataChatID(rt), enabled, text); err != nil {
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Welcome updated.", rt.ReplyOptions(telegram.SendMessageOptions{}))
@@ -336,7 +336,7 @@ func (s *Service) goodbye(ctx context.Context, rt *runtime.Context) error {
 	if len(rt.Command.Args) > 1 {
 		text = strings.TrimSpace(strings.Join(rt.Command.Args[1:], " "))
 	}
-	if err := rt.Store.SetGoodbye(ctx, rt.Bot.ID, rt.ChatID(), enabled, text); err != nil {
+	if err := rt.Store.SetGoodbye(ctx, rt.Bot.ID, dataChatID(rt), enabled, text); err != nil {
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Goodbye updated.", rt.ReplyOptions(telegram.SendMessageOptions{}))
@@ -350,7 +350,7 @@ func (s *Service) setRules(ctx context.Context, rt *runtime.Context) error {
 	if strings.TrimSpace(rt.Command.RawArgs) == "" {
 		return fmt.Errorf("usage: /setrules <text>")
 	}
-	if err := rt.Store.SetRules(ctx, rt.Bot.ID, rt.ChatID(), rt.Command.RawArgs); err != nil {
+	if err := rt.Store.SetRules(ctx, rt.Bot.ID, dataChatID(rt), rt.Command.RawArgs); err != nil {
 		return err
 	}
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Rules updated.", rt.ReplyOptions(telegram.SendMessageOptions{}))
@@ -361,7 +361,7 @@ func (s *Service) resetRules(ctx context.Context, rt *runtime.Context) error {
 	if !rt.ActorPermissions.IsChatAdmin {
 		return fmt.Errorf("admin rights required")
 	}
-	if err := rt.Store.SetRules(ctx, rt.Bot.ID, rt.ChatID(), ""); err != nil {
+	if err := rt.Store.SetRules(ctx, rt.Bot.ID, dataChatID(rt), ""); err != nil {
 		return err
 	}
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Rules cleared.", rt.ReplyOptions(telegram.SendMessageOptions{}))
@@ -377,7 +377,7 @@ func (s *Service) rules(ctx context.Context, rt *runtime.Context) error {
 		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{
 			ReplyMarkup: serviceutil.Markup(
 				[]telegram.InlineKeyboardButton{
-					{Text: "Open PM", URL: serviceutil.BotDeepLink(rt.Bot.Username, fmt.Sprintf("rules_%d", rt.ChatID()))},
+					{Text: "Open PM", URL: serviceutil.BotDeepLink(rt.Bot.Username, fmt.Sprintf("rules_%d", dataChatID(rt)))},
 					{Text: "Show Here", CallbackData: "ux:rules:show"},
 				},
 				[]telegram.InlineKeyboardButton{
@@ -396,7 +396,7 @@ func (s *Service) rules(ctx context.Context, rt *runtime.Context) error {
 	if rt.Message != nil && rt.Message.From != nil {
 		user = *rt.Message.From
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(rt.RuntimeBundle.Settings.RulesText, user, rt.Message.Chat, rt.RuntimeBundle.Settings.RulesText), rt.ReplyOptions(telegram.SendMessageOptions{
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(rt.RuntimeBundle.Settings.RulesText, user, dataChat(rt), rt.RuntimeBundle.Settings.RulesText), rt.ReplyOptions(telegram.SendMessageOptions{
 		ReplyMarkup: serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
 				{Text: "Help", CallbackData: "ux:help:root"},
@@ -409,4 +409,21 @@ func (s *Service) rules(ctx context.Context, rt *runtime.Context) error {
 		),
 	}))
 	return err
+}
+
+func dataChatID(rt *runtime.Context) int64 {
+	if rt.TargetChatID != 0 {
+		return rt.TargetChatID
+	}
+	return rt.ChatID()
+}
+
+func dataChat(rt *runtime.Context) telegram.Chat {
+	if rt.TargetChat != nil {
+		return *rt.TargetChat
+	}
+	if rt.Message != nil {
+		return rt.Message.Chat
+	}
+	return telegram.Chat{ID: dataChatID(rt)}
 }

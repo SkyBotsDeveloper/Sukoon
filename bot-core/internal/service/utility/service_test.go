@@ -567,8 +567,8 @@ func TestHelpNavigationSupportsNestedHelpBatchPages(t *testing.T) {
 	if !strings.Contains(renderedText(h.Client.EditedMessages[10].Text), "/disabledel [on|off]") {
 		t.Fatalf("expected disabling page, got %q", h.Client.EditedMessages[10].Text)
 	}
-	if !strings.Contains(renderedText(h.Client.EditedMessages[11].Text), "does not expose remote chat connections") {
-		t.Fatalf("expected truthful connections placeholder, got %q", h.Client.EditedMessages[11].Text)
+	if !strings.Contains(renderedText(h.Client.EditedMessages[11].Text), "/connect <chatid/username>") || !strings.Contains(renderedText(h.Client.EditedMessages[11].Text), "/reconnect") {
+		t.Fatalf("expected live connections help page, got %q", h.Client.EditedMessages[11].Text)
 	}
 	if !strings.Contains(renderedText(h.Client.EditedMessages[12].Text), "/raidtime <time>") || !strings.Contains(renderedText(h.Client.EditedMessages[12].Text), "/autoantiraid <number/off/no>") {
 		t.Fatalf("expected live antiraid help page, got %q", h.Client.EditedMessages[12].Text)

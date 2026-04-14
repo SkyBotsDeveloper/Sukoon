@@ -2,6 +2,7 @@ package testsupport
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -268,6 +269,79 @@ func (m *MemoryStore) ListChats(_ context.Context, botID string) ([]telegram.Cha
 	return chats, nil
 }
 
+func (m *MemoryStore) SetChatConnection(_ context.Context, botID string, userID int64, chatID int64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	chat, ok := m.chats[chatKey(botID, chatID)]
+	if !ok {
+		return pgx.ErrNoRows
+	}
+	connection := domain.ChatConnection{
+		BotID:        botID,
+		UserID:       userID,
+		ChatID:       chat.ID,
+		ChatType:     chat.Type,
+		ChatTitle:    chat.Title,
+		ChatUsername: chat.Username,
+		ConnectedAt:  time.Now(),
+	}
+	key := connectionKey(botID, userID)
+	m.connections[key] = connection
+	if _, ok := m.connectionHistory[key]; !ok {
+		m.connectionHistory[key] = map[int64]domain.ChatConnection{}
+	}
+	m.connectionHistory[key][chatID] = connection
+	return nil
+}
+
+func (m *MemoryStore) ClearChatConnection(_ context.Context, botID string, userID int64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.connections, connectionKey(botID, userID))
+	return nil
+}
+
+func (m *MemoryStore) GetChatConnection(_ context.Context, botID string, userID int64) (domain.ChatConnection, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	connection, ok := m.connections[connectionKey(botID, userID)]
+	if !ok {
+		return domain.ChatConnection{}, pgx.ErrNoRows
+	}
+	return connection, nil
+}
+
+func (m *MemoryStore) GetLastChatConnection(_ context.Context, botID string, userID int64) (domain.ChatConnection, error) {
+	connections, err := m.ListChatConnections(context.Background(), botID, userID, 1)
+	if err != nil {
+		return domain.ChatConnection{}, err
+	}
+	if len(connections) == 0 {
+		return domain.ChatConnection{}, pgx.ErrNoRows
+	}
+	return connections[0], nil
+}
+
+func (m *MemoryStore) ListChatConnections(_ context.Context, botID string, userID int64, limit int) ([]domain.ChatConnection, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if limit <= 0 {
+		limit = 10
+	}
+	history := m.connectionHistory[connectionKey(botID, userID)]
+	connections := make([]domain.ChatConnection, 0, len(history))
+	for _, connection := range history {
+		connections = append(connections, connection)
+	}
+	sort.Slice(connections, func(i, j int) bool {
+		return connections[i].ConnectedAt.After(connections[j].ConnectedAt)
+	})
+	if len(connections) > limit {
+		connections = connections[:limit]
+	}
+	return connections, nil
+}
+
 func (m *MemoryStore) GetStats(_ context.Context, botID string) (domain.BotStats, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -297,6 +371,10 @@ func (m *MemoryStore) GetStats(_ context.Context, botID string) (domain.BotStats
 		}
 	}
 	return stats, nil
+}
+
+func connectionKey(botID string, userID int64) string {
+	return fmt.Sprintf("%s:%d", botID, userID)
 }
 
 func (m *MemoryStore) SetGlobalBlacklistUser(_ context.Context, entry domain.GlobalBlacklistUser, enabled bool) error {

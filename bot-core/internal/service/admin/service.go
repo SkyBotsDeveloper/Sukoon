@@ -71,6 +71,14 @@ func (s *Service) Handle(ctx context.Context, rt *runtime.Context) (bool, error)
 		return true, s.anonAdmin(ctx, rt)
 	case "adminerror":
 		return true, s.adminError(ctx, rt)
+	case "connect":
+		return true, s.connect(ctx, rt)
+	case "disconnect":
+		return true, s.disconnect(ctx, rt)
+	case "reconnect":
+		return true, s.reconnect(ctx, rt)
+	case "connection":
+		return true, s.connection(ctx, rt)
 	case "cleancommands", "cleancommand", "keepcommand":
 		return true, s.cleanCommands(ctx, rt)
 	case "cleancommandtypes":
@@ -749,6 +757,192 @@ func (s *Service) cleanCommands(ctx context.Context, rt *runtime.Context) error 
 		_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategorySettings, fmt.Sprintf("settings: actor=%d cleancommands enabled=%t categories=%s", rt.ActorID(), enabled, strings.Join(categories, ",")))
 	}
 	return err
+}
+
+func (s *Service) connect(ctx context.Context, rt *runtime.Context) error {
+	if rt.Message == nil {
+		return nil
+	}
+	if len(rt.Command.Args) == 0 {
+		if rt.Message.Chat.Type == "private" {
+			return s.listRecentConnections(ctx, rt)
+		}
+		if ok, err := s.ensureChatAdmin(ctx, rt); err != nil || !ok {
+			return err
+		}
+		if err := rt.Store.SetChatConnection(ctx, rt.Bot.ID, rt.ActorID(), rt.ChatID()); err != nil {
+			return err
+		}
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Connected you to %s. Open PM to manage this chat privately.", logChatLabel(rt.Message.Chat)), rt.ReplyOptions(telegram.SendMessageOptions{
+			ReplyMarkup: serviceutil.Markup(
+				[]telegram.InlineKeyboardButton{{Text: "Open PM", URL: serviceutil.BotURL(rt.Bot.Username)}},
+			),
+		}))
+		return err
+	}
+
+	target, err := s.resolveConnectionTarget(ctx, rt, rt.Command.Args[0])
+	if err != nil {
+		return err
+	}
+	if ok, err := s.canConnectToChat(ctx, rt, target); err != nil || !ok {
+		return err
+	}
+	if err := rt.Store.SetChatConnection(ctx, rt.Bot.ID, rt.ActorID(), target.ID); err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Connected to %s. Notes, filters, greetings, and rules commands in PM will use this chat.", logChatLabel(target)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) disconnect(ctx context.Context, rt *runtime.Context) error {
+	connection, err := rt.Store.GetChatConnection(ctx, rt.Bot.ID, rt.ActorID())
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			_, sendErr := rt.Client.SendMessage(ctx, rt.ChatID(), "You are not connected to any chat.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+			return sendErr
+		}
+		return err
+	}
+	if err := rt.Store.ClearChatConnection(ctx, rt.Bot.ID, rt.ActorID()); err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Disconnected from %s.", connectionLabel(connection)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) reconnect(ctx context.Context, rt *runtime.Context) error {
+	connection, err := rt.Store.GetLastChatConnection(ctx, rt.Bot.ID, rt.ActorID())
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			_, sendErr := rt.Client.SendMessage(ctx, rt.ChatID(), "No previous connection found. Use /connect <chatid> first.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+			return sendErr
+		}
+		return err
+	}
+	target := chatFromConnection(connection)
+	if ok, err := s.canConnectToChat(ctx, rt, target); err != nil || !ok {
+		return err
+	}
+	if err := rt.Store.SetChatConnection(ctx, rt.Bot.ID, rt.ActorID(), connection.ChatID); err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Reconnected to %s.", connectionLabel(connection)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) connection(ctx context.Context, rt *runtime.Context) error {
+	connection, err := rt.Store.GetChatConnection(ctx, rt.Bot.ID, rt.ActorID())
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			_, sendErr := rt.Client.SendMessage(ctx, rt.ChatID(), "You are not connected to any chat.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+			return sendErr
+		}
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Current connection: %s.", connectionLabel(connection)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return err
+}
+
+func (s *Service) listRecentConnections(ctx context.Context, rt *runtime.Context) error {
+	active, activeErr := rt.Store.GetChatConnection(ctx, rt.Bot.ID, rt.ActorID())
+	connections, err := rt.Store.ListChatConnections(ctx, rt.Bot.ID, rt.ActorID(), 8)
+	if err != nil {
+		return err
+	}
+	if activeErr == pgx.ErrNoRows && len(connections) == 0 {
+		_, sendErr := rt.Client.SendMessage(ctx, rt.ChatID(), "No recent connections. Use /connect <chatid> or run /connect in a group where you are admin.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return sendErr
+	}
+	lines := []string{"Connections:"}
+	if activeErr == nil {
+		lines = append(lines, "- current: "+connectionLabel(active))
+	}
+	if len(connections) > 0 {
+		lines = append(lines, "", "Recent chats:")
+		for _, connection := range connections {
+			lines = append(lines, "- "+connectionLabel(connection))
+		}
+	}
+	lines = append(lines, "", "Use /connect <chatid> to connect, /disconnect to clear it, or /reconnect to restore the last chat.")
+	_, sendErr := rt.Client.SendMessage(ctx, rt.ChatID(), strings.Join(lines, "\n"), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	return sendErr
+}
+
+func (s *Service) resolveConnectionTarget(ctx context.Context, rt *runtime.Context, value string) (telegram.Chat, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return telegram.Chat{}, fmt.Errorf("usage: /connect <chatid/username>")
+	}
+	if chatID, err := strconv.ParseInt(value, 10, 64); err == nil {
+		for _, chat := range s.listKnownChats(ctx, rt) {
+			if chat.ID == chatID {
+				return chat, nil
+			}
+		}
+		if rt.Client != nil {
+			chat, err := rt.Client.GetChat(ctx, chatID)
+			if err == nil {
+				if chat.ID == 0 {
+					chat.ID = chatID
+				}
+				if err := rt.Store.EnsureChat(ctx, rt.Bot.ID, chat); err != nil {
+					return telegram.Chat{}, err
+				}
+				return chat, nil
+			}
+		}
+		return telegram.Chat{}, fmt.Errorf("chat not found; make sure Sukoon is in that chat")
+	}
+	username := strings.ToLower(strings.TrimPrefix(value, "@"))
+	if username == "" {
+		return telegram.Chat{}, fmt.Errorf("usage: /connect <chatid/username>")
+	}
+	for _, chat := range s.listKnownChats(ctx, rt) {
+		if strings.EqualFold(strings.TrimPrefix(chat.Username, "@"), username) {
+			return chat, nil
+		}
+	}
+	return telegram.Chat{}, fmt.Errorf("chat not found; ask Sukoon to see the chat first or use its numeric chat id")
+}
+
+func (s *Service) listKnownChats(ctx context.Context, rt *runtime.Context) []telegram.Chat {
+	chats, err := rt.Store.ListChats(ctx, rt.Bot.ID)
+	if err != nil {
+		return nil
+	}
+	return chats
+}
+
+func (s *Service) canConnectToChat(ctx context.Context, rt *runtime.Context, chat telegram.Chat) (bool, error) {
+	if rt.ActorPermissions.IsOwner || rt.ActorPermissions.IsSudo {
+		return true, nil
+	}
+	if s.permissions == nil {
+		return false, fmt.Errorf("permission service is not available")
+	}
+	perms, err := s.permissions.Load(ctx, rt.Bot.ID, rt.ActorID(), chat.ID, chat.Type, rt.Client)
+	if err != nil {
+		return false, err
+	}
+	if !perms.IsChatAdmin {
+		_, sendErr := rt.Client.SendMessage(ctx, rt.ChatID(), "You need to be admin in the target chat to connect to it.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+		return false, sendErr
+	}
+	return true, nil
+}
+
+func chatFromConnection(connection domain.ChatConnection) telegram.Chat {
+	return telegram.Chat{
+		ID:       connection.ChatID,
+		Type:     connection.ChatType,
+		Title:    connection.ChatTitle,
+		Username: connection.ChatUsername,
+	}
+}
+
+func connectionLabel(connection domain.ChatConnection) string {
+	return logChatLabel(chatFromConnection(connection))
 }
 
 func (s *Service) cleanCommandTypes(ctx context.Context, rt *runtime.Context) error {
