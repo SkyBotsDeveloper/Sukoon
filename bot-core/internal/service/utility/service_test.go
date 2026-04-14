@@ -564,9 +564,13 @@ func TestHelpNavigationSupportsNestedHelpBatchPages(t *testing.T) {
 	if !strings.Contains(renderedText(h.Client.EditedMessages[8].Text), "buttonurl:https://misssukoon.vercel.app/") {
 		t.Fatalf("expected buttons page to show live syntax, got %q", h.Client.EditedMessages[8].Text)
 	}
-	if !strings.Contains(renderedText(h.Client.EditedMessages[10].Text), "/disabledel [on|off]") {
+	if !strings.Contains(renderedText(h.Client.EditedMessages[10].Text), "/disabledel <yes/no/on/off>") || !strings.Contains(renderedText(h.Client.EditedMessages[10].Text), "-> /disable all") {
 		t.Fatalf("expected disabling page, got %q", h.Client.EditedMessages[10].Text)
 	}
+	disablingMarkup := requireEditedMarkup(t, h.Client.EditedMessages[10])
+	assertButton(t, disablingMarkup, 0, 0, "Back", "ux:help:root", "")
+	assertNoButtonText(t, disablingMarkup, "Website")
+	assertNoButtonText(t, disablingMarkup, "Add to Group")
 	if !strings.Contains(renderedText(h.Client.EditedMessages[11].Text), "/connect <chatid/username>") || !strings.Contains(renderedText(h.Client.EditedMessages[11].Text), "/reconnect") {
 		t.Fatalf("expected live connections help page, got %q", h.Client.EditedMessages[11].Text)
 	}

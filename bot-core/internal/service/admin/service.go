@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -297,46 +298,35 @@ func (s *Service) disable(ctx context.Context, rt *runtime.Context, disabled boo
 	if len(rt.Command.Args) == 0 {
 		return fmt.Errorf("usage: /disable <command>")
 	}
-	command := strings.TrimPrefix(strings.ToLower(rt.Command.Args[0]), "/")
-	if isProtectedDisabledCommand(command) {
-		return fmt.Errorf("/%s cannot be disabled", command)
-	}
-	if err := rt.Store.SetDisabledCommand(ctx, rt.Bot.ID, rt.ChatID(), command, disabled, rt.ActorID()); err != nil {
+	commands, err := parseDisableTargets(rt.Command.Args)
+	if err != nil {
 		return err
+	}
+	for _, command := range commands {
+		if err := rt.Store.SetDisabledCommand(ctx, rt.Bot.ID, rt.ChatID(), command, disabled, rt.ActorID()); err != nil {
+			return err
+		}
 	}
 	action := "Disabled"
 	if !disabled {
 		action = "Enabled"
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("%s /%s.", action, command), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("%s %d command(s): %s.", action, len(commands), formatSlashList(commands)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	if err == nil {
+		_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategorySettings, fmt.Sprintf("settings: actor=%d disabled_commands enabled=%t commands=%s", rt.ActorID(), disabled, strings.Join(commands, ",")))
+	}
 	return err
 }
 
 func (s *Service) disableable(ctx context.Context, rt *runtime.Context) error {
+	commands := DisableableCommands()
 	text := strings.Join([]string{
 		"Disableable Commands",
 		"",
-		"Sukoon disables the exact command name you pass. Admins bypass disabled commands by default unless /disableadmin is enabled.",
+		"Sukoon disables exact command names. Admins bypass disabled commands by default unless /disableadmin is enabled.",
+		"Use /disable all to disable everything listed below, and /enable all to undo it.",
 		"",
-		"/approve, /unapprove, /approved, /unapproveall, /approval",
-		"/ban, /dban, /sban, /tban, /unban",
-		"/mute, /dmute, /smute, /tmute, /unmute",
-		"/kick, /dkick, /skick, /kickme",
-		"/warn, /warns, /resetwarns, /setwarnlimit, /setwarnmode",
-		"/lock, /unlock, /locks, /locktypes",
-		"/addblocklist, /rmbl, /rmblocklist, /unblocklistall, /blocklist",
-		"/setflood, /flood, /setfloodtimer, /floodmode, /clearflood",
-		"/captcha, /captchamode, /captcharules, /captchamutetime, /captchakick, /captchakicktime, /setcaptchatext, /resetcaptchatext",
-		"/cleancommands, /cleancommand, /keepcommand, /cleancommandtypes",
-		"/cleanservice, /nocleanservice, /cleanservicetypes",
-		"/logchannel, /setlog, /unsetlog, /log, /nolog, /logcategories",
-		"/report, /reports",
-		"/save, /notes, /saved, /get, /clear",
-		"/filter, /filters, /stop, /stopall",
-		"/welcome, /setwelcome, /goodbye, /setgoodbye",
-		"/setrules, /resetrules, /rules",
-		"/antiabuse, /antibio, /free, /unfree, /freelist",
-		"/newfed, /renamefed, /delfed, /joinfed, /leavefed, /fedinfo, /fedadmins, /myfeds, /fedpromote, /feddemote, /feddemoteme, /fban, /unfban, /fedtransfer, /chatfed",
+		formatSlashList(commands),
 	}, "\n")
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
@@ -362,6 +352,9 @@ func (s *Service) disabledDelete(ctx context.Context, rt *runtime.Context) error
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Disabled command deletion %s.", toggleWord(enabled)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	if err == nil {
+		_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategorySettings, fmt.Sprintf("settings: actor=%d disabledel=%t", rt.ActorID(), enabled))
+	}
 	return err
 }
 
@@ -385,6 +378,9 @@ func (s *Service) disableAdmins(ctx context.Context, rt *runtime.Context) error 
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Disable-admin mode %s.", toggleWord(enabled)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	if err == nil {
+		_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategorySettings, fmt.Sprintf("settings: actor=%d disableadmin=%t", rt.ActorID(), enabled))
+	}
 	return err
 }
 
@@ -397,13 +393,14 @@ func (s *Service) listDisabled(ctx context.Context, rt *runtime.Context) error {
 	for command := range rt.RuntimeBundle.DisabledCommands {
 		commands = append(commands, "/"+command)
 	}
+	sort.Strings(commands)
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Disabled: "+strings.Join(commands, ", ")+fmt.Sprintf("\n/delete on disabled commands: %s\n/disableadmin: %s", onOff(rt.RuntimeBundle.Settings.DisabledDelete), onOff(rt.RuntimeBundle.Settings.DisableAdmins)), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
 func isProtectedDisabledCommand(command string) bool {
 	switch strings.TrimSpace(strings.ToLower(command)) {
-	case "", "disable", "enable", "disabled", "disableable", "disabledel", "disableadmin", "start", "help":
+	case "", "disable", "enable", "disabled", "disableable", "disabledel", "disableadmin", "start", "help", "connect", "disconnect", "reconnect", "connection":
 		return true
 	default:
 		return false
@@ -1272,6 +1269,84 @@ func parseCleanCommandTypes(args []string) ([]string, error) {
 		"users":  "user",
 		"other":  "other",
 	}, "clean command type")
+}
+
+func parseDisableTargets(args []string) ([]string, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("usage: /disable <command>")
+	}
+	allowed := disableableCommandSet()
+	if len(args) == 1 && strings.EqualFold(strings.TrimPrefix(args[0], "/"), "all") {
+		return DisableableCommands(), nil
+	}
+	seen := map[string]struct{}{}
+	commands := make([]string, 0, len(args))
+	for _, raw := range args {
+		command := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(raw)), "/")
+		if isProtectedDisabledCommand(command) {
+			return nil, fmt.Errorf("/%s cannot be disabled", command)
+		}
+		if _, ok := allowed[command]; !ok {
+			return nil, fmt.Errorf("/%s is not disableable", command)
+		}
+		if _, exists := seen[command]; exists {
+			continue
+		}
+		seen[command] = struct{}{}
+		commands = append(commands, command)
+	}
+	if len(commands) == 0 {
+		return nil, fmt.Errorf("at least one command is required")
+	}
+	return commands, nil
+}
+
+func DisableableCommands() []string {
+	commands := []string{
+		"approval", "approve", "unapprove", "approved", "unapproveall",
+		"ban", "dban", "sban", "tban", "unban",
+		"mute", "dmute", "smute", "tmute", "unmute",
+		"kick", "dkick", "skick", "kickme",
+		"warn", "warns", "resetwarns", "setwarnlimit", "setwarnmode",
+		"lock", "unlock", "locks", "lockwarns", "locktypes", "allowlist", "rmallowlist", "rmallowlistall",
+		"addblocklist", "rmbl", "rmblocklist", "unblocklistall", "blocklist", "blocklistmode", "blocklistdelete", "setblocklistreason", "resetblocklistreason",
+		"setflood", "flood", "setfloodtimer", "floodmode", "setfloodmode", "clearflood",
+		"antiraid", "raidtime", "raidactiontime", "autoantiraid",
+		"captcha", "captchamode", "captcharules", "captchamutetime", "captchakick", "captchakicktime", "setcaptchatext", "resetcaptchatext",
+		"cleancommands", "cleancommand", "keepcommand", "cleancommandtypes",
+		"cleanservice", "keepservice", "nocleanservice", "cleanservicetypes",
+		"logchannel", "setlog", "unsetlog", "log", "nolog", "logcategories",
+		"report", "reports",
+		"info",
+		"save", "notes", "saved", "get", "clear",
+		"filter", "filters", "stop", "stopall",
+		"welcome", "setwelcome", "goodbye", "setgoodbye",
+		"setrules", "resetrules", "rules",
+		"pin", "unpin", "unpinall",
+		"antiabuse", "antibio", "free", "unfree", "freelist",
+		"newfed", "renamefed", "delfed", "joinfed", "leavefed", "fedinfo", "fedadmins", "myfeds", "fedpromote", "feddemote", "feddemoteme", "fban", "unfban", "fedtransfer", "chatfed",
+		"admins", "adminlist", "mods",
+		"afk", "donate", "language", "setlang", "privacy", "mydata", "forgetme",
+	}
+	sort.Strings(commands)
+	return commands
+}
+
+func disableableCommandSet() map[string]struct{} {
+	commands := DisableableCommands()
+	set := make(map[string]struct{}, len(commands))
+	for _, command := range commands {
+		set[command] = struct{}{}
+	}
+	return set
+}
+
+func formatSlashList(commands []string) string {
+	parts := make([]string, 0, len(commands))
+	for _, command := range commands {
+		parts = append(parts, "/"+strings.TrimPrefix(command, "/"))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func parseCleanServiceTypes(args []string) ([]string, error) {

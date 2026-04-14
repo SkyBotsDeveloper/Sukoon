@@ -383,22 +383,37 @@ var helpPages = map[string]helpPage{
 	helpDisabling: {
 		Title: "Disabling",
 		Lines: []string{
-			"Disable command families for normal members without removing the feature from Sukoon entirely.",
+			"Not everyone wants every feature Sukoon offers. Some commands are best left unused; to avoid spam and abuse.",
 			"",
-			"/disable <commandname>",
-			"/enable <commandname>",
-			"/disableable",
-			"/disabledel [on|off]",
-			"/disableadmin [on|off]",
-			"/disabled",
+			"This allows you to disable some commonly used commands, so no one can use them. It'll also allow you to autodelete them, stopping people from bluetexting.",
 			"",
-			"By default, disabled commands affect non-admins only. Enable /disableadmin if chat admins should also be blocked.",
-			"Turn on /disabledel to delete disabled command messages instead of replying.",
+			"Admin commands:",
+			"- /disable <commandname>: Stop users from using commandname in this group.",
+			"- /enable <commandname>: Allow users to use commandname in this group.",
+			"- /disableable: List all disableable commands.",
+			"- /disabledel <yes/no/on/off>: Delete disabled commands when used by non-admins.",
+			"- /disableadmin <yes/no/on/off>: Stop admins from using disabled commands too.",
+			"- /disabled: List the disabled commands in this chat.",
 			"",
 			"Examples:",
-			"/disable reports",
-			"/disabledel on",
-			"/disableadmin on",
+			"- Stop people from using the info command:",
+			"-> /disable info",
+			"",
+			"- Enable the info command:",
+			"-> /enable info",
+			"",
+			"- Disable all commands listed in /disableable:",
+			"-> /disable all",
+			"",
+			"- Delete disabled commands that get used:",
+			"-> /disabledel on",
+			"",
+			"- Make sure that disabled commands are also disabled for admins:",
+			"-> /disableadmin on",
+			"",
+			"Note:",
+			"By default, disabling a command only disables it for non-admins. To stop admins from using disabled commands too, check the /disableadmin toggle.",
+			"Disabled commands are still accessible through the /connect feature.",
 		},
 	},
 	helpFederations: {
@@ -1199,6 +1214,12 @@ func helpSectionMarkup(page string, username string, parent string) *telegram.In
 			},
 		)
 	case helpConnections:
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: callbackHelpMain},
+			},
+		)
+	case helpDisabling:
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},

@@ -322,6 +322,9 @@ func (r *Router) HandleUpdate(ctx context.Context, bot domain.BotInstance, clien
 
 	if rt.CommandOK {
 		if _, disabled := rt.RuntimeBundle.DisabledCommands[rt.Command.Name]; disabled && !rt.ActorPermissions.IsOwner && !rt.ActorPermissions.IsSudo {
+			if rt.TargetChatID != 0 && rt.Message != nil && rt.Message.Chat.Type == "private" {
+				goto dispatchCommand
+			}
 			if rt.ActorPermissions.IsChatAdmin && !rt.RuntimeBundle.Settings.DisableAdmins {
 				goto dispatchCommand
 			}

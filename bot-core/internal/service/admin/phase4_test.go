@@ -645,6 +645,61 @@ func TestCleanCommandTypeSelection(t *testing.T) {
 	}
 }
 
+func TestDisableAllAndConnectBypass(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100732, Type: "supergroup", Title: "Disable All", Username: "disableall"}
+	pm := telegram.Chat{ID: 30, Type: "private"}
+	h.Client.AdminsByChat[chat.ID] = []telegram.ChatAdministrator{
+		{
+			User:              telegram.User{ID: 30, FirstName: "Admin"},
+			Status:            "administrator",
+			CanDeleteMessages: true,
+			CanChangeInfo:     true,
+		},
+	}
+
+	for idx, text := range []string{"/connect", "/disable all", "/disabled"} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(1 + idx),
+			Message: &telegram.Message{
+				MessageID: int64(10 + idx),
+				From:      &telegram.User{ID: 30, FirstName: "Admin"},
+				Chat:      chat,
+				Text:      text,
+			},
+		}); err != nil {
+			t.Fatalf("group command %q failed: %v", text, err)
+		}
+	}
+
+	bundle, err := h.Store.LoadRuntimeBundle(context.Background(), h.Bot.ID, chat.ID)
+	if err != nil {
+		t.Fatalf("load runtime bundle failed: %v", err)
+	}
+	if _, ok := bundle.DisabledCommands["save"]; !ok {
+		t.Fatalf("expected /disable all to include save, got %+v", bundle.DisabledCommands)
+	}
+	if _, ok := bundle.DisabledCommands["info"]; !ok {
+		t.Fatalf("expected /disable all to include info example command, got %+v", bundle.DisabledCommands)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 10,
+		Message: &telegram.Message{
+			MessageID: 20,
+			From:      &telegram.User{ID: 30, FirstName: "Admin"},
+			Chat:      pm,
+			Text:      "/save connected Allowed through connect",
+		},
+	}); err != nil {
+		t.Fatalf("connected /save should bypass disabled gate: %v", err)
+	}
+	note, err := h.Store.GetNote(context.Background(), h.Bot.ID, chat.ID, "connected")
+	if err != nil || note.Text != "Allowed through connect" {
+		t.Fatalf("expected connected note saved despite disabled command, note=%+v err=%v", note, err)
+	}
+}
+
 func TestDisableControlsAffectNonAdminsFirstThenAdmins(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	chat := telegram.Chat{ID: -100718, Type: "supergroup", Title: "Disable"}
