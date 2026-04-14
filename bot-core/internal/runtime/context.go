@@ -81,3 +81,10 @@ func (c *Context) ReplyOptions(options telegram.SendMessageOptions) telegram.Sen
 	}
 	return options
 }
+
+func (c *Context) ReplyMediaOptions(options telegram.SendMediaOptions) telegram.SendMediaOptions {
+	if options.ReplyToMessageID == 0 && c.Message != nil {
+		options.ReplyToMessageID = c.Message.MessageID
+	}
+	return options
+}

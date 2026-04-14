@@ -62,16 +62,18 @@ func (s *Store) DeleteNote(ctx context.Context, botID string, chatID int64, name
 
 func (s *Store) UpsertFilter(ctx context.Context, filter domain.FilterRule) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO filters (bot_id, chat_id, trigger, match_mode, response_text, parse_mode, buttons_json, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, COALESCE(NULLIF($7, ''), '[]')::jsonb, $8)
+		INSERT INTO filters (bot_id, chat_id, trigger, match_mode, response_text, response_media_type, response_media_file_id, parse_mode, buttons_json, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE(NULLIF($9, ''), '[]')::jsonb, $10)
 		ON CONFLICT (bot_id, chat_id, trigger) DO UPDATE SET
 			match_mode = EXCLUDED.match_mode,
 			response_text = EXCLUDED.response_text,
+			response_media_type = EXCLUDED.response_media_type,
+			response_media_file_id = EXCLUDED.response_media_file_id,
 			parse_mode = EXCLUDED.parse_mode,
 			buttons_json = EXCLUDED.buttons_json,
 			created_by = EXCLUDED.created_by,
 			updated_at = NOW()
-	`, filter.BotID, filter.ChatID, filter.Trigger, filter.MatchMode, filter.ResponseText, filter.ParseMode, filter.ButtonsJSON, filter.CreatedBy)
+	`, filter.BotID, filter.ChatID, filter.Trigger, filter.MatchMode, filter.ResponseText, filter.ResponseMediaType, filter.ResponseMediaFileID, filter.ParseMode, filter.ButtonsJSON, filter.CreatedBy)
 	return err
 }
 
@@ -82,7 +84,7 @@ func (s *Store) DeleteFilter(ctx context.Context, botID string, chatID int64, tr
 
 func (s *Store) ListFilters(ctx context.Context, botID string, chatID int64) ([]domain.FilterRule, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, bot_id, chat_id, trigger, match_mode, response_text, parse_mode, buttons_json::text, created_by, created_at, updated_at
+		SELECT id, bot_id, chat_id, trigger, match_mode, response_text, response_media_type, response_media_file_id, parse_mode, buttons_json::text, created_by, created_at, updated_at
 		FROM filters
 		WHERE bot_id=$1 AND chat_id=$2
 		ORDER BY id ASC
@@ -95,7 +97,7 @@ func (s *Store) ListFilters(ctx context.Context, botID string, chatID int64) ([]
 	var filters []domain.FilterRule
 	for rows.Next() {
 		var filter domain.FilterRule
-		if err := rows.Scan(&filter.ID, &filter.BotID, &filter.ChatID, &filter.Trigger, &filter.MatchMode, &filter.ResponseText, &filter.ParseMode, &filter.ButtonsJSON, &filter.CreatedBy, &filter.CreatedAt, &filter.UpdatedAt); err != nil {
+		if err := rows.Scan(&filter.ID, &filter.BotID, &filter.ChatID, &filter.Trigger, &filter.MatchMode, &filter.ResponseText, &filter.ResponseMediaType, &filter.ResponseMediaFileID, &filter.ParseMode, &filter.ButtonsJSON, &filter.CreatedBy, &filter.CreatedAt, &filter.UpdatedAt); err != nil {
 			return nil, err
 		}
 		filters = append(filters, filter)

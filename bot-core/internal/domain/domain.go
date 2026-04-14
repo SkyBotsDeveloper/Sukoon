@@ -159,17 +159,19 @@ type Note struct {
 }
 
 type FilterRule struct {
-	ID           int64
-	BotID        string
-	ChatID       int64
-	Trigger      string
-	MatchMode    string
-	ResponseText string
-	ParseMode    string
-	ButtonsJSON  string
-	CreatedBy    int64
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID                  int64
+	BotID               string
+	ChatID              int64
+	Trigger             string
+	MatchMode           string
+	ResponseText        string
+	ResponseMediaType   string
+	ResponseMediaFileID string
+	ParseMode           string
+	ButtonsJSON         string
+	CreatedBy           int64
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
 }
 
 type CaptchaChallenge struct {

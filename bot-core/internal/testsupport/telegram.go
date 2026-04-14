@@ -14,6 +14,7 @@ type FakeTelegramClient struct {
 	mu               sync.Mutex
 	Messages         []SentMessage
 	Photos           []SentPhoto
+	Media            []SentMedia
 	EditedMessages   []EditedMessage
 	DeletedMessages  []DeletedMessage
 	PinnedMessages   []PinnedMessage
@@ -63,6 +64,14 @@ type SentPhoto struct {
 	ChatID    int64
 	Photo     string
 	Options   telegram.SendPhotoOptions
+}
+
+type SentMedia struct {
+	MessageID int64
+	ChatID    int64
+	MediaType string
+	FileID    string
+	Options   telegram.SendMediaOptions
 }
 
 type DeletedMessage struct {
@@ -152,6 +161,27 @@ func (f *FakeTelegramClient) SendPhoto(_ context.Context, chatID int64, photo st
 	}
 	f.nextMessageID++
 	f.Photos = append(f.Photos, SentPhoto{MessageID: f.nextMessageID, ChatID: chatID, Photo: photo, Options: options})
+	return telegram.Message{
+		MessageID: f.nextMessageID,
+		Chat:      telegram.Chat{ID: chatID},
+		Caption:   options.Caption,
+	}, nil
+}
+
+func (f *FakeTelegramClient) SendMedia(_ context.Context, chatID int64, mediaType string, fileID string, options telegram.SendMediaOptions) (telegram.Message, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err, ok := f.SendErrors[chatID]; ok {
+		return telegram.Message{}, err
+	}
+	f.nextMessageID++
+	f.Media = append(f.Media, SentMedia{
+		MessageID: f.nextMessageID,
+		ChatID:    chatID,
+		MediaType: mediaType,
+		FileID:    fileID,
+		Options:   options,
+	})
 	return telegram.Message{
 		MessageID: f.nextMessageID,
 		Chat:      telegram.Chat{ID: chatID},

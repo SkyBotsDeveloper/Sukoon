@@ -1085,7 +1085,7 @@ func TestFilterExamplesHelpAliasesAndFillingsBackNavigation(t *testing.T) {
 			t.Fatalf("%s failed: %v", text, err)
 		}
 		last := h.Client.Messages[len(h.Client.Messages)-1]
-		if !strings.Contains(renderedText(last.Text), "Filter Example Usage") || !strings.Contains(renderedText(last.Text), "trigger force") {
+		if !strings.Contains(renderedText(last.Text), "Filter Example Usage") || !strings.Contains(renderedText(last.Text), "trigger force") || !strings.Contains(renderedText(last.Text), "/filter trigger") {
 			t.Fatalf("expected filter example page for %s, got %q", text, last.Text)
 		}
 		markup := requireMarkup(t, last)
@@ -1109,7 +1109,7 @@ func TestFilterExamplesHelpAliasesAndFillingsBackNavigation(t *testing.T) {
 		t.Fatalf("fillings callback failed: %v", err)
 	}
 	fillings := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
-	if !strings.Contains(renderedText(fillings.Text), "{replytag}") || !strings.Contains(renderedText(fillings.Text), "{protect}") {
+	if !strings.Contains(renderedText(fillings.Text), "{replytag}") || !strings.Contains(renderedText(fillings.Text), "{protect}") || !strings.Contains(renderedText(fillings.Text), "{preview:top}") || !strings.Contains(renderedText(fillings.Text), "{mediaspoiler}") {
 		t.Fatalf("expected filter fillings content, got %q", fillings.Text)
 	}
 	fillingsMarkup := requireEditedMarkup(t, fillings)

@@ -65,15 +65,23 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 		if name != "" {
 			note, err := rt.Store.GetNote(ctx, rt.Bot.ID, dataChatID(rt), strings.ToLower(name))
 			if err == nil {
-				replyMarkup, err := buttonsFromJSON(note.ButtonsJSON)
-				if err != nil {
-					return false, err
-				}
 				user := telegram.User{}
 				if message.From != nil {
 					user = *message.From
 				}
-				_, err = rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(note.Text, user, dataChat(rt), rt.RuntimeBundle.Settings.RulesText), telegram.SendMessageOptions{ParseMode: note.ParseMode, ReplyMarkup: replyMarkup})
+				rendered, err := renderStoredPayload(note.Text, note.ButtonsJSON, user, dataChat(rt), rt.RuntimeBundle.Settings.RulesText, rt.Bot.Username, dataChatID(rt))
+				if err != nil {
+					return false, err
+				}
+				_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rendered.Text, telegram.SendMessageOptions{
+					ParseMode:             note.ParseMode,
+					ReplyMarkup:           rendered.ReplyMarkup,
+					DisableWebPagePreview: rendered.DisableWebPagePreview,
+					EnableWebPagePreview:  rendered.EnableWebPagePreview,
+					ShowPreviewAboveText:  rendered.ShowPreviewAboveText,
+					DisableNotification:   rendered.DisableNotification,
+					ProtectContent:        rendered.ProtectContent,
+				})
 				return true, err
 			}
 			if err != pgx.ErrNoRows {
@@ -99,12 +107,26 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 			if err != nil || !ok {
 				return false, err
 			}
+			if rendered.MediaFileID != "" && !noFormat {
+				_, err = rt.Client.SendMedia(ctx, rt.ChatID(), rendered.MediaType, rendered.MediaFileID, rt.ReplyMediaOptions(telegram.SendMediaOptions{
+					Caption:               rendered.Text,
+					ParseMode:             filter.ParseMode,
+					ReplyMarkup:           rendered.ReplyMarkup,
+					DisableNotification:   rendered.DisableNotification,
+					ProtectContent:        rendered.ProtectContent,
+					HasSpoiler:            rendered.HasMediaSpoiler,
+					ShowCaptionAboveMedia: rendered.ShowPreviewAboveText,
+				}))
+				return true, err
+			}
 			_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rendered.Text, rt.ReplyOptions(telegram.SendMessageOptions{
 				ParseMode:             filter.ParseMode,
 				ReplyMarkup:           rendered.ReplyMarkup,
 				DisableNotification:   rendered.DisableNotification,
 				ProtectContent:        rendered.ProtectContent,
-				DisableWebPagePreview: false,
+				DisableWebPagePreview: rendered.DisableWebPagePreview,
+				EnableWebPagePreview:  rendered.EnableWebPagePreview,
+				ShowPreviewAboveText:  rendered.ShowPreviewAboveText,
 			}))
 			return true, err
 		}
@@ -117,7 +139,18 @@ func (s *Service) HandleJoin(ctx context.Context, rt *runtime.Context, user tele
 	if !rt.RuntimeBundle.Settings.WelcomeEnabled || strings.TrimSpace(rt.RuntimeBundle.Settings.WelcomeText) == "" {
 		return nil
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(rt.RuntimeBundle.Settings.WelcomeText, user, rt.Message.Chat, rt.RuntimeBundle.Settings.RulesText), telegram.SendMessageOptions{})
+	rendered, err := renderStoredPayload(rt.RuntimeBundle.Settings.WelcomeText, "", user, rt.Message.Chat, rt.RuntimeBundle.Settings.RulesText, rt.Bot.Username, rt.ChatID())
+	if err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rendered.Text, telegram.SendMessageOptions{
+		ReplyMarkup:           rendered.ReplyMarkup,
+		DisableWebPagePreview: rendered.DisableWebPagePreview,
+		EnableWebPagePreview:  rendered.EnableWebPagePreview,
+		ShowPreviewAboveText:  rendered.ShowPreviewAboveText,
+		DisableNotification:   rendered.DisableNotification,
+		ProtectContent:        rendered.ProtectContent,
+	})
 	return err
 }
 
@@ -125,7 +158,18 @@ func (s *Service) HandleLeave(ctx context.Context, rt *runtime.Context, user tel
 	if !rt.RuntimeBundle.Settings.GoodbyeEnabled || strings.TrimSpace(rt.RuntimeBundle.Settings.GoodbyeText) == "" {
 		return nil
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(rt.RuntimeBundle.Settings.GoodbyeText, user, rt.Message.Chat, rt.RuntimeBundle.Settings.RulesText), telegram.SendMessageOptions{})
+	rendered, err := renderStoredPayload(rt.RuntimeBundle.Settings.GoodbyeText, "", user, rt.Message.Chat, rt.RuntimeBundle.Settings.RulesText, rt.Bot.Username, rt.ChatID())
+	if err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rendered.Text, telegram.SendMessageOptions{
+		ReplyMarkup:           rendered.ReplyMarkup,
+		DisableWebPagePreview: rendered.DisableWebPagePreview,
+		EnableWebPagePreview:  rendered.EnableWebPagePreview,
+		ShowPreviewAboveText:  rendered.ShowPreviewAboveText,
+		DisableNotification:   rendered.DisableNotification,
+		ProtectContent:        rendered.ProtectContent,
+	})
 	return err
 }
 
@@ -184,15 +228,23 @@ func (s *Service) get(ctx context.Context, rt *runtime.Context) error {
 		}
 		return err
 	}
-	replyMarkup, err := buttonsFromJSON(note.ButtonsJSON)
-	if err != nil {
-		return err
-	}
 	user := telegram.User{}
 	if rt.Message != nil && rt.Message.From != nil {
 		user = *rt.Message.From
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(note.Text, user, dataChat(rt), rt.RuntimeBundle.Settings.RulesText), rt.ReplyOptions(telegram.SendMessageOptions{ParseMode: note.ParseMode, ReplyMarkup: replyMarkup}))
+	rendered, err := renderStoredPayload(note.Text, note.ButtonsJSON, user, dataChat(rt), rt.RuntimeBundle.Settings.RulesText, rt.Bot.Username, dataChatID(rt))
+	if err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rendered.Text, rt.ReplyOptions(telegram.SendMessageOptions{
+		ParseMode:             note.ParseMode,
+		ReplyMarkup:           rendered.ReplyMarkup,
+		DisableWebPagePreview: rendered.DisableWebPagePreview,
+		EnableWebPagePreview:  rendered.EnableWebPagePreview,
+		ShowPreviewAboveText:  rendered.ShowPreviewAboveText,
+		DisableNotification:   rendered.DisableNotification,
+		ProtectContent:        rendered.ProtectContent,
+	}))
 	return err
 }
 
@@ -216,22 +268,59 @@ func (s *Service) filter(ctx context.Context, rt *runtime.Context) error {
 	}
 	definitions, err := parseFilterDefinitions(rt.Command.RawArgs)
 	if err != nil {
+		if rt.Message == nil || rt.Message.ReplyToMessage == nil {
+			return fmt.Errorf("usage: /filter <trigger> <response>")
+		}
+		definitions, err = parseFilterTriggersOnly(rt.Command.RawArgs)
+		if err != nil {
+			return fmt.Errorf("usage: /filter <trigger> <response>")
+		}
+	}
+	replyText := ""
+	replyButtons := ""
+	replyMediaType := ""
+	replyMediaFileID := ""
+	if rt.Message != nil && rt.Message.ReplyToMessage != nil && strings.TrimSpace(rt.Command.RawArgs) != "" {
+		if fallbackDefs, fallbackErr := parseFilterTriggersOnly(rt.Command.RawArgs); fallbackErr == nil {
+			if text, buttonsJSON, mediaType, mediaFileID, replyErr := parseFilterReplyPayload(rt.Message.ReplyToMessage); replyErr == nil && len(fallbackDefs) > 0 {
+				if onlyTriggers(definitions) {
+					definitions = fallbackDefs
+					replyText = text
+					replyButtons = buttonsJSON
+					replyMediaType = mediaType
+					replyMediaFileID = mediaFileID
+				}
+			}
+		}
+	}
+	if onlyTriggers(definitions) && strings.TrimSpace(replyText) == "" && replyMediaFileID == "" {
 		return fmt.Errorf("usage: /filter <trigger> <response>")
 	}
 	for _, definition := range definitions {
-		response, buttonsJSON, err := parseStoredContent(definition.Body)
-		if err != nil {
-			return err
+		response := replyText
+		buttonsJSON := replyButtons
+		mediaType := replyMediaType
+		mediaFileID := replyMediaFileID
+		if definition.Body != "" {
+			var parseErr error
+			response, buttonsJSON, parseErr = parseStoredContent(definition.Body)
+			if parseErr != nil {
+				return parseErr
+			}
+			mediaType = ""
+			mediaFileID = ""
 		}
 		if err := rt.Store.UpsertFilter(ctx, domain.FilterRule{
-			BotID:        rt.Bot.ID,
-			ChatID:       dataChatID(rt),
-			Trigger:      strings.ToLower(definition.Trigger),
-			MatchMode:    definition.MatchMode,
-			ResponseText: response,
-			ParseMode:    "",
-			ButtonsJSON:  buttonsJSON,
-			CreatedBy:    rt.ActorID(),
+			BotID:               rt.Bot.ID,
+			ChatID:              dataChatID(rt),
+			Trigger:             strings.ToLower(definition.Trigger),
+			MatchMode:           definition.MatchMode,
+			ResponseText:        response,
+			ResponseMediaType:   mediaType,
+			ResponseMediaFileID: mediaFileID,
+			ParseMode:           "",
+			ButtonsJSON:         buttonsJSON,
+			CreatedBy:           rt.ActorID(),
 		}); err != nil {
 			return err
 		}
@@ -406,7 +495,11 @@ func (s *Service) rules(ctx context.Context, rt *runtime.Context) error {
 	if rt.Message != nil && rt.Message.From != nil {
 		user = *rt.Message.From
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(rt.RuntimeBundle.Settings.RulesText, user, dataChat(rt), rt.RuntimeBundle.Settings.RulesText), rt.ReplyOptions(telegram.SendMessageOptions{
+	rendered, err := renderStoredPayload(rt.RuntimeBundle.Settings.RulesText, "", user, dataChat(rt), rt.RuntimeBundle.Settings.RulesText, rt.Bot.Username, dataChatID(rt))
+	if err != nil {
+		return err
+	}
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rendered.Text, rt.ReplyOptions(telegram.SendMessageOptions{
 		ReplyMarkup: serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
 				{Text: "Help", CallbackData: "ux:help:root"},
@@ -417,6 +510,11 @@ func (s *Service) rules(ctx context.Context, rt *runtime.Context) error {
 				{Text: "Close", CallbackData: "ux:close"},
 			},
 		),
+		DisableWebPagePreview: rendered.DisableWebPagePreview,
+		EnableWebPagePreview:  rendered.EnableWebPagePreview,
+		ShowPreviewAboveText:  rendered.ShowPreviewAboveText,
+		DisableNotification:   rendered.DisableNotification,
+		ProtectContent:        rendered.ProtectContent,
 	}))
 	return err
 }
@@ -471,4 +569,16 @@ func normalizeFilterTrigger(item string) string {
 	default:
 		return item
 	}
+}
+
+func onlyTriggers(definitions []filterDefinition) bool {
+	if len(definitions) == 0 {
+		return false
+	}
+	for _, definition := range definitions {
+		if strings.TrimSpace(definition.Body) != "" {
+			return false
+		}
+	}
+	return true
 }

@@ -759,8 +759,12 @@ func (m *MemoryStore) UpsertFilter(_ context.Context, filter domain.FilterRule) 
 	if _, ok := m.filters[key]; !ok {
 		m.filters[key] = map[string]domain.FilterRule{}
 	}
-	m.nextFilterID++
-	filter.ID = m.nextFilterID
+	if existing, ok := m.filters[key][strings.ToLower(filter.Trigger)]; ok {
+		filter.ID = existing.ID
+	} else {
+		m.nextFilterID++
+		filter.ID = m.nextFilterID
+	}
 	m.filters[key][strings.ToLower(filter.Trigger)] = filter
 	return nil
 }

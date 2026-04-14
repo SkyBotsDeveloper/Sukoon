@@ -162,6 +162,73 @@ func splitFilterTriggersAndBody(raw string) ([]string, string, error) {
 	return []string{trigger}, body, nil
 }
 
+func parseFilterTriggersOnly(raw string) ([]filterDefinition, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, fmt.Errorf("trigger is required")
+	}
+	var triggers []string
+	var err error
+	if strings.HasPrefix(raw, "(") {
+		end := findClosingParen(raw)
+		if end < 0 || strings.TrimSpace(raw[end+1:]) != "" {
+			return nil, fmt.Errorf("usage: /filter <trigger> <response>")
+		}
+		triggers, err = splitCommaTriggers(raw[1:end])
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		trimmed := strings.TrimSpace(raw)
+		trigger := ""
+		switch {
+		case strings.HasPrefix(trimmed, "\"") && strings.HasSuffix(trimmed, "\"") && len(trimmed) >= 2:
+			trigger = strings.TrimSpace(trimmed[1 : len(trimmed)-1])
+		default:
+			trigger = strings.TrimSpace(trimmed)
+			if strings.ContainsAny(trigger, " \n\t") {
+				return nil, fmt.Errorf("usage: /filter <trigger> <response>")
+			}
+		}
+		if trigger == "" {
+			return nil, fmt.Errorf("usage: /filter <trigger> <response>")
+		}
+		triggers = []string{trigger}
+	}
+
+	definitions := make([]filterDefinition, 0, len(triggers))
+	seen := map[string]struct{}{}
+	for _, trigger := range triggers {
+		trigger = strings.TrimSpace(trigger)
+		if trigger == "" {
+			continue
+		}
+		matchMode := "contains"
+		lower := strings.ToLower(trigger)
+		switch {
+		case strings.HasPrefix(lower, "exact:"):
+			matchMode = "exact"
+			trigger = strings.TrimSpace(trigger[len("exact:"):])
+		case strings.HasPrefix(lower, "prefix:"):
+			matchMode = "prefix"
+			trigger = strings.TrimSpace(trigger[len("prefix:"):])
+		}
+		if trigger == "" {
+			continue
+		}
+		key := matchMode + ":" + strings.ToLower(trigger)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		definitions = append(definitions, filterDefinition{Trigger: trigger, MatchMode: matchMode})
+	}
+	if len(definitions) == 0 {
+		return nil, fmt.Errorf("trigger is required")
+	}
+	return definitions, nil
+}
+
 func findClosingParen(raw string) int {
 	inQuote := false
 	for idx, r := range raw {
@@ -206,19 +273,29 @@ func splitCommaTriggers(raw string) ([]string, error) {
 }
 
 type filterRenderResult struct {
-	Text                string
-	ReplyMarkup         *telegram.InlineKeyboardMarkup
-	DisableNotification bool
-	ProtectContent      bool
+	Text                  string
+	ReplyMarkup           *telegram.InlineKeyboardMarkup
+	DisableWebPagePreview bool
+	EnableWebPagePreview  bool
+	ShowPreviewAboveText  bool
+	DisableNotification   bool
+	ProtectContent        bool
+	HasMediaSpoiler       bool
+	MediaType             string
+	MediaFileID           string
 }
 
 func renderFilterResponse(filter domain.FilterRule, user telegram.User, chat telegram.Chat, rules string, rt *runtime.Context, noFormat bool, force bool) (filterRenderResult, bool, error) {
-	replyMarkup, err := buttonsFromJSON(filter.ButtonsJSON)
-	if err != nil {
-		return filterRenderResult{}, false, err
-	}
 	if noFormat {
-		return filterRenderResult{Text: filter.ResponseText, ReplyMarkup: replyMarkup}, true, nil
+		replyMarkup, err := buttonsFromJSON(filter.ButtonsJSON)
+		if err != nil {
+			return filterRenderResult{}, false, err
+		}
+		text := filter.ResponseText
+		if strings.TrimSpace(text) == "" && filter.ResponseMediaFileID != "" {
+			text = "This filter replies with saved media."
+		}
+		return filterRenderResult{Text: text, ReplyMarkup: replyMarkup}, true, nil
 	}
 
 	segments := strings.Split(filter.ResponseText, "%%%")
@@ -251,14 +328,22 @@ func renderFilterResponse(filter domain.FilterRule, user telegram.User, chat tel
 	if strings.Contains(chosen, "{replytag}") && rt.Message != nil && rt.Message.ReplyToMessage != nil && rt.Message.ReplyToMessage.From != nil {
 		renderUser = *rt.Message.ReplyToMessage.From
 	}
-	result := filterRenderResult{
-		DisableNotification: strings.Contains(chosen, "{nonotif}"),
-		ProtectContent:      strings.Contains(chosen, "{protect}"),
-		ReplyMarkup:         replyMarkup,
+	rendered, err := renderStoredPayload(chosen, filter.ButtonsJSON, renderUser, chat, rules, rt.Bot.Username, rt.ChatID())
+	if err != nil {
+		return filterRenderResult{}, false, err
 	}
-	cleaned := stripFilterControlTokens(chosen)
-	result.Text = renderStoredText(cleaned, renderUser, chat, rules)
-	return result, true, nil
+	return filterRenderResult{
+		Text:                  rendered.Text,
+		ReplyMarkup:           rendered.ReplyMarkup,
+		DisableWebPagePreview: rendered.DisableWebPagePreview,
+		EnableWebPagePreview:  rendered.EnableWebPagePreview,
+		ShowPreviewAboveText:  rendered.ShowPreviewAboveText,
+		DisableNotification:   rendered.DisableNotification,
+		ProtectContent:        rendered.ProtectContent,
+		HasMediaSpoiler:       rendered.HasMediaSpoiler,
+		MediaType:             filter.ResponseMediaType,
+		MediaFileID:           filter.ResponseMediaFileID,
+	}, true, nil
 }
 
 func stripFilterControlTokens(raw string) string {
@@ -271,8 +356,125 @@ func stripFilterControlTokens(raw string) string {
 		"{nonotif}", "",
 		"{preview}", "",
 		"{preview:top}", "",
+		"{rules}", "",
+		"{rules:same}", "",
+		"{mediaspoiler}", "",
 	)
 	return strings.TrimSpace(replacer.Replace(raw))
+}
+
+type storedPayloadResult struct {
+	Text                  string
+	ReplyMarkup           *telegram.InlineKeyboardMarkup
+	DisableWebPagePreview bool
+	EnableWebPagePreview  bool
+	ShowPreviewAboveText  bool
+	DisableNotification   bool
+	ProtectContent        bool
+	HasMediaSpoiler       bool
+}
+
+func renderStoredPayload(raw string, buttonsJSON string, user telegram.User, chat telegram.Chat, rules string, botUsername string, rulesChatID int64) (storedPayloadResult, error) {
+	replyMarkup, err := buttonsFromJSON(buttonsJSON)
+	if err != nil {
+		return storedPayloadResult{}, err
+	}
+
+	hasRulesRow := strings.Contains(raw, "{rules}")
+	hasRulesSame := strings.Contains(raw, "{rules:same}")
+	enablePreview := strings.Contains(raw, "{preview}") || strings.Contains(raw, "{preview:top}")
+	showPreviewAbove := strings.Contains(raw, "{preview:top}")
+
+	cleaned := stripFilterControlTokens(raw)
+	if hasRulesRow || hasRulesSame {
+		replyMarkup = appendRulesButton(replyMarkup, botUsername, rulesChatID, strings.TrimSpace(rules) != "", hasRulesRow, hasRulesSame)
+	}
+
+	return storedPayloadResult{
+		Text:                  renderStoredText(cleaned, user, chat, rules),
+		ReplyMarkup:           replyMarkup,
+		DisableWebPagePreview: !enablePreview,
+		EnableWebPagePreview:  enablePreview,
+		ShowPreviewAboveText:  showPreviewAbove,
+		DisableNotification:   strings.Contains(raw, "{nonotif}"),
+		ProtectContent:        strings.Contains(raw, "{protect}"),
+		HasMediaSpoiler:       strings.Contains(raw, "{mediaspoiler}"),
+	}, nil
+}
+
+func appendRulesButton(markup *telegram.InlineKeyboardMarkup, botUsername string, rulesChatID int64, hasRules bool, newRow bool, sameRow bool) *telegram.InlineKeyboardMarkup {
+	if !hasRules || strings.TrimSpace(botUsername) == "" || rulesChatID == 0 {
+		return markup
+	}
+
+	rows := make([][]telegram.InlineKeyboardButton, 0)
+	if markup != nil {
+		rows = make([][]telegram.InlineKeyboardButton, 0, len(markup.InlineKeyboard)+1)
+		for _, row := range markup.InlineKeyboard {
+			rows = append(rows, append([]telegram.InlineKeyboardButton(nil), row...))
+		}
+	}
+
+	button := telegram.InlineKeyboardButton{
+		Text: "Rules",
+		URL:  serviceutil.BotDeepLink(botUsername, fmt.Sprintf("rules_%d", rulesChatID)),
+	}
+	if sameRow && len(rows) > 0 {
+		rows[len(rows)-1] = append(rows[len(rows)-1], button)
+	} else if newRow || len(rows) == 0 {
+		rows = append(rows, []telegram.InlineKeyboardButton{button})
+	} else {
+		rows[len(rows)-1] = append(rows[len(rows)-1], button)
+	}
+	return &telegram.InlineKeyboardMarkup{InlineKeyboard: rows}
+}
+
+func mediaFromMessage(message *telegram.Message) (string, string, bool) {
+	if message == nil {
+		return "", "", false
+	}
+	switch {
+	case len(message.Photo) > 0:
+		return "photo", message.Photo[len(message.Photo)-1].FileID, true
+	case message.Animation != nil && message.Animation.FileID != "":
+		return "animation", message.Animation.FileID, true
+	case message.Video != nil && message.Video.FileID != "":
+		return "video", message.Video.FileID, true
+	case message.Document != nil && message.Document.FileID != "":
+		return "document", message.Document.FileID, true
+	case message.Audio != nil && message.Audio.FileID != "":
+		return "audio", message.Audio.FileID, true
+	case message.Voice != nil && message.Voice.FileID != "":
+		return "voice", message.Voice.FileID, true
+	case message.VideoNote != nil && message.VideoNote.FileID != "":
+		return "videonote", message.VideoNote.FileID, true
+	case message.Sticker != nil && message.Sticker.FileID != "":
+		return "sticker", message.Sticker.FileID, true
+	default:
+		return "", "", false
+	}
+}
+
+func parseFilterReplyPayload(message *telegram.Message) (string, string, string, string, error) {
+	if message == nil {
+		return "", "", "", "", fmt.Errorf("usage: /filter <trigger> <response>")
+	}
+	body := strings.TrimSpace(message.Caption)
+	if body == "" {
+		body = strings.TrimSpace(message.Text)
+	}
+	text, buttonsJSON, err := parseStoredContent(body)
+	if err != nil {
+		return "", "", "", "", err
+	}
+	mediaType, mediaFileID, hasMedia := mediaFromMessage(message)
+	if hasMedia {
+		return text, buttonsJSON, mediaType, mediaFileID, nil
+	}
+	if strings.TrimSpace(text) == "" {
+		return "", "", "", "", fmt.Errorf("usage: /filter <trigger> <response>")
+	}
+	return text, buttonsJSON, "", "", nil
 }
 
 func parseButtonRow(line string) ([]telegram.InlineKeyboardButton, bool, error) {

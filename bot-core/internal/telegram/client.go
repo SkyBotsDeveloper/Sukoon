@@ -16,6 +16,7 @@ import (
 type Client interface {
 	SendMessage(ctx context.Context, chatID int64, text string, options SendMessageOptions) (Message, error)
 	SendPhoto(ctx context.Context, chatID int64, photo string, options SendPhotoOptions) (Message, error)
+	SendMedia(ctx context.Context, chatID int64, mediaType string, fileID string, options SendMediaOptions) (Message, error)
 	EditMessageText(ctx context.Context, chatID int64, messageID int64, text string, options EditMessageTextOptions) error
 	DeleteMessage(ctx context.Context, chatID int64, messageID int64) error
 	PinChatMessage(ctx context.Context, chatID int64, messageID int64, disableNotification bool) error
@@ -99,7 +100,16 @@ func (c *HTTPClient) SendMessage(ctx context.Context, chatID int64, text string,
 	if options.ParseMode != "" {
 		payload["parse_mode"] = options.ParseMode
 	}
-	if options.DisableWebPagePreview {
+	if options.ShowPreviewAboveText {
+		payload["link_preview_options"] = map[string]any{
+			"is_disabled":     false,
+			"show_above_text": true,
+		}
+	} else if options.EnableWebPagePreview {
+		payload["link_preview_options"] = map[string]any{
+			"is_disabled": false,
+		}
+	} else if options.DisableWebPagePreview {
 		payload["disable_web_page_preview"] = true
 	}
 	if options.DisableNotification {
@@ -128,10 +138,82 @@ func (c *HTTPClient) SendPhoto(ctx context.Context, chatID int64, photo string, 
 	if options.ParseMode != "" {
 		payload["parse_mode"] = options.ParseMode
 	}
+	if options.DisableNotification {
+		payload["disable_notification"] = true
+	}
+	if options.ProtectContent {
+		payload["protect_content"] = true
+	}
+	if options.HasSpoiler {
+		payload["has_spoiler"] = true
+	}
 	if options.ReplyMarkup != nil {
 		payload["reply_markup"] = options.ReplyMarkup
 	}
 	return request[Message](ctx, c, "sendPhoto", payload)
+}
+
+func (c *HTTPClient) SendMedia(ctx context.Context, chatID int64, mediaType string, fileID string, options SendMediaOptions) (Message, error) {
+	method := ""
+	field := ""
+	switch mediaType {
+	case "photo":
+		method = "sendPhoto"
+		field = "photo"
+	case "animation":
+		method = "sendAnimation"
+		field = "animation"
+	case "video":
+		method = "sendVideo"
+		field = "video"
+	case "document":
+		method = "sendDocument"
+		field = "document"
+	case "audio":
+		method = "sendAudio"
+		field = "audio"
+	case "voice":
+		method = "sendVoice"
+		field = "voice"
+	case "videonote":
+		method = "sendVideoNote"
+		field = "video_note"
+	case "sticker":
+		method = "sendSticker"
+		field = "sticker"
+	default:
+		return Message{}, fmt.Errorf("unsupported media type %q", mediaType)
+	}
+
+	payload := map[string]any{
+		"chat_id": chatID,
+		field:     fileID,
+	}
+	if options.ReplyToMessageID != 0 {
+		payload["reply_to_message_id"] = options.ReplyToMessageID
+	}
+	if options.Caption != "" && mediaType != "sticker" && mediaType != "videonote" {
+		payload["caption"] = options.Caption
+	}
+	if options.ParseMode != "" && mediaType != "sticker" && mediaType != "videonote" {
+		payload["parse_mode"] = options.ParseMode
+	}
+	if options.DisableNotification {
+		payload["disable_notification"] = true
+	}
+	if options.ProtectContent {
+		payload["protect_content"] = true
+	}
+	if options.HasSpoiler && (mediaType == "photo" || mediaType == "animation" || mediaType == "video") {
+		payload["has_spoiler"] = true
+	}
+	if options.ShowCaptionAboveMedia && (mediaType == "photo" || mediaType == "animation" || mediaType == "video") {
+		payload["show_caption_above_media"] = true
+	}
+	if options.ReplyMarkup != nil {
+		payload["reply_markup"] = options.ReplyMarkup
+	}
+	return request[Message](ctx, c, method, payload)
 }
 
 func (c *HTTPClient) EditMessageText(ctx context.Context, chatID int64, messageID int64, text string, options EditMessageTextOptions) error {
@@ -143,7 +225,16 @@ func (c *HTTPClient) EditMessageText(ctx context.Context, chatID int64, messageI
 	if options.ParseMode != "" {
 		payload["parse_mode"] = options.ParseMode
 	}
-	if options.DisableWebPagePreview {
+	if options.ShowPreviewAboveText {
+		payload["link_preview_options"] = map[string]any{
+			"is_disabled":     false,
+			"show_above_text": true,
+		}
+	} else if options.EnableWebPagePreview {
+		payload["link_preview_options"] = map[string]any{
+			"is_disabled": false,
+		}
+	} else if options.DisableWebPagePreview {
 		payload["disable_web_page_preview"] = true
 	}
 	if options.ReplyMarkup != nil {

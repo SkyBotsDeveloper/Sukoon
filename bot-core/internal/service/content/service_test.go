@@ -114,6 +114,46 @@ func TestRulesSurfaceUsesButtonsInGroupAndCallbackFlow(t *testing.T) {
 	assertRulesButton(t, shownMarkup, 1, 1, "Close", "ux:close", "")
 }
 
+func TestSavedNoteSupportsRulesButtonFilling(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100777, Type: "supergroup", Title: "Rules Fillings"}
+
+	if err := h.Store.SetRules(context.Background(), h.Bot.ID, chat.ID, "Follow the rules."); err != nil {
+		t.Fatalf("set rules failed: %v", err)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 10,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/save info Press the button to read the chat rules! {rules}",
+		},
+	}); err != nil {
+		t.Fatalf("save note failed: %v", err)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		Message: &telegram.Message{
+			MessageID: 11,
+			From:      &telegram.User{ID: 20, FirstName: "Member"},
+			Chat:      chat,
+			Text:      "#info",
+		},
+	}); err != nil {
+		t.Fatalf("get note failed: %v", err)
+	}
+
+	got := h.Client.Messages[len(h.Client.Messages)-1]
+	if !strings.Contains(got.Text, "Press the button to read the chat rules!") {
+		t.Fatalf("unexpected note text: %q", got.Text)
+	}
+	markup := requireRulesMarkup(t, got)
+	assertRulesButton(t, markup, 0, 0, "Rules", "", serviceutil.BotDeepLink(h.Bot.Username, "rules_-100777"))
+}
+
 func requireRulesMarkup(t *testing.T, msg testsupport.SentMessage) *telegram.InlineKeyboardMarkup {
 	t.Helper()
 	if msg.Options.ReplyMarkup == nil {

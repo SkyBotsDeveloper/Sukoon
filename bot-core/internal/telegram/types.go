@@ -235,21 +235,39 @@ type SendMessageOptions struct {
 	ReplyToMessageID      int64
 	ParseMode             string
 	DisableWebPagePreview bool
+	EnableWebPagePreview  bool
+	ShowPreviewAboveText  bool
 	DisableNotification   bool
 	ProtectContent        bool
 	ReplyMarkup           *InlineKeyboardMarkup
 }
 
 type SendPhotoOptions struct {
-	ReplyToMessageID int64
-	Caption          string
-	ParseMode        string
-	ReplyMarkup      *InlineKeyboardMarkup
+	ReplyToMessageID    int64
+	Caption             string
+	ParseMode           string
+	DisableNotification bool
+	ProtectContent      bool
+	HasSpoiler          bool
+	ReplyMarkup         *InlineKeyboardMarkup
+}
+
+type SendMediaOptions struct {
+	ReplyToMessageID      int64
+	Caption               string
+	ParseMode             string
+	DisableNotification   bool
+	ProtectContent        bool
+	HasSpoiler            bool
+	ShowCaptionAboveMedia bool
+	ReplyMarkup           *InlineKeyboardMarkup
 }
 
 type EditMessageTextOptions struct {
 	ParseMode             string
 	DisableWebPagePreview bool
+	EnableWebPagePreview  bool
+	ShowPreviewAboveText  bool
 	ReplyMarkup           *InlineKeyboardMarkup
 }
 

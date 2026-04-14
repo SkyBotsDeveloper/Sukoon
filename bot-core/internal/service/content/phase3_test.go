@@ -268,7 +268,9 @@ func TestFiltersSupportQuotedTriggersStopAllAndContentFillings(t *testing.T) {
 		t.Fatalf("get filled note failed: %v", err)
 	}
 	noteText := h.Client.Messages[len(h.Client.Messages)-1].Text
-	if !strings.Contains(noteText, "@filteruser") && !strings.Contains(noteText, "Read No spam here") {
+	noteMarkup := h.Client.Messages[len(h.Client.Messages)-1].Options.ReplyMarkup
+	hasRulesButton := noteMarkup != nil && len(noteMarkup.InlineKeyboard) > 0 && len(noteMarkup.InlineKeyboard[0]) > 0 && noteMarkup.InlineKeyboard[0][0].Text == "Rules"
+	if !strings.Contains(noteText, "@filteruser") && !hasRulesButton {
 		t.Fatalf("expected note fillings or random content to resolve, got %q", noteText)
 	}
 }
@@ -410,5 +412,90 @@ func TestFilterRoseStyleExamplesThatAreLive(t *testing.T) {
 		if got.Options.DisableNotification != tc.wantSilent || got.Options.ProtectContent != tc.wantProtect {
 			t.Fatalf("unexpected filter send options for %q: %+v", tc.text, got.Options)
 		}
+	}
+}
+
+func TestFilterSupportsReplySavedMediaAndPreviewControls(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100736, Type: "supergroup", Title: "Rose Media Filters"}
+
+	if err := h.Store.SetRules(context.Background(), h.Bot.ID, chat.ID, "No spam."); err != nil {
+		t.Fatalf("set rules failed: %v", err)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 10,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/filter splash",
+			ReplyToMessage: &telegram.Message{
+				MessageID: 9,
+				Chat:      chat,
+				Caption:   "Look at this {mediaspoiler} {protect} {nonotif}",
+				Photo: []telegram.PhotoSize{
+					{FileID: "thumb"},
+					{FileID: "photo-file"},
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("save media filter failed: %v", err)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		Message: &telegram.Message{
+			MessageID: 11,
+			From:      &telegram.User{ID: 20, FirstName: "Member"},
+			Chat:      chat,
+			Text:      "splash",
+		},
+	}); err != nil {
+		t.Fatalf("trigger media filter failed: %v", err)
+	}
+
+	if len(h.Client.Media) != 1 {
+		t.Fatalf("expected one media reply, got %+v", h.Client.Media)
+	}
+	media := h.Client.Media[0]
+	if media.MediaType != "photo" || media.FileID != "photo-file" {
+		t.Fatalf("unexpected media send: %+v", media)
+	}
+	if media.Options.Caption != "Look at this" || !media.Options.HasSpoiler || !media.Options.ProtectContent || !media.Options.DisableNotification {
+		t.Fatalf("unexpected media options: %+v", media.Options)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 3,
+		Message: &telegram.Message{
+			MessageID: 12,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/filter docs https://example.com {preview:top}",
+		},
+	}); err != nil {
+		t.Fatalf("save preview filter failed: %v", err)
+	}
+
+	before := len(h.Client.Messages)
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 4,
+		Message: &telegram.Message{
+			MessageID: 13,
+			From:      &telegram.User{ID: 20, FirstName: "Member"},
+			Chat:      chat,
+			Text:      "docs",
+		},
+	}); err != nil {
+		t.Fatalf("trigger preview filter failed: %v", err)
+	}
+	if len(h.Client.Messages) != before+1 {
+		t.Fatalf("expected preview filter message, got %+v", h.Client.Messages)
+	}
+	got := h.Client.Messages[len(h.Client.Messages)-1]
+	if got.Options.DisableWebPagePreview || !got.Options.EnableWebPagePreview || !got.Options.ShowPreviewAboveText {
+		t.Fatalf("unexpected preview options: %+v", got.Options)
 	}
 }
