@@ -1058,6 +1058,25 @@ func TestCleanServiceHelpPageUsesBackOnlyLayout(t *testing.T) {
 
 	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
 		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 10,
+			From:      &telegram.User{ID: 61, FirstName: "User"},
+			Chat:      chat,
+			Text:      "/help clean service",
+		},
+	}); err != nil {
+		t.Fatalf("cleanservice help command failed: %v", err)
+	}
+
+	sent := h.Client.Messages[len(h.Client.Messages)-1]
+	if rendered := renderedText(sent.Text); !strings.Contains(rendered, "Clean Service") || strings.Contains(rendered, "Clean Commands") {
+		t.Fatalf("expected /help clean service to open cleanservice page, got %q", sent.Text)
+	}
+	sentMarkup := requireMarkup(t, sent)
+	assertButton(t, sentMarkup, 0, 0, "Back", "ux:help:root", "")
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
 		CallbackQuery: &telegram.CallbackQuery{
 			ID:   "cb-help-cleanservice",
 			From: telegram.User{ID: 61, FirstName: "User"},
@@ -1082,6 +1101,28 @@ func TestCleanServiceHelpPageUsesBackOnlyLayout(t *testing.T) {
 	assertNoButtonText(t, markup, "Add to Group")
 	assertNoButtonText(t, markup, "Home")
 	assertNoButtonText(t, markup, "Close")
+}
+
+func TestGroupHelpCleanServiceGuidanceTargetsCleanService(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100861, Type: "supergroup", Title: "Help"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 20,
+			From:      &telegram.User{ID: 50, FirstName: "User"},
+			Chat:      chat,
+			Text:      "/help clean service",
+		},
+	}); err != nil {
+		t.Fatalf("group cleanservice help guidance failed: %v", err)
+	}
+
+	msg := h.Client.Messages[len(h.Client.Messages)-1]
+	markup := requireMarkup(t, msg)
+	assertButton(t, markup, 0, 0, "Open PM", "", serviceutil.BotURL(h.Bot.Username))
+	assertButton(t, markup, 0, 1, "Help", "", "https://t.me/sukoon_bot?start=help_cleanservice")
 }
 
 func TestGroupPMGuidanceUsesButtonsForHelpAndPrivacy(t *testing.T) {

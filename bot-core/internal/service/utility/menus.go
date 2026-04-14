@@ -1431,6 +1431,7 @@ func rulesPMMarkup(username string) *telegram.InlineKeyboardMarkup {
 
 func normalizeHelpSection(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
+	value = strings.Join(strings.Fields(value), " ")
 	switch value {
 	case "", "main", "home", "root":
 		return helpRoot
@@ -1452,9 +1453,9 @@ func normalizeHelpSection(value string) string {
 		return helpBlocklistExamples
 	case "captcha", "captchas", "captchamode", "captcharules", "captchamutetime", "captchakick", "captchakicktime", "setcaptchatext", "resetcaptchatext":
 		return helpCaptcha
-	case "clean", "cleanup", "cleancommands", "cleancommand", "keepcommand", "cleancommandtypes":
+	case "clean", "cleanup", "clean commands", "cleancommands", "cleancommand", "keepcommand", "cleancommandtypes":
 		return helpCleanCommands
-	case "cleanservice", "keepservice", "nocleanservice", "cleanservicetypes":
+	case "clean service", "clean services", "cleanservice", "keepservice", "nocleanservice", "cleanservicetypes":
 		return helpCleanService
 	case "connections", "connect", "disconnect", "reconnect", "connection":
 		return helpConnections

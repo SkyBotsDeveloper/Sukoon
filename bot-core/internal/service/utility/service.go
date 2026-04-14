@@ -142,8 +142,8 @@ func (s *Service) start(ctx context.Context, rt *runtime.Context) error {
 func (s *Service) help(ctx context.Context, rt *runtime.Context) error {
 	if !isPrivateChat(rt) {
 		payload := "help_main"
-		if len(rt.Command.Args) > 0 {
-			if section := normalizeHelpSection(rt.Command.Args[0]); section != "" {
+		if strings.TrimSpace(rt.Command.RawArgs) != "" {
+			if section := normalizeHelpSection(rt.Command.RawArgs); section != "" {
 				payload = "help_" + section
 			}
 		}
@@ -153,8 +153,8 @@ func (s *Service) help(ctx context.Context, rt *runtime.Context) error {
 		)
 	}
 
-	if len(rt.Command.Args) > 0 {
-		section := normalizeHelpSection(rt.Command.Args[0])
+	if strings.TrimSpace(rt.Command.RawArgs) != "" {
+		section := normalizeHelpSection(rt.Command.RawArgs)
 		if section != "" {
 			return s.sendHelpMessage(ctx, rt, section)
 		}
