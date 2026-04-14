@@ -3,6 +3,7 @@ package testsupport
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -688,7 +689,7 @@ func (m *MemoryStore) SetCleanService(_ context.Context, botID string, chatID in
 		settings.CleanServiceOther = enabled
 	case "videochat":
 		settings.CleanServiceVideoChat = enabled
-	default:
+	case "all":
 		settings.CleanServiceJoin = enabled
 		settings.CleanServiceLeave = enabled
 		settings.CleanServicePin = enabled
@@ -696,6 +697,8 @@ func (m *MemoryStore) SetCleanService(_ context.Context, botID string, chatID in
 		settings.CleanServicePhoto = enabled
 		settings.CleanServiceOther = enabled
 		settings.CleanServiceVideoChat = enabled
+	default:
+		return fmt.Errorf("unknown cleanservice type: %s", target)
 	}
 	m.settings[key] = settings
 	return nil

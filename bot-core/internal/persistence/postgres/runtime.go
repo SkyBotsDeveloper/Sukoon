@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -407,8 +408,10 @@ func (s *Store) SetCleanService(ctx context.Context, botID string, chatID int64,
 		query += `, clean_service_other=$3`
 	case "videochat":
 		query += `, clean_service_videochat=$3`
-	default:
+	case "all":
 		query += `, clean_service_join=$3, clean_service_leave=$3, clean_service_pin=$3, clean_service_title=$3, clean_service_photo=$3, clean_service_other=$3, clean_service_videochat=$3`
+	default:
+		return fmt.Errorf("unknown cleanservice type: %s", target)
 	}
 	query += ` WHERE bot_id=$1 AND chat_id=$2`
 	_, err := s.pool.Exec(ctx, query, botID, chatID, enabled)

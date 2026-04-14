@@ -1052,6 +1052,38 @@ func TestCleanCommandsHelpPageLinksToContextualLocksAndLogChannels(t *testing.T)
 	assertButton(t, logMarkup, 0, 0, "Back", "ux:help:cleancommands", "")
 }
 
+func TestCleanServiceHelpPageUsesBackOnlyLayout(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: 61, Type: "private"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-help-cleanservice",
+			From: telegram.User{ID: 61, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: 100,
+				Chat:      chat,
+			},
+			Data: "ux:help:cleanservice",
+		},
+	}); err != nil {
+		t.Fatalf("cleanservice help callback failed: %v", err)
+	}
+
+	edited := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	rendered := renderedText(edited.Text)
+	if !strings.Contains(rendered, "/keepservice <type>") || !strings.Contains(rendered, "/cleanservicetypes") {
+		t.Fatalf("expected cleanservice help page content, got %q", edited.Text)
+	}
+	markup := requireEditedMarkup(t, edited)
+	assertButton(t, markup, 0, 0, "Back", "ux:help:root", "")
+	assertNoButtonText(t, markup, "Website")
+	assertNoButtonText(t, markup, "Add to Group")
+	assertNoButtonText(t, markup, "Home")
+	assertNoButtonText(t, markup, "Close")
+}
+
 func TestGroupPMGuidanceUsesButtonsForHelpAndPrivacy(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	group := telegram.Chat{ID: -100990, Type: "supergroup", Title: "Help"}

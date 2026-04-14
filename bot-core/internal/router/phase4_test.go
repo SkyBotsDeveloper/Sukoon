@@ -70,6 +70,33 @@ func TestCleanServiceCoversTitlePhotoAndOther(t *testing.T) {
 				MessageAutoDeleteTimerChanged: &telegram.MessageAutoDeleteTimerChanged{MessageAutoDeleteTime: 60},
 			},
 		},
+		{
+			UpdateID: 14,
+			Message: &telegram.Message{
+				MessageID:        24,
+				From:             &telegram.User{ID: 2, FirstName: "User"},
+				Chat:             chat,
+				ForumTopicEdited: &telegram.ForumTopicEdited{Name: "Fresh title"},
+			},
+		},
+		{
+			UpdateID: 15,
+			Message: &telegram.Message{
+				MessageID:         25,
+				From:              &telegram.User{ID: 2, FirstName: "User"},
+				Chat:              chat,
+				ChatBackgroundSet: &telegram.ChatBackgroundSet{},
+			},
+		},
+		{
+			UpdateID: 16,
+			Message: &telegram.Message{
+				MessageID:           26,
+				From:                &telegram.User{ID: 2, FirstName: "User"},
+				Chat:                chat,
+				ChecklistTasksAdded: &telegram.ChecklistTasksAdded{},
+			},
+		},
 	}
 
 	for _, update := range serviceUpdates {
@@ -78,7 +105,7 @@ func TestCleanServiceCoversTitlePhotoAndOther(t *testing.T) {
 		}
 	}
 
-	if len(h.Client.DeletedMessages) != 4 {
-		t.Fatalf("expected 4 cleanservice deletions, got %+v", h.Client.DeletedMessages)
+	if len(h.Client.DeletedMessages) != 7 {
+		t.Fatalf("expected 7 cleanservice deletions, got %+v", h.Client.DeletedMessages)
 	}
 }

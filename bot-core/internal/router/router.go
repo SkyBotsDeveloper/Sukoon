@@ -438,22 +438,47 @@ func shouldCleanServiceMessage(message *telegram.Message, settings domain.ChatSe
 	if message == nil {
 		return false
 	}
-	switch {
-	case len(message.NewChatMembers) > 0:
+	switch cleanServiceCategory(message) {
+	case "join":
 		return settings.CleanServiceJoin
-	case message.LeftChatMember != nil:
+	case "leave":
 		return settings.CleanServiceLeave
-	case message.PinnedMessage != nil:
+	case "pin":
 		return settings.CleanServicePin
-	case message.NewChatTitle != "":
+	case "title":
 		return settings.CleanServiceTitle
-	case len(message.NewChatPhoto) > 0 || message.DeleteChatPhoto:
+	case "photo":
 		return settings.CleanServicePhoto
-	case message.VideoChatStarted != nil || message.VideoChatEnded != nil || message.VideoChatParticipantsInvited != nil || message.VideoChatScheduled != nil:
+	case "videochat":
 		return settings.CleanServiceVideoChat
-	case message.GroupChatCreated || message.SupergroupChatCreated || message.ChannelChatCreated || message.MessageAutoDeleteTimerChanged != nil:
+	case "other":
 		return settings.CleanServiceOther
 	default:
 		return false
+	}
+}
+
+func cleanServiceCategory(message *telegram.Message) string {
+	switch {
+	case len(message.NewChatMembers) > 0:
+		return "join"
+	case message.LeftChatMember != nil:
+		return "leave"
+	case message.PinnedMessage != nil:
+		return "pin"
+	case message.NewChatTitle != "" || message.ForumTopicCreated != nil || message.ForumTopicEdited != nil:
+		return "title"
+	case len(message.NewChatPhoto) > 0 || message.DeleteChatPhoto || message.ChatBackgroundSet != nil:
+		return "photo"
+	case message.VideoChatStarted != nil || message.VideoChatEnded != nil || message.VideoChatParticipantsInvited != nil || message.VideoChatScheduled != nil:
+		return "videochat"
+	case message.GroupChatCreated || message.SupergroupChatCreated || message.ChannelChatCreated ||
+		message.MessageAutoDeleteTimerChanged != nil || message.SuccessfulPayment != nil ||
+		message.RefundedPayment != nil || message.ProximityAlertTriggered != nil ||
+		message.WebAppData != nil || message.ChecklistTasksDone != nil ||
+		message.ChecklistTasksAdded != nil || message.BoostAdded != nil:
+		return "other"
+	default:
+		return ""
 	}
 }

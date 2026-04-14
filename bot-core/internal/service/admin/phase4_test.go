@@ -462,6 +462,56 @@ func TestApprovalStatusUnapproveAllAndLogCategories(t *testing.T) {
 	}
 }
 
+func TestCleanServiceCommandsAndKeepAlias(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100725, Type: "supergroup", Title: "Clean Service"}
+
+	for idx, text := range []string{
+		"/cleanservice join pin",
+		"/keepservice pin",
+		"/cleanservice other on",
+		"/cleanservicetypes",
+	} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(100 + idx),
+			Message: &telegram.Message{
+				MessageID: int64(300 + idx),
+				From:      &telegram.User{ID: 1, FirstName: "Owner"},
+				Chat:      chat,
+				Text:      text,
+			},
+		}); err != nil {
+			t.Fatalf("command %q failed: %v", text, err)
+		}
+	}
+
+	bundle, err := h.Store.LoadRuntimeBundle(context.Background(), h.Bot.ID, chat.ID)
+	if err != nil {
+		t.Fatalf("load runtime bundle failed: %v", err)
+	}
+	if !bundle.Settings.CleanServiceJoin || bundle.Settings.CleanServicePin || !bundle.Settings.CleanServiceOther {
+		t.Fatalf("unexpected cleanservice settings: %+v", bundle.Settings)
+	}
+
+	last := h.Client.Messages[len(h.Client.Messages)-1].Text
+	if !strings.Contains(last, "chat boosts") || !strings.Contains(last, "/keepservice <type>") {
+		t.Fatalf("expected detailed cleanservicetypes response, got %q", last)
+	}
+
+	err = h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 999,
+		Message: &telegram.Message{
+			MessageID: 999,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/cleanservice nonsense",
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "unknown cleanservice type") {
+		t.Fatalf("expected invalid cleanservice type error, got %v", err)
+	}
+}
+
 func TestCleanCommandTypeSelection(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	chat := telegram.Chat{ID: -100717, Type: "supergroup", Title: "Clean Commands"}

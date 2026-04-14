@@ -37,10 +37,20 @@ type Message struct {
 	SupergroupChatCreated         bool                           `json:"supergroup_chat_created,omitempty"`
 	ChannelChatCreated            bool                           `json:"channel_chat_created,omitempty"`
 	MessageAutoDeleteTimerChanged *MessageAutoDeleteTimerChanged `json:"message_auto_delete_timer_changed,omitempty"`
+	SuccessfulPayment             *SuccessfulPayment             `json:"successful_payment,omitempty"`
+	RefundedPayment               *RefundedPayment               `json:"refunded_payment,omitempty"`
+	ProximityAlertTriggered       *ProximityAlertTriggered       `json:"proximity_alert_triggered,omitempty"`
+	WebAppData                    *WebAppData                    `json:"web_app_data,omitempty"`
 	VideoChatStarted              *VideoChatStarted              `json:"video_chat_started,omitempty"`
 	VideoChatEnded                *VideoChatEnded                `json:"video_chat_ended,omitempty"`
 	VideoChatParticipantsInvited  *VideoChatParticipantsInvited  `json:"video_chat_participants_invited,omitempty"`
 	VideoChatScheduled            *VideoChatScheduled            `json:"video_chat_scheduled,omitempty"`
+	ForumTopicCreated             *ForumTopicCreated             `json:"forum_topic_created,omitempty"`
+	ForumTopicEdited              *ForumTopicEdited              `json:"forum_topic_edited,omitempty"`
+	ChatBackgroundSet             *ChatBackgroundSet             `json:"chat_background_set,omitempty"`
+	ChecklistTasksDone            *ChecklistTasksDone            `json:"checklist_tasks_done,omitempty"`
+	ChecklistTasksAdded           *ChecklistTasksAdded           `json:"checklist_tasks_added,omitempty"`
+	BoostAdded                    *BoostAdded                    `json:"boost_added,omitempty"`
 	ForwardOrigin                 any                            `json:"forward_origin,omitempty"`
 	ExternalReply                 *ExternalReplyInfo             `json:"external_reply,omitempty"`
 	IsAutomaticForward            bool                           `json:"is_automatic_forward,omitempty"`
@@ -149,6 +159,14 @@ type MessageAutoDeleteTimerChanged struct {
 	MessageAutoDeleteTime int `json:"message_auto_delete_time"`
 }
 
+type SuccessfulPayment struct{}
+
+type RefundedPayment struct{}
+
+type ProximityAlertTriggered struct{}
+
+type WebAppData struct{}
+
 type VideoChatStarted struct{}
 
 type VideoChatEnded struct {
@@ -162,6 +180,22 @@ type VideoChatParticipantsInvited struct {
 type VideoChatScheduled struct {
 	StartDate int64 `json:"start_date,omitempty"`
 }
+
+type ForumTopicCreated struct {
+	Name string `json:"name,omitempty"`
+}
+
+type ForumTopicEdited struct {
+	Name string `json:"name,omitempty"`
+}
+
+type ChatBackgroundSet struct{}
+
+type ChecklistTasksDone struct{}
+
+type ChecklistTasksAdded struct{}
+
+type BoostAdded struct{}
 
 type ChatAdministrator struct {
 	User               User   `json:"user"`

@@ -77,7 +77,7 @@ func (s *Service) Handle(ctx context.Context, rt *runtime.Context) (bool, error)
 		return true, s.cleanCommandTypes(ctx, rt)
 	case "cleanservice":
 		return true, s.cleanService(ctx, rt)
-	case "nocleanservice":
+	case "nocleanservice", "keepservice":
 		return true, s.noCleanService(ctx, rt)
 	case "cleanservicetypes":
 		return true, s.cleanServiceTypes(ctx, rt)
@@ -771,7 +771,12 @@ func (s *Service) cleanService(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	if len(rt.Command.Args) == 0 {
-		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Clean service: join=%t leave=%t pin=%t title=%t photo=%t other=%t videochat=%t", rt.RuntimeBundle.Settings.CleanServiceJoin, rt.RuntimeBundle.Settings.CleanServiceLeave, rt.RuntimeBundle.Settings.CleanServicePin, rt.RuntimeBundle.Settings.CleanServiceTitle, rt.RuntimeBundle.Settings.CleanServicePhoto, rt.RuntimeBundle.Settings.CleanServiceOther, rt.RuntimeBundle.Settings.CleanServiceVideoChat), rt.ReplyOptions(telegram.SendMessageOptions{}))
+		enabled := enabledCleanServiceTypes(rt.RuntimeBundle.Settings)
+		text := "Clean Service is off. Use /cleanservice <type> to enable categories."
+		if len(enabled) > 0 {
+			text = "Currently cleaned service messages: " + strings.Join(enabled, ", ") + "."
+		}
+		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
 		return err
 	}
 	if len(rt.Command.Args) == 1 {
@@ -780,6 +785,9 @@ func (s *Service) cleanService(ctx context.Context, rt *runtime.Context) error {
 				return err
 			}
 			_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Clean service all set to %s.", toggleWord(enabled)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+			if err == nil {
+				_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategorySettings, fmt.Sprintf("settings: actor=%d cleanservice enabled=%t categories=all", rt.ActorID(), enabled))
+			}
 			return err
 		}
 	}
@@ -792,14 +800,21 @@ func (s *Service) cleanService(ctx context.Context, rt *runtime.Context) error {
 		}
 	}
 	if len(targets) == 0 {
-		return fmt.Errorf("usage: /cleanservice <on|off|join|leave|pin|title|photo|other|videochat|all> [on|off]")
+		return fmt.Errorf("usage: /cleanservice <type/yes/no/on/off> where type is join, leave, other, photo, pin, title, videochat, or all")
 	}
-	for _, target := range targets {
-		if err := rt.Store.SetCleanService(ctx, rt.Bot.ID, rt.ChatID(), strings.ToLower(target), enabled); err != nil {
+	categories, err := parseCleanServiceTypes(targets)
+	if err != nil {
+		return err
+	}
+	for _, target := range categories {
+		if err := rt.Store.SetCleanService(ctx, rt.Bot.ID, rt.ChatID(), target, enabled); err != nil {
 			return err
 		}
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Clean service %s set to %s.", strings.Join(targets, ", "), toggleWord(enabled)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Clean service %s set to %s.", strings.Join(categories, ", "), toggleWord(enabled)), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	if err == nil {
+		_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategorySettings, fmt.Sprintf("settings: actor=%d cleanservice enabled=%t categories=%s", rt.ActorID(), enabled, strings.Join(categories, ",")))
+	}
 	return err
 }
 
@@ -808,19 +823,40 @@ func (s *Service) noCleanService(ctx context.Context, rt *runtime.Context) error
 		return err
 	}
 	if len(rt.Command.Args) == 0 {
-		return fmt.Errorf("usage: /nocleanservice <join|leave|pin|title|photo|other|videochat|all>")
+		return fmt.Errorf("usage: /%s <join|leave|other|photo|pin|title|videochat|all>", rt.Command.Name)
 	}
-	for _, target := range rt.Command.Args {
+	categories, err := parseCleanServiceTypes(rt.Command.Args)
+	if err != nil {
+		return err
+	}
+	for _, target := range categories {
 		if err := rt.Store.SetCleanService(ctx, rt.Bot.ID, rt.ChatID(), strings.ToLower(target), false); err != nil {
 			return err
 		}
 	}
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Requested cleanservice types were disabled.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), "Requested cleanservice types were disabled.", rt.ReplyOptions(telegram.SendMessageOptions{}))
+	if err == nil {
+		_ = serviceutil.SendLogCategory(ctx, rt, serviceutil.LogCategorySettings, fmt.Sprintf("settings: actor=%d cleanservice enabled=false categories=%s", rt.ActorID(), strings.Join(categories, ",")))
+	}
 	return err
 }
 
 func (s *Service) cleanServiceTypes(ctx context.Context, rt *runtime.Context) error {
-	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "Cleanservice types: all, join, leave, pin, title, photo, other, videochat", rt.ReplyOptions(telegram.SendMessageOptions{}))
+	text := strings.Join([]string{
+		"Clean Service types:",
+		"",
+		"- all: All service messages.",
+		"- join: When a new user joins, or is added. Eg: 'X joined the chat'.",
+		"- leave: When a user leaves, or is removed. Eg: 'X left the chat'.",
+		"- other: Miscellaneous items; such as chat boosts, successful Telegram payments, proximity alerts, webapp messages, or message auto deletion changes.",
+		"- photo: When chat photos or chat backgrounds are changed.",
+		"- pin: When a new message is pinned. Eg: 'X pinned a message'.",
+		"- title: When chat or topic titles are changed.",
+		"- videochat: When a video chat action occurs - eg starting, ending, scheduling, or adding members to the call.",
+		"",
+		"Use /cleanservice <type> to clean specific categories, and /keepservice <type> or /nocleanservice <type> to stop cleaning them.",
+	}, "\n")
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -1044,6 +1080,26 @@ func parseCleanCommandTypes(args []string) ([]string, error) {
 	}, "clean command type")
 }
 
+func parseCleanServiceTypes(args []string) ([]string, error) {
+	return parseCategories(args, map[string]string{
+		"all":       "all",
+		"join":      "join",
+		"joins":     "join",
+		"leave":     "leave",
+		"leaves":    "leave",
+		"other":     "other",
+		"photo":     "photo",
+		"photos":    "photo",
+		"pin":       "pin",
+		"pins":      "pin",
+		"title":     "title",
+		"titles":    "title",
+		"videochat": "videochat",
+		"voicechat": "videochat",
+		"vc":        "videochat",
+	}, "cleanservice type")
+}
+
 func parseLogCategories(args []string) ([]string, error) {
 	return parseCategories(args, map[string]string{
 		"all":       "all",
@@ -1100,6 +1156,32 @@ func applyCleanCommandTypes(settings *domain.ChatSettings, categories []string, 
 		}
 	}
 	settings.CleanCommands = settings.CleanCommandAll || settings.CleanCommandAdmin || settings.CleanCommandUser || settings.CleanCommandOther
+}
+
+func enabledCleanServiceTypes(settings domain.ChatSettings) []string {
+	categories := make([]string, 0, 7)
+	if settings.CleanServiceJoin {
+		categories = append(categories, "join")
+	}
+	if settings.CleanServiceLeave {
+		categories = append(categories, "leave")
+	}
+	if settings.CleanServiceOther {
+		categories = append(categories, "other")
+	}
+	if settings.CleanServicePhoto {
+		categories = append(categories, "photo")
+	}
+	if settings.CleanServicePin {
+		categories = append(categories, "pin")
+	}
+	if settings.CleanServiceTitle {
+		categories = append(categories, "title")
+	}
+	if settings.CleanServiceVideoChat {
+		categories = append(categories, "videochat")
+	}
+	return categories
 }
 
 func applyLogCategories(settings *domain.ChatSettings, categories []string, enabled bool) {

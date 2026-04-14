@@ -322,16 +322,32 @@ var helpPages = map[string]helpPage{
 	helpCleanService: {
 		Title: "Clean Service",
 		Lines: []string{
-			"Clean service removes join/leave and other service messages after Telegram posts them.",
+			"Clean up automated Telegram service messages! The available categories are:",
 			"",
-			"/cleanservice <on|off|join|leave|pin|title|photo|other|videochat|all> [on|off]",
-			"/nocleanservice <join|leave|pin|title|photo|other|videochat|all>",
-			"/cleanservicetypes",
+			"- all: All service messages.",
+			"- join: When a new user joins, or is added. Eg: 'X joined the chat'.",
+			"- leave: When a user leaves, or is removed. Eg: 'X left the chat'.",
+			"- other: Miscellaneous items; such as chat boosts, successful telegram payments, proximity alerts, webapp messages, message auto deletion changes, or checklist updates.",
+			"- photo: When chat photos or chat backgrounds are changed.",
+			"- pin: When a new message is pinned. Eg: 'X pinned a message'.",
+			"- title: When chat or topic titles are changed.",
+			"- videochat: When a video chat action occurs - eg starting, ending, scheduling, or adding members to the call.",
+			"",
+			"Admin commands:",
+			"- /cleanservice <type/yes/no/on/off>: Select which service messages to delete.",
+			"- /keepservice <type>: Select which service messages to stop deleting.",
+			"- /nocleanservice <type>: Same as /keepservice.",
+			"- /cleanservicetypes: List all the available service messages, with a brief explanation.",
 			"",
 			"Examples:",
-			"/cleanservice on",
-			"/cleanservice join on",
-			"/nocleanservice pin",
+			"- Stop all Telegram service messages:",
+			"-> /cleanservice all",
+			"",
+			"- Stop Telegram's 'X joined the chat' messages:",
+			"-> /cleanservice join",
+			"",
+			"- Keep Telegram's 'X pinned a message' messages:",
+			"-> /keepservice pin",
 		},
 	},
 	helpConnections: {
@@ -1162,6 +1178,12 @@ func helpSectionMarkup(page string, username string, parent string) *telegram.In
 				{Text: "Back", CallbackData: callbackHelpMain},
 			},
 		)
+	case helpCleanService:
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: callbackHelpMain},
+			},
+		)
 	case helpBans:
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
@@ -1432,7 +1454,7 @@ func normalizeHelpSection(value string) string {
 		return helpCaptcha
 	case "clean", "cleanup", "cleancommands", "cleancommand", "keepcommand", "cleancommandtypes":
 		return helpCleanCommands
-	case "cleanservice", "nocleanservice", "cleanservicetypes":
+	case "cleanservice", "keepservice", "nocleanservice", "cleanservicetypes":
 		return helpCleanService
 	case "connections", "connect", "disconnect", "reconnect", "connection":
 		return helpConnections
