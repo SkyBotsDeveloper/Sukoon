@@ -235,6 +235,8 @@ type SendMessageOptions struct {
 	ReplyToMessageID      int64
 	ParseMode             string
 	DisableWebPagePreview bool
+	DisableNotification   bool
+	ProtectContent        bool
 	ReplyMarkup           *InlineKeyboardMarkup
 }
 

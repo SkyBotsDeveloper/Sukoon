@@ -88,17 +88,24 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 	}
 	lowerText := strings.ToLower(text)
 	for _, filter := range filters {
-		trigger := strings.ToLower(filter.Trigger)
-		if strings.Contains(lowerText, trigger) {
-			replyMarkup, err := buttonsFromJSON(filter.ButtonsJSON)
-			if err != nil {
-				return false, err
-			}
+		if filterMatches(filter, lowerText) {
 			user := telegram.User{}
 			if message.From != nil {
 				user = *message.From
 			}
-			_, err = rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(filter.ResponseText, user, dataChat(rt), rt.RuntimeBundle.Settings.RulesText), rt.ReplyOptions(telegram.SendMessageOptions{ParseMode: filter.ParseMode, ReplyMarkup: replyMarkup}))
+			noFormat := hasFilterKeyword(lowerText, strings.ToLower(filter.Trigger), "noformat")
+			force := hasFilterKeyword(lowerText, strings.ToLower(filter.Trigger), "force")
+			rendered, ok, err := renderFilterResponse(filter, user, dataChat(rt), rt.RuntimeBundle.Settings.RulesText, rt, noFormat, force)
+			if err != nil || !ok {
+				return false, err
+			}
+			_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rendered.Text, rt.ReplyOptions(telegram.SendMessageOptions{
+				ParseMode:             filter.ParseMode,
+				ReplyMarkup:           rendered.ReplyMarkup,
+				DisableNotification:   rendered.DisableNotification,
+				ProtectContent:        rendered.ProtectContent,
+				DisableWebPagePreview: false,
+			}))
 			return true, err
 		}
 	}
@@ -207,27 +214,33 @@ func (s *Service) filter(ctx context.Context, rt *runtime.Context) error {
 	if !rt.ActorPermissions.IsChatAdmin {
 		return fmt.Errorf("admin rights required")
 	}
-	trigger, body, err := splitTriggerAndBody(rt.Command.RawArgs)
+	definitions, err := parseFilterDefinitions(rt.Command.RawArgs)
 	if err != nil {
 		return fmt.Errorf("usage: /filter <trigger> <response>")
 	}
-	response, buttonsJSON, err := parseStoredContent(body)
-	if err != nil {
-		return err
+	for _, definition := range definitions {
+		response, buttonsJSON, err := parseStoredContent(definition.Body)
+		if err != nil {
+			return err
+		}
+		if err := rt.Store.UpsertFilter(ctx, domain.FilterRule{
+			BotID:        rt.Bot.ID,
+			ChatID:       dataChatID(rt),
+			Trigger:      strings.ToLower(definition.Trigger),
+			MatchMode:    definition.MatchMode,
+			ResponseText: response,
+			ParseMode:    "",
+			ButtonsJSON:  buttonsJSON,
+			CreatedBy:    rt.ActorID(),
+		}); err != nil {
+			return err
+		}
 	}
-	if err := rt.Store.UpsertFilter(ctx, domain.FilterRule{
-		BotID:        rt.Bot.ID,
-		ChatID:       dataChatID(rt),
-		Trigger:      strings.ToLower(trigger),
-		MatchMode:    "contains",
-		ResponseText: response,
-		ParseMode:    "",
-		ButtonsJSON:  buttonsJSON,
-		CreatedBy:    rt.ActorID(),
-	}); err != nil {
-		return err
+	label := definitions[0].Trigger
+	if len(definitions) > 1 {
+		label = fmt.Sprintf("%d filters", len(definitions))
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Filter %s saved.", trigger), rt.ReplyOptions(telegram.SendMessageOptions{}))
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), fmt.Sprintf("Filter %s saved.", label), rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 
@@ -240,7 +253,7 @@ func (s *Service) stop(ctx context.Context, rt *runtime.Context) error {
 		return fmt.Errorf("usage: /stop <trigger>")
 	}
 	for _, item := range items {
-		if err := rt.Store.DeleteFilter(ctx, rt.Bot.ID, dataChatID(rt), strings.ToLower(item)); err != nil {
+		if err := rt.Store.DeleteFilter(ctx, rt.Bot.ID, dataChatID(rt), normalizeFilterTrigger(item)); err != nil {
 			return err
 		}
 	}
@@ -423,4 +436,39 @@ func dataChat(rt *runtime.Context) telegram.Chat {
 		return rt.Message.Chat
 	}
 	return telegram.Chat{ID: dataChatID(rt)}
+}
+
+func filterMatches(filter domain.FilterRule, lowerText string) bool {
+	trigger := strings.ToLower(strings.TrimSpace(filter.Trigger))
+	if trigger == "" {
+		return false
+	}
+	text := strings.TrimSpace(lowerText)
+	switch strings.ToLower(strings.TrimSpace(filter.MatchMode)) {
+	case "exact":
+		return text == trigger || text == trigger+" noformat" || text == trigger+" force"
+	case "prefix":
+		return strings.HasPrefix(text, trigger)
+	default:
+		return strings.Contains(lowerText, trigger)
+	}
+}
+
+func hasFilterKeyword(lowerText string, trigger string, keyword string) bool {
+	text := strings.TrimSpace(lowerText)
+	keyword = strings.ToLower(strings.TrimSpace(keyword))
+	trigger = strings.ToLower(strings.TrimSpace(trigger))
+	return text == trigger+" "+keyword || strings.HasSuffix(text, " "+keyword)
+}
+
+func normalizeFilterTrigger(item string) string {
+	item = strings.ToLower(strings.Trim(strings.TrimSpace(item), `"`))
+	switch {
+	case strings.HasPrefix(item, "exact:"):
+		return strings.TrimSpace(item[len("exact:"):])
+	case strings.HasPrefix(item, "prefix:"):
+		return strings.TrimSpace(item[len("prefix:"):])
+	default:
+		return item
+	}
 }

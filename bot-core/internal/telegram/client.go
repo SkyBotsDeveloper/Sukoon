@@ -102,6 +102,12 @@ func (c *HTTPClient) SendMessage(ctx context.Context, chatID int64, text string,
 	if options.DisableWebPagePreview {
 		payload["disable_web_page_preview"] = true
 	}
+	if options.DisableNotification {
+		payload["disable_notification"] = true
+	}
+	if options.ProtectContent {
+		payload["protect_content"] = true
+	}
 	if options.ReplyMarkup != nil {
 		payload["reply_markup"] = options.ReplyMarkup
 	}

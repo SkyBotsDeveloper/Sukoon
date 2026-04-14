@@ -88,6 +88,9 @@ func RenderChatTemplate(template string, user telegram.User, chat telegram.Chat,
 	if mention == "" {
 		mention = fullName
 	}
+	if username == "" {
+		username = mention
+	}
 	replacer := strings.NewReplacer(
 		"{first}", user.FirstName,
 		"{last}", user.LastName,

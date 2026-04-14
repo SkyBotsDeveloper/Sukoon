@@ -514,16 +514,52 @@ var helpPages = map[string]helpPage{
 	helpFilterExamples: {
 		Title: "Filter Example Usage",
 		Lines: []string{
-			"Truthful examples for the current Sukoon filter parser:",
+			"Filters can seem quite complicated; so here are some examples, so you can get some inspiration.",
 			"",
-			"/filter hello Hi there",
-			"/filter \"buy now\" Sales links are not allowed here.",
-			"/filter welcome Welcome {first}",
-			"/filter rules Please read {rules}",
-			"/filter ping Pong %%% Still here %%% Online",
-			"/stop hello | buy now",
+			"Examples:",
+			"- Set a filter:",
+			"-> /filter hello Hello there! How are you?",
 			"",
-			"Reply-tag filters, protected filters, exact/prefix match toggles, and media-save shortcuts are still deferred.",
+			"- Set a filter which uses the user's name through fillings:",
+			"-> /filter hello Hello there {first}! How are you?",
+			"",
+			"- Set a filter on a sentence:",
+			"-> /filter \"hello friend\" Hello back! Long time no see!",
+			"",
+			"- Set multiple filters at once by wrapping triggers in brackets and separating with commas:",
+			"-> /filter (hi, hey, hello, \"hi there\") Hello back! Long time no see!",
+			"",
+			"- Set a filter that can only be used by admins:",
+			"-> /filter \"trigger\" This filter won't happen if a normal user says it {admin}",
+			"",
+			"- Or, set a filter that can only be used by users:",
+			"-> /filter \"trigger\" Admins won't trigger this {user}",
+			"",
+			"- Set a filter that only triggers if the entire message matches the filter:",
+			"-> /filter \"exact:hi\" This will only match 'hi', and not 'hi there'",
+			"",
+			"- Set a filter that only triggers if the message starts with the trigger:",
+			"-> /filter \"prefix:hi\" This will match 'hi', and 'hi there', but NOT 'Say hi'",
+			"",
+			"- If an admin wants to force a {user} filter to reply:",
+			"-> trigger force",
+			"",
+			"- To get the unformatted version of a filter, say the trigger followed by noformat:",
+			"-> trigger noformat",
+			"",
+			"- To save a protected filter, which can't be forwarded:",
+			"-> /filter \"example\" This filter can't be forwarded {protect}",
+			"",
+			"- If you want the filter to reply to the person you replied to, instead of you:",
+			"-> /filter \"magic\" Watch out for wizards! {replytag}",
+			"",
+			"- To set a filter which replies with a random answer from a preset list:",
+			"-> /filter test Answer one %%% Answer two",
+			"",
+			"- To set a filter which gives a different reply to admins and users:",
+			"-> /filter test Only admins see this {admin} %%% Only users see this {user}",
+			"",
+			"Media/file shortcut filters are still deferred; use text filters and structured buttons for now.",
 		},
 	},
 	helpFormatting: {
@@ -552,21 +588,35 @@ var helpPages = map[string]helpPage{
 	helpFormattingFillings: {
 		Title: "Fillings",
 		Lines: []string{
-			"Supported contextual fillings in the current build:",
+			"You can customise stored messages with contextual data. For example, you can mention a user by name in a welcome message, note, or filter.",
 			"",
-			"{first}",
-			"{last}",
-			"{fullname}",
-			"{username}",
-			"{mention}",
-			"{id}",
-			"{chat}",
-			"{chatname}",
-			"{rules}",
-			"{rules:same}",
+			"Supported fillings:",
+			"- {first}: The user's first name.",
+			"- {last}: The user's last name.",
+			"- {fullname}: The user's full name.",
+			"- {username}: The user's username. If they don't have one, Sukoon falls back to their display name.",
+			"- {mention}: Uses @username when available, otherwise the user's display name.",
+			"- {id}: The user's ID.",
+			"- {chatname}: The chat's name.",
+			"- {rules}: Insert the current chat rules text.",
+			"- {rules:same}: Insert the current chat rules text.",
+			"- {admin}: Filter response is available to admins only.",
+			"- {user}: Filter response is available to normal users only.",
+			"- {replytag}: Filter fillings target the replied-to user when available.",
+			"- {nonotif}: Sends the filter reply without notification.",
+			"- {protect}: Sends the filter reply as protected content.",
 			"",
-			"{mention} renders @username when available, otherwise the user's display name.",
-			"Preview/protect/nonotif/mediaspoiler control tags are still deferred.",
+			"Example usages:",
+			"- Save a filter using the user's name.",
+			"-> /filter test {first} triggered this filter.",
+			"",
+			"- Add rules text to a note.",
+			"-> /save info Read the chat rules: {rules}",
+			"",
+			"- Mention a user in the welcome message.",
+			"-> /setwelcome on Welcome {mention} to {chatname}!",
+			"",
+			"Preview-position and media-spoiler control tags are still deferred.",
 		},
 	},
 	helpFormattingRandom: {
@@ -1368,7 +1418,14 @@ func helpSectionMarkup(page string, username string, parent string) *telegram.In
 			},
 		)
 	case helpFilterExamples:
-		return helpSubsectionMarkup(username, helpFilters)
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Fillings", CallbackData: helpContextCallback(helpFilterExamples, helpFormattingFillings)},
+			},
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: helpCallback(helpFilters)},
+			},
+		)
 	case helpFormattingMarkdown:
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
@@ -1382,7 +1439,17 @@ func helpSectionMarkup(page string, username string, parent string) *telegram.In
 				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
 			},
 		)
-	case helpFormattingFillings, helpFormattingRandom, helpFormattingButtons:
+	case helpFormattingFillings:
+		parentCallback := helpCallback(helpFormatting)
+		if parent == helpFilterExamples {
+			parentCallback = helpCallback(helpFilterExamples)
+		}
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: parentCallback},
+			},
+		)
+	case helpFormattingRandom, helpFormattingButtons:
 		return helpSubsectionMarkup(username, helpFormatting)
 	case helpLockDescriptions, helpLockExamples:
 		lockParentCallback := helpCallback(helpLocks)
@@ -1536,7 +1603,7 @@ func normalizeHelpSection(value string) string {
 		return helpFederationsUser
 	case "filters", "filter", "stop", "stopall":
 		return helpFilters
-	case "filters_examples", "filterexamples", "filter_examples", "exampleusage":
+	case "filters_examples", "filterexamples", "filter_examples", "exampleusage", "filter example", "filter examples", "filters example", "filters examples", "fiter example", "fiter examples":
 		return helpFilterExamples
 	case "formatting":
 		return helpFormatting

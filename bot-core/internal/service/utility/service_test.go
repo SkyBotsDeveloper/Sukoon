@@ -564,7 +564,10 @@ func TestHelpNavigationSupportsNestedHelpBatchPages(t *testing.T) {
 	if !strings.Contains(renderedText(h.Client.EditedMessages[3].Text), "/filter <trigger> <reply>") || !strings.Contains(renderedText(h.Client.EditedMessages[3].Text), "/stopall") {
 		t.Fatalf("expected filters page to list live commands, got %q", h.Client.EditedMessages[3].Text)
 	}
-	if !strings.Contains(renderedText(h.Client.EditedMessages[4].Text), "/filter \"buy now\"") || !strings.Contains(renderedText(h.Client.EditedMessages[4].Text), "/stop hello | buy now") {
+	filterExamplesMarkup := requireEditedMarkup(t, h.Client.EditedMessages[4])
+	assertButton(t, filterExamplesMarkup, 0, 0, "Fillings", "ux:helpctx:filters_examples:formatting_fillings", "")
+	assertButton(t, filterExamplesMarkup, 1, 0, "Back", "ux:help:filters", "")
+	if !strings.Contains(renderedText(h.Client.EditedMessages[4].Text), "/filter (hi, hey, hello, \"hi there\")") || !strings.Contains(renderedText(h.Client.EditedMessages[4].Text), "trigger noformat") {
 		t.Fatalf("expected filter examples page, got %q", h.Client.EditedMessages[4].Text)
 	}
 	if !strings.Contains(renderedText(h.Client.EditedMessages[7].Text), "full markdown helper set") {
@@ -1063,6 +1066,54 @@ func TestCleanCommandsHelpPageLinksToContextualLocksAndLogChannels(t *testing.T)
 	}
 	logMarkup := requireEditedMarkup(t, logPage)
 	assertButton(t, logMarkup, 0, 0, "Back", "ux:help:cleancommands", "")
+}
+
+func TestFilterExamplesHelpAliasesAndFillingsBackNavigation(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: 68, Type: "private"}
+
+	for idx, text := range []string{"/help filter examples", "/help filters example"} {
+		if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+			UpdateID: int64(idx + 1),
+			Message: &telegram.Message{
+				MessageID: int64(idx + 80),
+				From:      &telegram.User{ID: 68, FirstName: "User"},
+				Chat:      chat,
+				Text:      text,
+			},
+		}); err != nil {
+			t.Fatalf("%s failed: %v", text, err)
+		}
+		last := h.Client.Messages[len(h.Client.Messages)-1]
+		if !strings.Contains(renderedText(last.Text), "Filter Example Usage") || !strings.Contains(renderedText(last.Text), "trigger force") {
+			t.Fatalf("expected filter example page for %s, got %q", text, last.Text)
+		}
+		markup := requireMarkup(t, last)
+		assertButton(t, markup, 0, 0, "Fillings", "ux:helpctx:filters_examples:formatting_fillings", "")
+		assertButton(t, markup, 1, 0, "Back", "ux:help:filters", "")
+	}
+
+	root := h.Client.Messages[len(h.Client.Messages)-1]
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 10,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-filter-fillings",
+			From: telegram.User{ID: 68, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: root.MessageID,
+				Chat:      chat,
+			},
+			Data: "ux:helpctx:filters_examples:formatting_fillings",
+		},
+	}); err != nil {
+		t.Fatalf("fillings callback failed: %v", err)
+	}
+	fillings := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	if !strings.Contains(renderedText(fillings.Text), "{replytag}") || !strings.Contains(renderedText(fillings.Text), "{protect}") {
+		t.Fatalf("expected filter fillings content, got %q", fillings.Text)
+	}
+	fillingsMarkup := requireEditedMarkup(t, fillings)
+	assertButton(t, fillingsMarkup, 0, 0, "Back", "ux:help:filters_examples", "")
 }
 
 func TestCleanServiceHelpPageUsesBackOnlyLayout(t *testing.T) {

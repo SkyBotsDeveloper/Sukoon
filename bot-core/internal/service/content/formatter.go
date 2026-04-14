@@ -3,8 +3,11 @@ package content
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"strings"
 
+	"sukoon/bot-core/internal/domain"
+	"sukoon/bot-core/internal/runtime"
 	"sukoon/bot-core/internal/serviceutil"
 	"sukoon/bot-core/internal/telegram"
 )
@@ -86,6 +89,190 @@ func splitTriggerAndBody(raw string) (string, string, error) {
 		return trigger, body, nil
 	}
 	return splitNameAndBody(raw)
+}
+
+type filterDefinition struct {
+	Trigger   string
+	MatchMode string
+	Body      string
+}
+
+func parseFilterDefinitions(raw string) ([]filterDefinition, error) {
+	triggers, body, err := splitFilterTriggersAndBody(raw)
+	if err != nil {
+		return nil, err
+	}
+	definitions := make([]filterDefinition, 0, len(triggers))
+	seen := map[string]struct{}{}
+	for _, trigger := range triggers {
+		trigger = strings.TrimSpace(trigger)
+		if trigger == "" {
+			continue
+		}
+		matchMode := "contains"
+		lower := strings.ToLower(trigger)
+		switch {
+		case strings.HasPrefix(lower, "exact:"):
+			matchMode = "exact"
+			trigger = strings.TrimSpace(trigger[len("exact:"):])
+		case strings.HasPrefix(lower, "prefix:"):
+			matchMode = "prefix"
+			trigger = strings.TrimSpace(trigger[len("prefix:"):])
+		}
+		if trigger == "" {
+			continue
+		}
+		key := matchMode + ":" + strings.ToLower(trigger)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		definitions = append(definitions, filterDefinition{Trigger: trigger, MatchMode: matchMode, Body: body})
+	}
+	if len(definitions) == 0 {
+		return nil, fmt.Errorf("trigger is required")
+	}
+	return definitions, nil
+}
+
+func splitFilterTriggersAndBody(raw string) ([]string, string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, "", fmt.Errorf("trigger is required")
+	}
+	if strings.HasPrefix(raw, "(") {
+		end := findClosingParen(raw)
+		if end < 0 {
+			return nil, "", fmt.Errorf("multi-filter trigger list is missing a closing bracket")
+		}
+		body := strings.TrimSpace(raw[end+1:])
+		if body == "" {
+			return nil, "", fmt.Errorf("usage: /filter <trigger> <response>")
+		}
+		triggers, err := splitCommaTriggers(raw[1:end])
+		if err != nil {
+			return nil, "", err
+		}
+		return triggers, body, nil
+	}
+	trigger, body, err := splitTriggerAndBody(raw)
+	if err != nil {
+		return nil, "", err
+	}
+	return []string{trigger}, body, nil
+}
+
+func findClosingParen(raw string) int {
+	inQuote := false
+	for idx, r := range raw {
+		switch r {
+		case '"':
+			inQuote = !inQuote
+		case ')':
+			if !inQuote {
+				return idx
+			}
+		}
+	}
+	return -1
+}
+
+func splitCommaTriggers(raw string) ([]string, error) {
+	var triggers []string
+	var current strings.Builder
+	inQuote := false
+	for _, r := range raw {
+		switch r {
+		case '"':
+			inQuote = !inQuote
+		case ',':
+			if !inQuote {
+				if item := strings.TrimSpace(current.String()); item != "" {
+					triggers = append(triggers, strings.Trim(item, `"`))
+				}
+				current.Reset()
+				continue
+			}
+		}
+		current.WriteRune(r)
+	}
+	if inQuote {
+		return nil, fmt.Errorf("quoted trigger is missing a closing quote")
+	}
+	if item := strings.TrimSpace(current.String()); item != "" {
+		triggers = append(triggers, strings.Trim(item, `"`))
+	}
+	return triggers, nil
+}
+
+type filterRenderResult struct {
+	Text                string
+	ReplyMarkup         *telegram.InlineKeyboardMarkup
+	DisableNotification bool
+	ProtectContent      bool
+}
+
+func renderFilterResponse(filter domain.FilterRule, user telegram.User, chat telegram.Chat, rules string, rt *runtime.Context, noFormat bool, force bool) (filterRenderResult, bool, error) {
+	replyMarkup, err := buttonsFromJSON(filter.ButtonsJSON)
+	if err != nil {
+		return filterRenderResult{}, false, err
+	}
+	if noFormat {
+		return filterRenderResult{Text: filter.ResponseText, ReplyMarkup: replyMarkup}, true, nil
+	}
+
+	segments := strings.Split(filter.ResponseText, "%%%")
+	permitted := make([]string, 0, len(segments))
+	actorIsAdmin := rt.ActorPermissions.IsOwner || rt.ActorPermissions.IsSudo || rt.ActorPermissions.IsChatAdmin || rt.ActorPermissions.IsSilentMod
+	for _, segment := range segments {
+		segment = strings.TrimSpace(segment)
+		if segment == "" {
+			continue
+		}
+		adminOnly := strings.Contains(segment, "{admin}")
+		userOnly := strings.Contains(segment, "{user}")
+		switch {
+		case adminOnly && !actorIsAdmin:
+			continue
+		case userOnly && actorIsAdmin && !force:
+			continue
+		}
+		permitted = append(permitted, segment)
+	}
+	if len(permitted) == 0 {
+		return filterRenderResult{}, false, nil
+	}
+	chosen := permitted[0]
+	if len(permitted) > 1 {
+		chosen = permitted[rand.Intn(len(permitted))]
+	}
+
+	renderUser := user
+	if strings.Contains(chosen, "{replytag}") && rt.Message != nil && rt.Message.ReplyToMessage != nil && rt.Message.ReplyToMessage.From != nil {
+		renderUser = *rt.Message.ReplyToMessage.From
+	}
+	result := filterRenderResult{
+		DisableNotification: strings.Contains(chosen, "{nonotif}"),
+		ProtectContent:      strings.Contains(chosen, "{protect}"),
+		ReplyMarkup:         replyMarkup,
+	}
+	cleaned := stripFilterControlTokens(chosen)
+	result.Text = renderStoredText(cleaned, renderUser, chat, rules)
+	return result, true, nil
+}
+
+func stripFilterControlTokens(raw string) string {
+	replacer := strings.NewReplacer(
+		"{admin}", "",
+		"{user}", "",
+		"{force}", "",
+		"{replytag}", "",
+		"{protect}", "",
+		"{nonotif}", "",
+		"{preview}", "",
+		"{preview:top}", "",
+	)
+	return strings.TrimSpace(replacer.Replace(raw))
 }
 
 func parseButtonRow(line string) ([]telegram.InlineKeyboardButton, bool, error) {
