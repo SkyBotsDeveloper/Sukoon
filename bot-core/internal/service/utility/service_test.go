@@ -555,6 +555,15 @@ func TestHelpNavigationSupportsNestedHelpBatchPages(t *testing.T) {
 	if !strings.Contains(renderedText(h.Client.EditedMessages[1].Text), "/renamefed") || !strings.Contains(renderedText(h.Client.EditedMessages[1].Text), "/fedtransfer") {
 		t.Fatalf("expected federation owner page to list live owner commands, got %q", h.Client.EditedMessages[1].Text)
 	}
+	filterMarkup := requireEditedMarkup(t, h.Client.EditedMessages[3])
+	assertButton(t, filterMarkup, 0, 0, "Example Usage", "ux:help:filters_examples", "")
+	assertButton(t, filterMarkup, 0, 1, "Formatting", "ux:help:formatting", "")
+	assertButton(t, filterMarkup, 1, 0, "Back", "ux:help:root", "")
+	assertNoButtonText(t, filterMarkup, "Website")
+	assertNoButtonText(t, filterMarkup, "Add to Group")
+	if !strings.Contains(renderedText(h.Client.EditedMessages[3].Text), "/filter <trigger> <reply>") || !strings.Contains(renderedText(h.Client.EditedMessages[3].Text), "/stopall") {
+		t.Fatalf("expected filters page to list live commands, got %q", h.Client.EditedMessages[3].Text)
+	}
 	if !strings.Contains(renderedText(h.Client.EditedMessages[4].Text), "/filter \"buy now\"") || !strings.Contains(renderedText(h.Client.EditedMessages[4].Text), "/stop hello | buy now") {
 		t.Fatalf("expected filter examples page, got %q", h.Client.EditedMessages[4].Text)
 	}

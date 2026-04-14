@@ -498,12 +498,15 @@ var helpPages = map[string]helpPage{
 	helpFilters: {
 		Title: "Filters",
 		Lines: []string{
-			"Filters auto-reply when incoming text contains the configured trigger. Matching is case-insensitive in the current build.",
+			"Make your chat more lively with filters; the bot will reply to certain words.",
 			"",
-			"/filter <trigger> <reply>",
-			"/filters",
-			"/stop <trigger>",
-			"/stopall",
+			"Filters are case-insensitive. Every time someone says your trigger words, Sukoon will reply with your configured response. You can use this to create your own lightweight commands if desired.",
+			"",
+			"Commands:",
+			"- /filter <trigger> <reply>: Every time someone says trigger, the bot will reply with your sentence. For multiple word filters, quote the trigger.",
+			"- /filters: List all chat filters.",
+			"- /stop <trigger>: Stop the bot from replying to trigger.",
+			"- /stopall: Stop ALL filters in the current chat. This cannot be undone.",
 			"",
 			"Quoted triggers are supported for multi-word phrases. Open the example and formatting pages below for live syntax.",
 		},
@@ -1294,10 +1297,6 @@ func helpSectionMarkup(page string, username string, parent string) *telegram.In
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},
-			},
-			[]telegram.InlineKeyboardButton{
-				{Text: "Website", URL: serviceutil.WebsiteURL},
-				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
 			},
 		)
 	case helpFormatting:

@@ -129,7 +129,7 @@ func TestNotesAndFiltersListingAndRulesAliases(t *testing.T) {
 		UpdateID: 21,
 		Message: &telegram.Message{
 			MessageID: 41,
-			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			From:      &telegram.User{ID: 20, FirstName: "User"},
 			Chat:      chat,
 			Text:      "/filters",
 		},
@@ -270,5 +270,49 @@ func TestFiltersSupportQuotedTriggersStopAllAndContentFillings(t *testing.T) {
 	noteText := h.Client.Messages[len(h.Client.Messages)-1].Text
 	if !strings.Contains(noteText, "@filteruser") && !strings.Contains(noteText, "Read No spam here") {
 		t.Fatalf("expected note fillings or random content to resolve, got %q", noteText)
+	}
+}
+
+func TestStopAllRequiresCreatorOrBotOwner(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: -100734, Type: "supergroup", Title: "StopAll"}
+	h.Client.AdminsByChat[chat.ID] = []telegram.ChatAdministrator{
+		{
+			User:              telegram.User{ID: 2, FirstName: "Admin"},
+			Status:            "administrator",
+			CanDeleteMessages: true,
+		},
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 10,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      chat,
+			Text:      "/filter hello Hi",
+		},
+	}); err != nil {
+		t.Fatalf("setup filter failed: %v", err)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		Message: &telegram.Message{
+			MessageID: 11,
+			From:      &telegram.User{ID: 2, FirstName: "Admin"},
+			Chat:      chat,
+			Text:      "/stopall",
+		},
+	}); err == nil || !strings.Contains(err.Error(), "chat creator rights required") {
+		t.Fatalf("expected non-creator stopall to fail, got %v", err)
+	}
+
+	filters, err := h.Store.ListFilters(context.Background(), h.Bot.ID, chat.ID)
+	if err != nil {
+		t.Fatalf("list filters failed: %v", err)
+	}
+	if len(filters) != 1 {
+		t.Fatalf("expected filter to remain after denied stopall, got %+v", filters)
 	}
 }

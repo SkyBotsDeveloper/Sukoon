@@ -42,13 +42,13 @@ func TestFilterMatchesAndResponds(t *testing.T) {
 
 	found := false
 	for _, sent := range h.Client.Messages {
-		if sent.ChatID == chat.ID && sent.Text == "Hi there" {
+		if sent.ChatID == chat.ID && sent.Text == "Hi there" && sent.Options.ReplyToMessageID == 11 {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("expected filter response message")
+		t.Fatalf("expected filter response message replying to trigger")
 	}
 }
 

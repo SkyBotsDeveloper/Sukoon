@@ -98,7 +98,7 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 			if message.From != nil {
 				user = *message.From
 			}
-			_, err = rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(filter.ResponseText, user, dataChat(rt), rt.RuntimeBundle.Settings.RulesText), telegram.SendMessageOptions{ParseMode: filter.ParseMode, ReplyMarkup: replyMarkup})
+			_, err = rt.Client.SendMessage(ctx, rt.ChatID(), renderStoredText(filter.ResponseText, user, dataChat(rt), rt.RuntimeBundle.Settings.RulesText), rt.ReplyOptions(telegram.SendMessageOptions{ParseMode: filter.ParseMode, ReplyMarkup: replyMarkup}))
 			return true, err
 		}
 	}
@@ -249,8 +249,8 @@ func (s *Service) stop(ctx context.Context, rt *runtime.Context) error {
 }
 
 func (s *Service) stopAll(ctx context.Context, rt *runtime.Context) error {
-	if !rt.ActorPermissions.IsChatAdmin {
-		return fmt.Errorf("admin rights required")
+	if !rt.ActorPermissions.IsOwner && !rt.ActorPermissions.IsSudo && !rt.ActorPermissions.IsChatCreator {
+		return fmt.Errorf("chat creator rights required")
 	}
 	filters, err := rt.Store.ListFilters(ctx, rt.Bot.ID, dataChatID(rt))
 	if err != nil {
@@ -270,9 +270,6 @@ func (s *Service) stopAll(ctx context.Context, rt *runtime.Context) error {
 }
 
 func (s *Service) filters(ctx context.Context, rt *runtime.Context) error {
-	if !rt.ActorPermissions.IsChatAdmin {
-		return fmt.Errorf("admin rights required")
-	}
 	filters, err := rt.Store.ListFilters(ctx, rt.Bot.ID, dataChatID(rt))
 	if err != nil {
 		return err
