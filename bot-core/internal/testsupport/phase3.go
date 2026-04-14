@@ -443,6 +443,12 @@ func (m *MemoryStore) ListGlobalBlacklistChats(_ context.Context, botID string) 
 func (m *MemoryStore) CreateFederation(_ context.Context, federation domain.Federation) (domain.Federation, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if federation.NotifyActions == false {
+		federation.NotifyActions = true
+	}
+	if strings.TrimSpace(federation.LogLanguage) == "" {
+		federation.LogLanguage = "en"
+	}
 	m.federations[federation.ID] = federation
 	if _, ok := m.federationAdmins[federation.ID]; !ok {
 		m.federationAdmins[federation.ID] = map[int64]domain.FederationAdmin{}
@@ -462,6 +468,15 @@ func (m *MemoryStore) DeleteFederation(_ context.Context, federationID string) e
 	delete(m.federationAdmins, federationID)
 	delete(m.federationBans, federationID)
 	delete(m.federationChats, federationID)
+	delete(m.federationSubs, federationID)
+	for key := range m.federationSubs {
+		delete(m.federationSubs[key], federationID)
+	}
+	for key := range m.federationChatQuiet {
+		if strings.HasPrefix(key, federationID+":") {
+			delete(m.federationChatQuiet, key)
+		}
+	}
 	return nil
 }
 
@@ -474,6 +489,24 @@ func (m *MemoryStore) RenameFederation(_ context.Context, federationID string, s
 	}
 	federation.ShortName = strings.ToLower(strings.TrimSpace(shortName))
 	federation.DisplayName = strings.TrimSpace(displayName)
+	m.federations[federationID] = federation
+	return nil
+}
+
+func (m *MemoryStore) UpdateFederationSettings(_ context.Context, federationID string, notifyActions bool, requireReason bool, logChatID *int64, logLanguage string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	federation, ok := m.federations[federationID]
+	if !ok {
+		return pgx.ErrNoRows
+	}
+	federation.NotifyActions = notifyActions
+	federation.RequireReason = requireReason
+	federation.LogChatID = logChatID
+	if strings.TrimSpace(logLanguage) == "" {
+		logLanguage = "en"
+	}
+	federation.LogLanguage = strings.ToLower(strings.TrimSpace(logLanguage))
 	m.federations[federationID] = federation
 	return nil
 }
@@ -494,6 +527,17 @@ func (m *MemoryStore) GetFederationByShortName(_ context.Context, botID string, 
 	shortName = strings.ToLower(shortName)
 	for _, federation := range m.federations {
 		if federation.BotID == botID && strings.ToLower(federation.ShortName) == shortName {
+			return federation, nil
+		}
+	}
+	return domain.Federation{}, pgx.ErrNoRows
+}
+
+func (m *MemoryStore) GetFederationOwnedByUser(_ context.Context, botID string, ownerUserID int64) (domain.Federation, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, federation := range m.federations {
+		if federation.BotID == botID && federation.OwnerUserID == ownerUserID {
 			return federation, nil
 		}
 	}
@@ -537,6 +581,15 @@ func (m *MemoryStore) JoinFederation(_ context.Context, federationID string, bot
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	key := chatKey(botID, chatID)
+	for currentFederationID, chats := range m.federationChats {
+		var filtered []string
+		for _, current := range chats {
+			if current != key {
+				filtered = append(filtered, current)
+			}
+		}
+		m.federationChats[currentFederationID] = filtered
+	}
 	m.federationChats[federationID] = append(m.federationChats[federationID], key)
 	return nil
 }
@@ -552,6 +605,7 @@ func (m *MemoryStore) LeaveFederation(_ context.Context, federationID string, bo
 		}
 	}
 	m.federationChats[federationID] = filtered
+	delete(m.federationChatQuiet, federationChatQuietKey(federationID, botID, chatID))
 	return nil
 }
 
@@ -565,6 +619,19 @@ func (m *MemoryStore) ListFederationChats(_ context.Context, federationID string
 		}
 	}
 	return chats, nil
+}
+
+func (m *MemoryStore) SetFederationChatQuiet(_ context.Context, federationID string, botID string, chatID int64, enabled bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.federationChatQuiet[federationChatQuietKey(federationID, botID, chatID)] = enabled
+	return nil
+}
+
+func (m *MemoryStore) GetFederationChatQuiet(_ context.Context, federationID string, botID string, chatID int64) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.federationChatQuiet[federationChatQuietKey(federationID, botID, chatID)], nil
 }
 
 func (m *MemoryStore) SetFederationAdmin(_ context.Context, federationID string, userID int64, role string, enabled bool) error {
@@ -600,8 +667,47 @@ func (m *MemoryStore) TransferFederation(_ context.Context, federationID string,
 	if _, ok := m.federationAdmins[federationID]; !ok {
 		m.federationAdmins[federationID] = map[int64]domain.FederationAdmin{}
 	}
+	for userID, admin := range m.federationAdmins[federationID] {
+		if admin.Role == "owner" {
+			admin.Role = "admin"
+			m.federationAdmins[federationID][userID] = admin
+		}
+	}
 	m.federationAdmins[federationID][newOwnerUserID] = domain.FederationAdmin{FederationID: federationID, UserID: newOwnerUserID, Role: "owner"}
 	return nil
+}
+
+func (m *MemoryStore) SetFederationSubscription(_ context.Context, federationID string, subscribedFederationID string, enabled bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if federationID == subscribedFederationID {
+		return fmt.Errorf("cannot subscribe a federation to itself")
+	}
+	if _, ok := m.federationSubs[federationID]; !ok {
+		m.federationSubs[federationID] = map[string]domain.FederationSubscription{}
+	}
+	if enabled {
+		m.federationSubs[federationID][subscribedFederationID] = domain.FederationSubscription{
+			FederationID:           federationID,
+			SubscribedFederationID: subscribedFederationID,
+		}
+	} else {
+		delete(m.federationSubs[federationID], subscribedFederationID)
+	}
+	return nil
+}
+
+func (m *MemoryStore) ListFederationSubscriptions(_ context.Context, federationID string) ([]domain.Federation, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var federations []domain.Federation
+	for subscribedID := range m.federationSubs[federationID] {
+		if federation, ok := m.federations[subscribedID]; ok {
+			federations = append(federations, federation)
+		}
+	}
+	sort.Slice(federations, func(i, j int) bool { return federations[i].ShortName < federations[j].ShortName })
+	return federations, nil
 }
 
 func (m *MemoryStore) SetFederationBan(_ context.Context, ban domain.FederationBan, enabled bool) error {
@@ -623,6 +729,34 @@ func (m *MemoryStore) GetFederationBan(_ context.Context, federationID string, u
 	defer m.mu.Unlock()
 	ban, ok := m.federationBans[federationID][userID]
 	return ban, ok, nil
+}
+
+func (m *MemoryStore) ListFederationBans(_ context.Context, federationID string) ([]domain.FederationBan, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var bans []domain.FederationBan
+	for _, ban := range m.federationBans[federationID] {
+		bans = append(bans, ban)
+	}
+	sort.Slice(bans, func(i, j int) bool { return bans[i].UserID < bans[j].UserID })
+	return bans, nil
+}
+
+func (m *MemoryStore) ListFederationBansForUser(_ context.Context, userID int64) ([]domain.FederationBan, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var bans []domain.FederationBan
+	for _, fedBans := range m.federationBans {
+		if ban, ok := fedBans[userID]; ok {
+			bans = append(bans, ban)
+		}
+	}
+	sort.Slice(bans, func(i, j int) bool { return bans[i].FederationID < bans[j].FederationID })
+	return bans, nil
+}
+
+func federationChatQuietKey(federationID string, botID string, chatID int64) string {
+	return federationID + ":" + chatKey(botID, chatID)
 }
 
 func (m *MemoryStore) ExportUserData(_ context.Context, botID string, userID int64) (map[string]any, error) {

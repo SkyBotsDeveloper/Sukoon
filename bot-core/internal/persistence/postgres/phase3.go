@@ -370,12 +370,16 @@ func (s *Store) ListGlobalBlacklistChats(ctx context.Context, botID string) ([]d
 }
 
 func (s *Store) CreateFederation(ctx context.Context, federation domain.Federation) (domain.Federation, error) {
+	if federation.LogLanguage == "" {
+		federation.LogLanguage = "en"
+	}
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO federations (id, bot_id, short_name, display_name, owner_user_id)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, bot_id, short_name, display_name, owner_user_id, created_at
-	`, federation.ID, federation.BotID, federation.ShortName, federation.DisplayName, federation.OwnerUserID).Scan(
-		&federation.ID, &federation.BotID, &federation.ShortName, &federation.DisplayName, &federation.OwnerUserID, &federation.CreatedAt,
+		INSERT INTO federations (id, bot_id, short_name, display_name, owner_user_id, notify_actions, require_reason, log_chat_id, log_language)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		RETURNING id, bot_id, short_name, display_name, owner_user_id, notify_actions, require_reason, log_chat_id, log_language, created_at
+	`, federation.ID, federation.BotID, federation.ShortName, federation.DisplayName, federation.OwnerUserID, federation.NotifyActions, federation.RequireReason, federation.LogChatID, federation.LogLanguage).Scan(
+		&federation.ID, &federation.BotID, &federation.ShortName, &federation.DisplayName, &federation.OwnerUserID,
+		&federation.NotifyActions, &federation.RequireReason, &federation.LogChatID, &federation.LogLanguage, &federation.CreatedAt,
 	)
 	if err != nil {
 		return domain.Federation{}, err
@@ -402,40 +406,64 @@ func (s *Store) RenameFederation(ctx context.Context, federationID string, short
 	return err
 }
 
+func (s *Store) UpdateFederationSettings(ctx context.Context, federationID string, notifyActions bool, requireReason bool, logChatID *int64, logLanguage string) error {
+	if logLanguage == "" {
+		logLanguage = "en"
+	}
+	_, err := s.pool.Exec(ctx, `
+		UPDATE federations
+		SET notify_actions=$2, require_reason=$3, log_chat_id=$4, log_language=$5
+		WHERE id=$1
+	`, federationID, notifyActions, requireReason, logChatID, logLanguage)
+	return err
+}
+
 func (s *Store) GetFederationByID(ctx context.Context, federationID string) (domain.Federation, error) {
 	var federation domain.Federation
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, bot_id, short_name, display_name, owner_user_id, created_at
+		SELECT id, bot_id, short_name, display_name, owner_user_id, notify_actions, require_reason, log_chat_id, log_language, created_at
 		FROM federations
 		WHERE id=$1
-	`, federationID).Scan(&federation.ID, &federation.BotID, &federation.ShortName, &federation.DisplayName, &federation.OwnerUserID, &federation.CreatedAt)
+	`, federationID).Scan(&federation.ID, &federation.BotID, &federation.ShortName, &federation.DisplayName, &federation.OwnerUserID, &federation.NotifyActions, &federation.RequireReason, &federation.LogChatID, &federation.LogLanguage, &federation.CreatedAt)
 	return federation, err
 }
 
 func (s *Store) GetFederationByShortName(ctx context.Context, botID string, shortName string) (domain.Federation, error) {
 	var federation domain.Federation
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, bot_id, short_name, display_name, owner_user_id, created_at
+		SELECT id, bot_id, short_name, display_name, owner_user_id, notify_actions, require_reason, log_chat_id, log_language, created_at
 		FROM federations
 		WHERE bot_id=$1 AND LOWER(short_name)=LOWER($2)
-	`, botID, shortName).Scan(&federation.ID, &federation.BotID, &federation.ShortName, &federation.DisplayName, &federation.OwnerUserID, &federation.CreatedAt)
+	`, botID, shortName).Scan(&federation.ID, &federation.BotID, &federation.ShortName, &federation.DisplayName, &federation.OwnerUserID, &federation.NotifyActions, &federation.RequireReason, &federation.LogChatID, &federation.LogLanguage, &federation.CreatedAt)
+	return federation, err
+}
+
+func (s *Store) GetFederationOwnedByUser(ctx context.Context, botID string, ownerUserID int64) (domain.Federation, error) {
+	var federation domain.Federation
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, bot_id, short_name, display_name, owner_user_id, notify_actions, require_reason, log_chat_id, log_language, created_at
+		FROM federations
+		WHERE bot_id=$1 AND owner_user_id=$2
+		ORDER BY created_at ASC
+		LIMIT 1
+	`, botID, ownerUserID).Scan(&federation.ID, &federation.BotID, &federation.ShortName, &federation.DisplayName, &federation.OwnerUserID, &federation.NotifyActions, &federation.RequireReason, &federation.LogChatID, &federation.LogLanguage, &federation.CreatedAt)
 	return federation, err
 }
 
 func (s *Store) GetFederationByChat(ctx context.Context, botID string, chatID int64) (domain.Federation, error) {
 	var federation domain.Federation
 	err := s.pool.QueryRow(ctx, `
-		SELECT f.id, f.bot_id, f.short_name, f.display_name, f.owner_user_id, f.created_at
+		SELECT f.id, f.bot_id, f.short_name, f.display_name, f.owner_user_id, f.notify_actions, f.require_reason, f.log_chat_id, f.log_language, f.created_at
 		FROM federation_chats fc
 		JOIN federations f ON f.id = fc.federation_id
 		WHERE fc.bot_id=$1 AND fc.chat_id=$2
-	`, botID, chatID).Scan(&federation.ID, &federation.BotID, &federation.ShortName, &federation.DisplayName, &federation.OwnerUserID, &federation.CreatedAt)
+	`, botID, chatID).Scan(&federation.ID, &federation.BotID, &federation.ShortName, &federation.DisplayName, &federation.OwnerUserID, &federation.NotifyActions, &federation.RequireReason, &federation.LogChatID, &federation.LogLanguage, &federation.CreatedAt)
 	return federation, err
 }
 
 func (s *Store) ListFederationsForUser(ctx context.Context, botID string, userID int64) ([]domain.Federation, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT DISTINCT f.id, f.bot_id, f.short_name, f.display_name, f.owner_user_id, f.created_at
+		SELECT DISTINCT f.id, f.bot_id, f.short_name, f.display_name, f.owner_user_id, f.notify_actions, f.require_reason, f.log_chat_id, f.log_language, f.created_at
 		FROM federations f
 		LEFT JOIN federation_admins fa ON fa.federation_id = f.id
 		WHERE f.bot_id=$1 AND (f.owner_user_id=$2 OR fa.user_id=$2)
@@ -449,7 +477,7 @@ func (s *Store) ListFederationsForUser(ctx context.Context, botID string, userID
 	var result []domain.Federation
 	for rows.Next() {
 		var federation domain.Federation
-		if err := rows.Scan(&federation.ID, &federation.BotID, &federation.ShortName, &federation.DisplayName, &federation.OwnerUserID, &federation.CreatedAt); err != nil {
+		if err := rows.Scan(&federation.ID, &federation.BotID, &federation.ShortName, &federation.DisplayName, &federation.OwnerUserID, &federation.NotifyActions, &federation.RequireReason, &federation.LogChatID, &federation.LogLanguage, &federation.CreatedAt); err != nil {
 			return nil, err
 		}
 		result = append(result, federation)
@@ -458,6 +486,9 @@ func (s *Store) ListFederationsForUser(ctx context.Context, botID string, userID
 }
 
 func (s *Store) JoinFederation(ctx context.Context, federationID string, botID string, chatID int64) error {
+	if _, err := s.pool.Exec(ctx, `DELETE FROM federation_chats WHERE bot_id=$1 AND chat_id=$2`, botID, chatID); err != nil {
+		return err
+	}
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO federation_chats (federation_id, bot_id, chat_id)
 		VALUES ($1, $2, $3)
@@ -493,6 +524,25 @@ func (s *Store) ListFederationChats(ctx context.Context, federationID string) ([
 		chats = append(chats, chat)
 	}
 	return chats, rows.Err()
+}
+
+func (s *Store) SetFederationChatQuiet(ctx context.Context, federationID string, botID string, chatID int64, enabled bool) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE federation_chats
+		SET quiet_fed=$4
+		WHERE federation_id=$1 AND bot_id=$2 AND chat_id=$3
+	`, federationID, botID, chatID, enabled)
+	return err
+}
+
+func (s *Store) GetFederationChatQuiet(ctx context.Context, federationID string, botID string, chatID int64) (bool, error) {
+	var enabled bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT quiet_fed
+		FROM federation_chats
+		WHERE federation_id=$1 AND bot_id=$2 AND chat_id=$3
+	`, federationID, botID, chatID).Scan(&enabled)
+	return enabled, err
 }
 
 func (s *Store) SetFederationAdmin(ctx context.Context, federationID string, userID int64, role string, enabled bool) error {
@@ -541,6 +591,9 @@ func (s *Store) TransferFederation(ctx context.Context, federationID string, new
 	if _, err := tx.Exec(ctx, `UPDATE federations SET owner_user_id=$2 WHERE id=$1`, federationID, newOwnerUserID); err != nil {
 		return err
 	}
+	if _, err := tx.Exec(ctx, `UPDATE federation_admins SET role='admin' WHERE federation_id=$1 AND role='owner'`, federationID); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO federation_admins (federation_id, user_id, role)
 		VALUES ($1, $2, 'owner')
@@ -549,6 +602,46 @@ func (s *Store) TransferFederation(ctx context.Context, federationID string, new
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func (s *Store) SetFederationSubscription(ctx context.Context, federationID string, subscribedFederationID string, enabled bool) error {
+	if enabled {
+		_, err := s.pool.Exec(ctx, `
+			INSERT INTO federation_subscriptions (federation_id, subscribed_federation_id)
+			VALUES ($1, $2)
+			ON CONFLICT DO NOTHING
+		`, federationID, subscribedFederationID)
+		return err
+	}
+	_, err := s.pool.Exec(ctx, `
+		DELETE FROM federation_subscriptions
+		WHERE federation_id=$1 AND subscribed_federation_id=$2
+	`, federationID, subscribedFederationID)
+	return err
+}
+
+func (s *Store) ListFederationSubscriptions(ctx context.Context, federationID string) ([]domain.Federation, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT f.id, f.bot_id, f.short_name, f.display_name, f.owner_user_id, f.notify_actions, f.require_reason, f.log_chat_id, f.log_language, f.created_at
+		FROM federation_subscriptions fs
+		JOIN federations f ON f.id = fs.subscribed_federation_id
+		WHERE fs.federation_id=$1
+		ORDER BY f.short_name ASC
+	`, federationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var federations []domain.Federation
+	for rows.Next() {
+		var federation domain.Federation
+		if err := rows.Scan(&federation.ID, &federation.BotID, &federation.ShortName, &federation.DisplayName, &federation.OwnerUserID, &federation.NotifyActions, &federation.RequireReason, &federation.LogChatID, &federation.LogLanguage, &federation.CreatedAt); err != nil {
+			return nil, err
+		}
+		federations = append(federations, federation)
+	}
+	return federations, rows.Err()
 }
 
 func (s *Store) SetFederationBan(ctx context.Context, ban domain.FederationBan, enabled bool) error {
@@ -578,6 +671,50 @@ func (s *Store) GetFederationBan(ctx context.Context, federationID string, userI
 		return domain.FederationBan{}, false, nil
 	}
 	return ban, err == nil, err
+}
+
+func (s *Store) ListFederationBans(ctx context.Context, federationID string) ([]domain.FederationBan, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT federation_id, user_id, reason, banned_by, banned_at
+		FROM federation_bans
+		WHERE federation_id=$1
+		ORDER BY user_id ASC
+	`, federationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var bans []domain.FederationBan
+	for rows.Next() {
+		var ban domain.FederationBan
+		if err := rows.Scan(&ban.FederationID, &ban.UserID, &ban.Reason, &ban.BannedBy, &ban.BannedAt); err != nil {
+			return nil, err
+		}
+		bans = append(bans, ban)
+	}
+	return bans, rows.Err()
+}
+
+func (s *Store) ListFederationBansForUser(ctx context.Context, userID int64) ([]domain.FederationBan, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT federation_id, user_id, reason, banned_by, banned_at
+		FROM federation_bans
+		WHERE user_id=$1
+		ORDER BY federation_id ASC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var bans []domain.FederationBan
+	for rows.Next() {
+		var ban domain.FederationBan
+		if err := rows.Scan(&ban.FederationID, &ban.UserID, &ban.Reason, &ban.BannedBy, &ban.BannedAt); err != nil {
+			return nil, err
+		}
+		bans = append(bans, ban)
+	}
+	return bans, rows.Err()
 }
 
 func (s *Store) ExportUserData(ctx context.Context, botID string, userID int64) (map[string]any, error) {

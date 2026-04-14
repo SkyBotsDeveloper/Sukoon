@@ -24,7 +24,7 @@ Current product direction focuses on fast moderation ergonomics, strong group pr
 - Reliable moderation primitives: bans, mutes, kicks, warns, approvals, locks with custom modes and allowlists, blocklists, antiflood, captcha
 - rich help surfaces for admin, approval, bans, antiflood, blocklists, captcha, clean commands, disabling, locks, log channels, federations, filters, and formatting
 - Owner/global tooling with job-backed broadcast and global blacklist controls
-- Federation support with canonical V2 storage, owner/admin/user help pages, and safe rename/chat-status helpers
+- Federation support with canonical V2 storage, owner/admin/user help pages, shared bans, subscriptions, quiet-fed controls, import/export, stats, and log/notification settings
 - Safe clone lifecycle with explicit per-bot webhook routing
 - Structured note and filter buttons without legacy regex parsing, plus random-content separators and contextual fillings
 - Button-driven help and rules flows with PM-first guidance, in-place menu editing, and scoped help subpages for blocklists, locks, federations, filters, and formatting

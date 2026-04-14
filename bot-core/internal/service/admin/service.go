@@ -1324,7 +1324,7 @@ func DisableableCommands() []string {
 		"setrules", "resetrules", "rules",
 		"pin", "unpin", "unpinall",
 		"antiabuse", "antibio", "free", "unfree", "freelist",
-		"newfed", "renamefed", "delfed", "joinfed", "leavefed", "fedinfo", "fedadmins", "myfeds", "fedpromote", "feddemote", "feddemoteme", "fban", "unfban", "fedtransfer", "chatfed",
+		"newfed", "renamefed", "delfed", "joinfed", "leavefed", "fedinfo", "fedadmins", "fedsubs", "myfeds", "fedpromote", "feddemote", "feddemoteme", "fban", "unfban", "fedtransfer", "fednotif", "fedreason", "subfed", "unsubfed", "fedexport", "fedimport", "setfedlog", "unsetfedlog", "setfedlang", "fedstat", "chatfed", "quietfed",
 		"admins", "adminlist", "mods",
 		"afk", "donate", "language", "setlang", "privacy", "mydata", "forgetme",
 	}

@@ -78,11 +78,15 @@
 - `/addsudo`, `/rmsudo`
 - `/newfed`, `/renamefed`, `/delfed`
 - `/joinfed`, `/leavefed`
-- `/fedinfo`, `/fedadmins`, `/myfeds`, `/chatfed`
+- `/fedinfo`, `/fedadmins`, `/fedsubs`, `/myfeds`, `/chatfed`
 - `/fedpromote`, `/feddemote`
 - `/feddemoteme`
 - `/fban`, `/unfban`
 - `/fedtransfer`
+- `/fednotif`, `/fedreason`, `/subfed`, `/unsubfed`
+- `/fedexport`, `/fedimport`
+- `/setfedlog`, `/unsetfedlog`, `/setfedlang`
+- `/fedstat`, `/quietfed`
 - `/clone`, `/clone sync`, `/clones`, `/mybot`, `/rmclone`
 
 ### Policy Features
@@ -116,7 +120,7 @@
 - separate admin web panel
 - full help or informational command surface beyond the current scoped live sections
 - advanced markdown helper parsing for bold/italics/spoilers/code blocks and note-button syntax in stored content
-- advanced federation policy toggles that were unsafe or unclear in the legacy runtime
+- federation admin promotion confirmation prompts are not implemented; Sukoon applies `/fedpromote` directly for federation owners
 
 ## Final Truth
 

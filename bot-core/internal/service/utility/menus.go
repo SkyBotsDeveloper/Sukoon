@@ -419,53 +419,80 @@ var helpPages = map[string]helpPage{
 	helpFederations: {
 		Title: "Federations",
 		Lines: []string{
-			"Federations link multiple chats under one shared moderation namespace.",
+			"Ah, group management. It's all fun and games, until you start getting spammers in, and you need to ban them. Then you need to start banning more, and more, and it gets painful.",
+			"But then you have multiple groups, and you don't want these spammers in any of your groups - how can you deal? Do you have to ban them manually, in all your groups?",
 			"",
-			"Use federation pages below for the live Sukoon command groups: shared bans, federation admins, chat linking, and ownership workflows.",
+			"No more! With federations, you can make a ban in one chat overlap to all your other chats.",
+			"You can even appoint federation admins, so that your trustworthiest admins can ban across all the chats that you want to protect.",
 			"",
-			"Only the commands backed by the current Go runtime are shown.",
+			"Open a federation command section below.",
 		},
 	},
 	helpFederationsAdmin: {
 		Title: "Fed Admin Commands",
 		Lines: []string{
-			"Federation admins manage shared bans across every joined chat.",
+			"The following is the list of all fed admin commands. To run these, you have to be a federation admin in the current federation.",
 			"",
-			"/fban <reply|user> [reason]",
-			"/unfban <reply|user>",
-			"/feddemoteme [federation]",
-			"/myfeds",
+			"Commands:",
+			"- /fban <reply/username/mention/userid> <reason>: Ban a user from the current chat's federation.",
+			"- /unfban <reply/username/mention/userid>: Unban a user from the current chat's federation.",
+			"- /feddemoteme <fedID>: Demote yourself from a fed.",
+			"- /myfeds: List all feds you are an admin in.",
 			"",
-			"Use these from a fed-linked chat, or pass a federation short name where the command supports it.",
+			"Examples:",
+			"-> /fban @spammer raid spam",
+			"-> /unfban 123456789",
+			"-> /feddemoteme main",
 		},
 	},
 	helpFederationsOwner: {
 		Title: "Federation Owner Commands",
 		Lines: []string{
-			"Federation owners manage the federation itself and its admin list.",
+			"These are the list of available fed owner commands. To run these, you have to own the current federation.",
 			"",
-			"/newfed <short_name> [display name]",
-			"/renamefed <short_name> [display name]",
-			"/delfed",
-			"/fedtransfer <reply|user>",
-			"/fedpromote <reply|user>",
-			"/feddemote <reply|user>",
+			"Owner Commands:",
+			"- /newfed <fedname>: Create a new federation. Only one federation per user.",
+			"- /renamefed <fedname>: Rename your federation.",
+			"- /delfed: Delete your federation and its stored federation data.",
+			"- /fedtransfer <reply/username/mention/userid>: Transfer your federation to another user.",
+			"- /fedpromote <reply/username/mention/userid>: Promote a user to fed admin in your fed.",
+			"- /feddemote <reply/username/mention/userid>: Demote a federation admin in your fed.",
+			"- /fednotif <yes/no/on/off>: Whether to receive PM notifications of federation actions.",
+			"- /fedreason <yes/no/on/off>: Whether fedbans should require a reason.",
+			"- /subfed <FedID>: Subscribe your federation to another. Users banned in the subscribed fed will also be banned in this one.",
+			"- /unsubfed <FedID>: Unsubscribe your federation from another.",
+			"- /fedexport <csv/minicsv/json/human>: Export the list of currently banned users. Default output is CSV.",
+			"- /fedimport <overwrite/keep> <csv/minicsv/json/human>: Import a list of banned users.",
+			"- /setfedlog: Set the current chat as the federation log.",
+			"- /unsetfedlog: Unset the federation log.",
+			"- /setfedlang <language>: Change the federation log language label.",
 			"",
-			"Fed notifications, subscriptions, import/export, fed logs, and fed language settings are still deferred.",
+			"Note:",
+			"Subscriptions do not change your own banlist. They only inherit bans from the subscribed federation.",
 		},
 	},
 	helpFederationsUser: {
 		Title: "Federation User Commands",
 		Lines: []string{
-			"These commands inspect or link the current chat to a federation.",
+			"These commands do not require you to be admin of a federation. They are for looking up federation information, checking fbans, or linking a chat.",
 			"",
-			"/fedinfo",
-			"/fedadmins",
-			"/joinfed <federation>",
-			"/leavefed",
-			"/chatfed",
+			"Commands:",
+			"- /fedinfo <FedID>: Information about a federation.",
+			"- /fedadmins <FedID>: List the admins in a federation.",
+			"- /fedsubs <FedID>: List all federations your federation is subscribed to.",
+			"- /joinfed <FedID>: Join the current chat to a federation. A chat can only join one federation.",
+			"- /leavefed: Leave the current federation.",
+			"- /fedstat: List all federations that you have been banned in.",
+			"- /fedstat <user ID>: List all federations that a user has been banned in.",
+			"- /fedstat <FedID>: Give information about your ban in a federation.",
+			"- /fedstat <user ID> <FedID>: Give information about a user's ban in a federation.",
+			"- /chatfed: Information about the federation the current chat is in.",
+			"- /quietfed <yes/no/on/off>: Whether to send notifications when fedbanned users join the chat.",
 			"",
-			"Quiet federation mode, federation subscriptions, and federation stats are still deferred in Sukoon.",
+			"Examples:",
+			"-> /fedinfo main",
+			"-> /fedstat 123456789 main",
+			"-> /quietfed on",
 		},
 	},
 	helpFilters: {
@@ -1250,8 +1277,6 @@ func helpSectionMarkup(page string, username string, parent string) *telegram.In
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
 				{Text: "Fed Admin Commands", CallbackData: helpCallback(helpFederationsAdmin)},
-			},
-			[]telegram.InlineKeyboardButton{
 				{Text: "Federation Owner Commands", CallbackData: helpCallback(helpFederationsOwner)},
 			},
 			[]telegram.InlineKeyboardButton{
@@ -1259,10 +1284,6 @@ func helpSectionMarkup(page string, username string, parent string) *telegram.In
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},
-			},
-			[]telegram.InlineKeyboardButton{
-				{Text: "Website", URL: serviceutil.WebsiteURL},
-				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
 			},
 		)
 	case helpFilters:
@@ -1342,7 +1363,11 @@ func helpSectionMarkup(page string, username string, parent string) *telegram.In
 			},
 		)
 	case helpFederationsAdmin, helpFederationsOwner, helpFederationsUser:
-		return helpSubsectionMarkup(username, helpFederations)
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: helpCallback(helpFederations)},
+			},
+		)
 	case helpFilterExamples:
 		return helpSubsectionMarkup(username, helpFilters)
 	case helpFormattingMarkdown:
@@ -1502,13 +1527,13 @@ func normalizeHelpSection(value string) string {
 		return helpConnections
 	case "disable", "enable", "disabled", "disableable", "disabledel", "disableadmin", "disabling":
 		return helpDisabling
-	case "federation", "federations", "fed", "newfed", "renamefed", "delfed", "fedtransfer":
+	case "federation", "federations", "fed":
 		return helpFederations
 	case "fedadmincommands", "federations_admin", "federation_admin", "fed_admin", "fban", "unfban", "feddemoteme", "myfeds":
 		return helpFederationsAdmin
-	case "fedownercommands", "federations_owner", "federation_owner", "fed_owner", "fedpromote", "feddemote":
+	case "fedownercommands", "federations_owner", "federation_owner", "fed_owner", "newfed", "renamefed", "delfed", "fedtransfer", "fedpromote", "feddemote", "fednotif", "fedreason", "subfed", "unsubfed", "fedexport", "fedimport", "setfedlog", "unsetfedlog", "setfedlang":
 		return helpFederationsOwner
-	case "fedusercommands", "federations_user", "federation_user", "fed_user", "fedinfo", "fedadmins", "joinfed", "leavefed", "chatfed":
+	case "fedusercommands", "federations_user", "federation_user", "fed_user", "fedinfo", "fedadmins", "fedsubs", "joinfed", "leavefed", "fedstat", "chatfed", "quietfed":
 		return helpFederationsUser
 	case "filters", "filter", "stop", "stopall":
 		return helpFilters

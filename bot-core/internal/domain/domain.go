@@ -247,12 +247,16 @@ type AntiRaidSettings struct {
 }
 
 type Federation struct {
-	ID          string
-	BotID       string
-	ShortName   string
-	DisplayName string
-	OwnerUserID int64
-	CreatedAt   time.Time
+	ID            string
+	BotID         string
+	ShortName     string
+	DisplayName   string
+	OwnerUserID   int64
+	NotifyActions bool
+	RequireReason bool
+	LogChatID     *int64
+	LogLanguage   string
+	CreatedAt     time.Time
 }
 
 type FederationAdmin struct {
@@ -268,6 +272,12 @@ type FederationBan struct {
 	Reason       string
 	BannedBy     int64
 	BannedAt     time.Time
+}
+
+type FederationSubscription struct {
+	FederationID           string
+	SubscribedFederationID string
+	CreatedAt              time.Time
 }
 
 type GlobalBlacklistUser struct {

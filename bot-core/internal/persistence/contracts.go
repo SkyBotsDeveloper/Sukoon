@@ -119,18 +119,26 @@ type Store interface {
 	CreateFederation(ctx context.Context, federation domain.Federation) (domain.Federation, error)
 	DeleteFederation(ctx context.Context, federationID string) error
 	RenameFederation(ctx context.Context, federationID string, shortName string, displayName string) error
+	UpdateFederationSettings(ctx context.Context, federationID string, notifyActions bool, requireReason bool, logChatID *int64, logLanguage string) error
 	GetFederationByID(ctx context.Context, federationID string) (domain.Federation, error)
 	GetFederationByShortName(ctx context.Context, botID string, shortName string) (domain.Federation, error)
+	GetFederationOwnedByUser(ctx context.Context, botID string, ownerUserID int64) (domain.Federation, error)
 	GetFederationByChat(ctx context.Context, botID string, chatID int64) (domain.Federation, error)
 	ListFederationsForUser(ctx context.Context, botID string, userID int64) ([]domain.Federation, error)
 	JoinFederation(ctx context.Context, federationID string, botID string, chatID int64) error
 	LeaveFederation(ctx context.Context, federationID string, botID string, chatID int64) error
 	ListFederationChats(ctx context.Context, federationID string) ([]telegram.Chat, error)
+	SetFederationChatQuiet(ctx context.Context, federationID string, botID string, chatID int64, enabled bool) error
+	GetFederationChatQuiet(ctx context.Context, federationID string, botID string, chatID int64) (bool, error)
 	SetFederationAdmin(ctx context.Context, federationID string, userID int64, role string, enabled bool) error
 	ListFederationAdmins(ctx context.Context, federationID string) ([]domain.FederationAdmin, error)
 	TransferFederation(ctx context.Context, federationID string, newOwnerUserID int64) error
+	SetFederationSubscription(ctx context.Context, federationID string, subscribedFederationID string, enabled bool) error
+	ListFederationSubscriptions(ctx context.Context, federationID string) ([]domain.Federation, error)
 	SetFederationBan(ctx context.Context, ban domain.FederationBan, enabled bool) error
 	GetFederationBan(ctx context.Context, federationID string, userID int64) (domain.FederationBan, bool, error)
+	ListFederationBans(ctx context.Context, federationID string) ([]domain.FederationBan, error)
+	ListFederationBansForUser(ctx context.Context, userID int64) ([]domain.FederationBan, error)
 	ExportUserData(ctx context.Context, botID string, userID int64) (map[string]any, error)
 	DeleteUserData(ctx context.Context, botID string, userID int64) error
 }
