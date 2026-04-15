@@ -426,6 +426,82 @@ func TestRandomContentHelpMatchesRoseStyleCopy(t *testing.T) {
 	}
 }
 
+func TestFormattingOpenedFromFiltersBacksToFilters(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: 54, Type: "private"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 24,
+			From:      &telegram.User{ID: 54, FirstName: "User"},
+			Chat:      chat,
+			Text:      "/help",
+		},
+	}); err != nil {
+		t.Fatalf("help failed: %v", err)
+	}
+
+	root := h.Client.Messages[len(h.Client.Messages)-1]
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-help-filters",
+			From: telegram.User{ID: 54, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: root.MessageID,
+				Chat:      chat,
+			},
+			Data: "ux:help:filters",
+		},
+	}); err != nil {
+		t.Fatalf("filters callback failed: %v", err)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 3,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-help-filters-formatting",
+			From: telegram.User{ID: 54, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: root.MessageID,
+				Chat:      chat,
+			},
+			Data: "ux:helpctx:filters:formatting",
+		},
+	}); err != nil {
+		t.Fatalf("filters->formatting callback failed: %v", err)
+	}
+
+	formatting := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	formattingMarkup := requireEditedMarkup(t, formatting)
+	assertButton(t, formattingMarkup, 0, 0, "Markdown Formatting", "ux:helpctx:filters:formatting_markdown", "")
+	assertButton(t, formattingMarkup, 0, 1, "Buttons", "ux:helpctx:filters:formatting_buttons", "")
+	assertButton(t, formattingMarkup, 1, 0, "Fillings", "ux:helpctx:filters:formatting_fillings", "")
+	assertButton(t, formattingMarkup, 1, 1, "Random Content", "ux:helpctx:filters:formatting_random", "")
+	assertButton(t, formattingMarkup, 2, 0, "Back", "ux:help:filters", "")
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 4,
+		CallbackQuery: &telegram.CallbackQuery{
+			ID:   "cb-help-filters-formatting-back",
+			From: telegram.User{ID: 54, FirstName: "User"},
+			Message: &telegram.Message{
+				MessageID: root.MessageID,
+				Chat:      chat,
+			},
+			Data: "ux:help:filters",
+		},
+	}); err != nil {
+		t.Fatalf("formatting back callback failed: %v", err)
+	}
+
+	backToFilters := h.Client.EditedMessages[len(h.Client.EditedMessages)-1]
+	if !strings.Contains(renderedText(backToFilters.Text), "Filters") {
+		t.Fatalf("expected back from formatting to return filters page, got %q", backToFilters.Text)
+	}
+}
+
 func TestStartHelpCallbacksUseFastPathWithoutHeavyRuntimeLoads(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	chat := telegram.Chat{ID: 501, Type: "private"}
@@ -657,7 +733,7 @@ func TestHelpNavigationSupportsNestedHelpBatchPages(t *testing.T) {
 	}
 	filterMarkup := requireEditedMarkup(t, h.Client.EditedMessages[3])
 	assertButton(t, filterMarkup, 0, 0, "Example Usage", "ux:help:filters_examples", "")
-	assertButton(t, filterMarkup, 0, 1, "Formatting", "ux:help:formatting", "")
+	assertButton(t, filterMarkup, 0, 1, "Formatting", "ux:helpctx:filters:formatting", "")
 	assertButton(t, filterMarkup, 1, 0, "Back", "ux:help:root", "")
 	assertNoButtonText(t, filterMarkup, "Website")
 	assertNoButtonText(t, filterMarkup, "Add to Group")

@@ -1446,24 +1446,36 @@ func helpSectionMarkup(page string, username string, parent string) *telegram.In
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
 				{Text: "Example Usage", CallbackData: helpCallback(helpFilterExamples)},
-				{Text: "Formatting", CallbackData: helpCallback(helpFormatting)},
+				{Text: "Formatting", CallbackData: helpContextCallback(helpFilters, helpFormatting)},
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},
 			},
 		)
 	case helpFormatting:
+		markdownCallback := helpCallback(helpFormattingMarkdown)
+		buttonsCallback := helpCallback(helpFormattingButtons)
+		fillingsCallback := helpCallback(helpFormattingFillings)
+		randomCallback := helpCallback(helpFormattingRandom)
+		backCallback := callbackHelpMain
+		if parent == helpFilters {
+			markdownCallback = helpContextCallback(helpFilters, helpFormattingMarkdown)
+			buttonsCallback = helpContextCallback(helpFilters, helpFormattingButtons)
+			fillingsCallback = helpContextCallback(helpFilters, helpFormattingFillings)
+			randomCallback = helpContextCallback(helpFilters, helpFormattingRandom)
+			backCallback = helpCallback(helpFilters)
+		}
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
-				{Text: "Markdown Formatting", CallbackData: helpCallback(helpFormattingMarkdown)},
-				{Text: "Buttons", CallbackData: helpCallback(helpFormattingButtons)},
+				{Text: "Markdown Formatting", CallbackData: markdownCallback},
+				{Text: "Buttons", CallbackData: buttonsCallback},
 			},
 			[]telegram.InlineKeyboardButton{
-				{Text: "Fillings", CallbackData: helpCallback(helpFormattingFillings)},
-				{Text: "Random Content", CallbackData: helpCallback(helpFormattingRandom)},
+				{Text: "Fillings", CallbackData: fillingsCallback},
+				{Text: "Random Content", CallbackData: randomCallback},
 			},
 			[]telegram.InlineKeyboardButton{
-				{Text: "Back", CallbackData: callbackHelpMain},
+				{Text: "Back", CallbackData: backCallback},
 			},
 		)
 	case helpCleanCommands:
@@ -1526,18 +1538,24 @@ func helpSectionMarkup(page string, username string, parent string) *telegram.In
 			},
 		)
 	case helpFormattingMarkdown:
+		backCallback := helpCallback(helpFormatting)
+		if parent == helpFilters {
+			backCallback = helpContextCallback(helpFilters, helpFormatting)
+		}
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
 				{Text: "Buttons", CallbackData: helpContextCallback(helpFormattingMarkdown, helpFormattingButtons)},
 			},
 			[]telegram.InlineKeyboardButton{
-				{Text: "Back", CallbackData: helpCallback(helpFormatting)},
+				{Text: "Back", CallbackData: backCallback},
 			},
 		)
 	case helpFormattingFillings:
 		parentCallback := helpCallback(helpFormatting)
 		if parent == helpFilterExamples {
 			parentCallback = helpCallback(helpFilterExamples)
+		} else if parent == helpFilters {
+			parentCallback = helpContextCallback(helpFilters, helpFormatting)
 		}
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
@@ -1545,15 +1563,21 @@ func helpSectionMarkup(page string, username string, parent string) *telegram.In
 			},
 		)
 	case helpFormattingRandom:
+		backCallback := helpCallback(helpFormatting)
+		if parent == helpFilters {
+			backCallback = helpContextCallback(helpFilters, helpFormatting)
+		}
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
-				{Text: "Back", CallbackData: helpCallback(helpFormatting)},
+				{Text: "Back", CallbackData: backCallback},
 			},
 		)
 	case helpFormattingButtons:
 		parentCallback := helpCallback(helpFormatting)
 		if parent == helpFormattingMarkdown {
 			parentCallback = helpCallback(helpFormattingMarkdown)
+		} else if parent == helpFilters {
+			parentCallback = helpContextCallback(helpFilters, helpFormatting)
 		}
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
