@@ -1095,6 +1095,9 @@ func helpPageText(section string) string {
 	if section == helpRoot {
 		return helpLandingText()
 	}
+	if section == helpFormattingMarkdown {
+		return markdownFormattingHelpText()
+	}
 	page, ok := helpPages[section]
 	if !ok {
 		return helpLandingText()
@@ -1104,6 +1107,42 @@ func helpPageText(section string) string {
 		lines = append(lines, formatHelpLine(line))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func markdownFormattingHelpText() string {
+	return strings.Join([]string{
+		"<b>Markdown Formatting</b>",
+		"",
+		"You can format your message using bold, italics, underline, and much more. Go ahead and experiment!",
+		"",
+		"<b>Supported markdown:</b>",
+		"- <code>`code words`</code>: Backticks are used for monospace fonts. Shows as: <code>code words</code>.",
+		"- <code>_italic words_</code>: Underscores are used for italic fonts. Shows as: <i>italic words</i>.",
+		"- <code>*bold words*</code>: Asterisks are used for bold fonts. Shows as: <b>bold words</b>.",
+		"- <code>~strikethrough~</code>: Tildes are used for strikethrough. Shows as: <s>strikethrough</s>.",
+		"- <code>__underline__</code>: Double underscores are used for underlines. Shows as: <u>underline</u>. NOTE: Some clients try to be smart and interpret it as italic. In that case, try to use your app's built-in formatting.",
+		"- <code>||spoiler||</code>: Double vertical bars are used for spoilers. Shows as: <span class=\"tg-spoiler\">spoiler</span>.",
+		"- <code>```shell",
+		"echo &quot;hi&quot;```</code>: Triple backticks are used for codeblocks. You can also specify the code language in the first line (here, shell). Shows as:",
+		"<pre><code class=\"language-shell\">echo &quot;hi&quot;</code></pre>",
+		"- <code>&gt; quote</code>: You can quote a line by prefixing it with &gt;. Shows as:",
+		"<blockquote>quote</blockquote>",
+		"- <code>**&gt; first line",
+		"&gt; second",
+		"&gt; third",
+		"&gt; hidden||</code>: You can create a multiline quote by starting a quote with **&gt;, and ending it with ||. This will show the first three lines, and then collapse the rest. Shows as:",
+		"<blockquote expandable>first line\nsecond\nthird\nhidden</blockquote>",
+		"- <code>[hyperlink](misssukoon.vercel.app)</code>: This is the formatting used for hyperlinks. Shows as: <a href=\"https://misssukoon.vercel.app/\">hyperlink</a>.",
+		"- <code>[My button](buttonurl://misssukoon.vercel.app)</code>: This is the formatting used for creating buttons. This example will create a button named My button which opens misssukoon.vercel.app when clicked.",
+		"If you would like to send buttons on the same row, use the <code>:same</code> formatting. EG:",
+		"<code>[button 1](buttonurl://example.com)</code>",
+		"<code>[button 2](buttonurl://example.com:same)</code>",
+		"<code>[button 3](buttonurl://example.com)</code>",
+		"This will show button 1 and 2 on the same line, with 3 underneath.",
+		"Use the Sukoon docs website to help with the button syntax: https://misssukoon.vercel.app/",
+		"- <code>[Styled button](buttonurl#primary://misssukoon.vercel.app)</code>: Styled button syntax is accepted for compatibility. Telegram bots cannot force client-side button colours, so styles are treated as normal URL buttons.",
+		"- <code>[note button](buttonurl://#notename)</code>: This syntax creates a button which links to a note. When clicked, the user is redirected to the bot's PM to see the note.",
+	}, "\n")
 }
 
 func formatHelpLine(line string) string {

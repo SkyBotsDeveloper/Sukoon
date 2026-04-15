@@ -590,6 +590,11 @@ func TestHelpNavigationSupportsNestedHelpBatchPages(t *testing.T) {
 		!strings.Contains(markdownText, "buttonurl://#notename") {
 		t.Fatalf("expected markdown formatting page, got %q", h.Client.EditedMessages[7].Text)
 	}
+	if !strings.Contains(h.Client.EditedMessages[7].Text, "<b>bold words</b>") ||
+		!strings.Contains(h.Client.EditedMessages[7].Text, "<pre><code") ||
+		!strings.Contains(h.Client.EditedMessages[7].Text, "<blockquote>quote</blockquote>") {
+		t.Fatalf("expected markdown page to render examples as HTML, got %q", h.Client.EditedMessages[7].Text)
+	}
 	buttonsMarkup := requireEditedMarkup(t, h.Client.EditedMessages[8])
 	assertButton(t, buttonsMarkup, 0, 0, "Back", "ux:help:formatting", "")
 	if !strings.Contains(renderedText(h.Client.EditedMessages[8].Text), "buttonurl://google.com") || !strings.Contains(renderedText(h.Client.EditedMessages[8].Text), "buttonurl://#my_note") {
