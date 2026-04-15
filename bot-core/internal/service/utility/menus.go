@@ -1545,7 +1545,11 @@ func helpSectionMarkup(page string, username string, parent string) *telegram.In
 			},
 		)
 	case helpFormattingRandom:
-		return helpSubsectionMarkup(username, helpFormatting)
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: helpCallback(helpFormatting)},
+			},
+		)
 	case helpFormattingButtons:
 		parentCallback := helpCallback(helpFormatting)
 		if parent == helpFormattingMarkdown {

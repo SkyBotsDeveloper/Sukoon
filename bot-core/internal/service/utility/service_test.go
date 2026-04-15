@@ -396,6 +396,10 @@ func TestRandomContentHelpMatchesRoseStyleCopy(t *testing.T) {
 	if msg.Options.ParseMode != "HTML" {
 		t.Fatalf("expected random content help to use HTML parse mode, got %+v", msg.Options)
 	}
+	markup := requireMarkup(t, msg)
+	assertButton(t, markup, 0, 0, "Back", "ux:help:formatting", "")
+	assertNoButtonText(t, markup, "Website")
+	assertNoButtonText(t, markup, "Add to Group")
 	rendered := renderedText(msg.Text)
 	for _, want := range []string{
 		"Random Content",
