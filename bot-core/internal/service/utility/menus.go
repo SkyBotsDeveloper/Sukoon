@@ -1085,7 +1085,7 @@ func helpSectionOptions(section string) (string, bool) {
 		return "HTML", true
 	}
 	switch section {
-	case helpBlocklistExamples, helpLockExamples:
+	case helpBlocklistExamples, helpLockExamples, helpFormattingMarkdown:
 		return "HTML", true
 	}
 	return "HTML", false

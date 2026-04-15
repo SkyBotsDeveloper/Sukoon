@@ -110,7 +110,9 @@ func (c *HTTPClient) SendMessage(ctx context.Context, chatID int64, text string,
 			"is_disabled": false,
 		}
 	} else if options.DisableWebPagePreview {
-		payload["disable_web_page_preview"] = true
+		payload["link_preview_options"] = map[string]any{
+			"is_disabled": true,
+		}
 	}
 	if options.DisableNotification {
 		payload["disable_notification"] = true
@@ -235,7 +237,9 @@ func (c *HTTPClient) EditMessageText(ctx context.Context, chatID int64, messageI
 			"is_disabled": false,
 		}
 	} else if options.DisableWebPagePreview {
-		payload["disable_web_page_preview"] = true
+		payload["link_preview_options"] = map[string]any{
+			"is_disabled": true,
+		}
 	}
 	if options.ReplyMarkup != nil {
 		payload["reply_markup"] = options.ReplyMarkup

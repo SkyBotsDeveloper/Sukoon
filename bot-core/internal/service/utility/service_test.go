@@ -583,6 +583,9 @@ func TestHelpNavigationSupportsNestedHelpBatchPages(t *testing.T) {
 	assertButton(t, markdownMarkup, 1, 0, "Back", "ux:help:formatting", "")
 	assertNoButtonText(t, markdownMarkup, "Website")
 	assertNoButtonText(t, markdownMarkup, "Add to Group")
+	if !h.Client.EditedMessages[7].Options.DisableWebPagePreview {
+		t.Fatalf("expected markdown formatting help to disable link previews, got %+v", h.Client.EditedMessages[7].Options)
+	}
 	markdownText := renderedText(h.Client.EditedMessages[7].Text)
 	if !strings.Contains(markdownText, "Supported markdown") ||
 		!strings.Contains(markdownText, "Double vertical bars are used for spoilers") ||
