@@ -9,6 +9,12 @@ The repository now has one canonical runtime:
 - Valkey or Redis for shared hot state
 - Docker-first deployment for VPS, plus Railway and Heroku support
 
+Recommended production storage model:
+
+- external PostgreSQL as the durable system of record
+- local VPS Valkey or Redis for hot-path state
+- VPS-hosted `bot-core` web and worker processes
+
 The old Next.js and Supabase bot runtime has been removed. This repository is no longer a migration workspace or dual-runtime project.
 
 ## Status
@@ -33,6 +39,12 @@ Current product direction focuses on fast moderation ergonomics, strong group pr
 
 ## Quick Start
 
+If you are setting up Sukoon on a VPS for the first time, follow the beginner guide in [DEPLOYMENT.md](/c:/Users/strad/OneDrive/Documents/shortcuts/Downloads/Sukoon/DEPLOYMENT.md) first. The recommended production model is:
+
+- external Postgres
+- local VPS Valkey/Redis
+- VPS-hosted `bot-core-web` and `bot-core-worker`
+
 1. Copy the env template:
 
 ```powershell
@@ -41,10 +53,28 @@ Copy-Item bot-core\.env.example bot-core\.env
 
 2. Fill in the required Telegram, database, Redis, and webhook values.
 
-3. Start local infrastructure:
+Production recommendation:
+
+- set `DATABASE_URL` to your external Postgres runtime URL
+- set `MIGRATE_DATABASE_URL` to the provider's direct Postgres URL when available
+- keep `REDIS_ADDR` pointed at local VPS Valkey/Redis
+
+For a VPS + external Postgres starting point, use:
+
+```powershell
+Copy-Item bot-core\.env.vps-external-postgres.example bot-core\.env
+```
+
+3. For local development or a local fallback database, start local infrastructure:
 
 ```powershell
 docker compose up -d postgres valkey
+```
+
+For the recommended VPS production model, start only local Valkey and use your external Postgres URL:
+
+```powershell
+docker compose up -d valkey
 ```
 
 4. Run migrations:
@@ -61,6 +91,8 @@ go run ./cmd/migrate
 ```powershell
 go run ./cmd/bot-core
 ```
+
+See [DEPLOYMENT.md](/c:/Users/strad/OneDrive/Documents/shortcuts/Downloads/Sukoon/DEPLOYMENT.md) for the full external Postgres + local Redis deployment flow.
 
 ## Docs
 

@@ -18,7 +18,12 @@ func main() {
 	}
 
 	logger := observability.NewLogger(cfg.AppEnv)
-	store, err := postgres.New(context.Background(), cfg.DatabaseURL, logger)
+	store, err := postgres.New(context.Background(), cfg.EffectiveMigrateDatabaseURL(), logger, postgres.Options{
+		MaxConns:        cfg.DatabaseMaxConns,
+		MinConns:        cfg.DatabaseMinConns,
+		MaxConnLifetime: cfg.DatabaseMaxConnLifetime,
+		MaxConnIdleTime: cfg.DatabaseMaxConnIdleTime,
+	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "database error: %v\n", err)
 		os.Exit(1)

@@ -85,17 +85,80 @@ Safe scale-out assumptions:
 - job claims use lock-safe database polling
 - flood tracking and leases are shared in Valkey or Redis
 
+## Storage Model
+
+Recommended production model:
+
+- external Postgres for durable state
+- local VPS Valkey/Redis for hot-path state
+
+Durable Postgres state includes:
+
+- bot instances and clone ownership
+- chat and moderation settings
+- notes, filters, rules, approvals, locks, blocklists
+- federation data and global blacklists
+- durable jobs and queued updates
+
+Ephemeral Redis state includes:
+
+- webhook bot cache
+- antiflood counters
+- antiraid join burst counters
+- short leases
+
 ## Backups
 
 Back up:
 
-- PostgreSQL
+- external PostgreSQL
+
+Provider recommendations:
+
+- enable provider backups or point-in-time restore where available
+- keep at least one tested export/restore path for the Postgres database
+- for Neon-compatible providers, keep the project in the nearest practical region to the VPS
 
 Persist:
 
 - Valkey appendonly data for better restart behavior
 
 Do not depend on Redis persistence alone for canonical bot data.
+
+## Failure Domains
+
+What survives VPS loss:
+
+- external Postgres durable state
+
+What does not need to survive VPS loss:
+
+- local Redis hot-state
+- in-process runtime caches
+
+Practical impact of losing local Redis:
+
+- webhook bot cache repopulates
+- flood counters reset
+- antiraid join burst counters reset
+- short leases reset
+
+This is acceptable under the current architecture.
+
+## VPS Replacement Checklist
+
+1. Provision the replacement VPS.
+2. Install Docker and Docker Compose.
+3. Restore `bot-core/.env` with the same `DATABASE_URL`, `MIGRATE_DATABASE_URL`, Redis, Telegram, and webhook values.
+4. Start local Valkey.
+5. Run `docker compose run --rm migrate`.
+6. Start `bot-core-web` and `bot-core-worker`.
+7. Verify `/healthz`.
+8. Verify Telegram webhook status.
+
+## Future Standby Database Note
+
+The current repo supports one primary Postgres URL cleanly. A standby or backup Postgres can be added later at the operator level, but automatic failover is not part of the current runtime.
 
 ## Operational Limits And Current Caveats
 

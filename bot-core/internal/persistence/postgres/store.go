@@ -25,18 +25,39 @@ type Store struct {
 	logger *slog.Logger
 }
 
+type Options struct {
+	MaxConns        int32
+	MinConns        int32
+	MaxConnLifetime time.Duration
+	MaxConnIdleTime time.Duration
+}
+
 var _ persistence.Store = (*Store)(nil)
 
-func New(ctx context.Context, databaseURL string, logger *slog.Logger) (*Store, error) {
+func DefaultOptions() Options {
+	return Options{
+		MaxConns:        10,
+		MinConns:        2,
+		MaxConnLifetime: time.Hour,
+		MaxConnIdleTime: 15 * time.Minute,
+	}
+}
+
+func New(ctx context.Context, databaseURL string, logger *slog.Logger, opts ...Options) (*Store, error) {
+	options := DefaultOptions()
+	if len(opts) > 0 {
+		options = opts[0]
+	}
+
 	cfg, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse database url: %w", err)
 	}
 
-	cfg.MaxConns = 10
-	cfg.MinConns = 2
-	cfg.MaxConnLifetime = time.Hour
-	cfg.MaxConnIdleTime = 15 * time.Minute
+	cfg.MaxConns = options.MaxConns
+	cfg.MinConns = options.MinConns
+	cfg.MaxConnLifetime = options.MaxConnLifetime
+	cfg.MaxConnIdleTime = options.MaxConnIdleTime
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {

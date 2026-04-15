@@ -46,13 +46,40 @@ func (r *Runtime) Close() {
 }
 
 func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Runtime, error) {
-	store, err := postgres.New(ctx, cfg.DatabaseURL, logger)
-	if err != nil {
-		return nil, err
+	dbOptions := postgres.Options{
+		MaxConns:        cfg.DatabaseMaxConns,
+		MinConns:        cfg.DatabaseMinConns,
+		MaxConnLifetime: cfg.DatabaseMaxConnLifetime,
+		MaxConnIdleTime: cfg.DatabaseMaxConnIdleTime,
 	}
-	if err := store.Migrate(ctx); err != nil {
-		store.Close()
-		return nil, err
+
+	var store *postgres.Store
+	if cfg.EffectiveMigrateDatabaseURL() == cfg.DatabaseURL {
+		runtimeStore, err := postgres.New(ctx, cfg.DatabaseURL, logger, dbOptions)
+		if err != nil {
+			return nil, err
+		}
+		if err := runtimeStore.Migrate(ctx); err != nil {
+			runtimeStore.Close()
+			return nil, err
+		}
+		store = runtimeStore
+	} else {
+		migrationStore, err := postgres.New(ctx, cfg.EffectiveMigrateDatabaseURL(), logger, dbOptions)
+		if err != nil {
+			return nil, err
+		}
+		if err := migrationStore.Migrate(ctx); err != nil {
+			migrationStore.Close()
+			return nil, err
+		}
+		migrationStore.Close()
+
+		runtimeStore, err := postgres.New(ctx, cfg.DatabaseURL, logger, dbOptions)
+		if err != nil {
+			return nil, err
+		}
+		store = runtimeStore
 	}
 
 	state := redisstate.New(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)

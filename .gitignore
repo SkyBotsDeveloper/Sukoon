@@ -1,5 +1,7 @@
 .env
 .env.*
+!bot-core/.env.example
+!bot-core/.env.vps-external-postgres.example
 .next/
 node_modules/
 out/
