@@ -10,7 +10,7 @@ import (
 	"sukoon/bot-core/internal/commands"
 	"sukoon/bot-core/internal/i18n"
 	"sukoon/bot-core/internal/runtime"
-	"sukoon/bot-core/internal/serviceutil"
+	contentservice "sukoon/bot-core/internal/service/content"
 	"sukoon/bot-core/internal/telegram"
 )
 
@@ -77,7 +77,12 @@ func (s *Service) HandleCallback(ctx context.Context, rt *runtime.Context) (bool
 			chatTitle = rt.CallbackQuery.Message.Chat.Title
 			chat = rt.CallbackQuery.Message.Chat
 		}
-		err = s.sendCallbackPage(ctx, rt, rulesText(chatTitle, serviceutil.RenderStoredMessage(rt.RuntimeBundle.Settings.RulesText, rt.CallbackQuery.From, chat, rt.RuntimeBundle.Settings.RulesText)), rulesShownHereMarkup(rt.Bot.Username, rt.ChatID()))
+		renderedRules, options, renderErr := contentservice.RenderStoredContentForSend(rt.RuntimeBundle.Settings.RulesText, "", rt.CallbackQuery.From, chat, rt.RuntimeBundle.Settings.RulesText, rt.Bot.Username, rt.ChatID())
+		if renderErr != nil {
+			err = renderErr
+			break
+		}
+		err = s.sendCallbackPageWithOptions(ctx, rt, rulesText(chatTitle, renderedRules), rulesShownHereMarkup(rt.Bot.Username, rt.ChatID()), options.ParseMode, options.DisableWebPagePreview)
 	case callbackClose:
 		err = s.closeCallbackMessage(ctx, rt)
 	default:
@@ -123,6 +128,8 @@ func (s *Service) start(ctx context.Context, rt *runtime.Context) error {
 		return s.sendHelpMessage(ctx, rt, section)
 	case strings.HasPrefix(payload, "rules_"):
 		return s.startRules(ctx, rt, strings.TrimPrefix(payload, "rules_"))
+	case strings.HasPrefix(payload, "note_"):
+		return s.startNote(ctx, rt, strings.TrimPrefix(payload, "note_"))
 	case payload == "privacy":
 		_, err := rt.Client.SendMessage(ctx, rt.ChatID(), privacyText(), rt.ReplyOptions(telegram.SendMessageOptions{
 			ParseMode:   "HTML",
@@ -137,6 +144,44 @@ func (s *Service) start(ctx context.Context, rt *runtime.Context) error {
 		}))
 		return err
 	}
+}
+
+func (s *Service) startNote(ctx context.Context, rt *runtime.Context, raw string) error {
+	parts := strings.SplitN(strings.TrimSpace(raw), "_", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid note target")
+	}
+	chatID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid note target")
+	}
+	noteName := strings.ToLower(strings.TrimSpace(parts[1]))
+	if noteName == "" {
+		return fmt.Errorf("invalid note target")
+	}
+	note, err := rt.Store.GetNote(ctx, rt.Bot.ID, chatID, noteName)
+	if err != nil {
+		return err
+	}
+	bundle, err := rt.Store.LoadRuntimeBundle(ctx, rt.Bot.ID, chatID)
+	if err != nil {
+		return err
+	}
+	chatTitle := "this group"
+	if chat, err := rt.Client.GetChat(ctx, chatID); err == nil && strings.TrimSpace(chat.Title) != "" {
+		chatTitle = chat.Title
+	}
+	requester := telegram.User{}
+	if rt.Message != nil && rt.Message.From != nil {
+		requester = *rt.Message.From
+	}
+	text, options, err := contentservice.RenderStoredContentForSend(note.Text, note.ButtonsJSON, requester, telegram.Chat{ID: chatID, Title: chatTitle}, bundle.Settings.RulesText, rt.Bot.Username, chatID)
+	if err != nil {
+		return err
+	}
+	options.ParseMode = coalesceUtilityParseMode(note.ParseMode, options.ParseMode)
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(options))
+	return err
 }
 
 func (s *Service) help(ctx context.Context, rt *runtime.Context) error {
@@ -311,9 +356,12 @@ func (s *Service) startRules(ctx context.Context, rt *runtime.Context, rawChatID
 	if rt.Message != nil && rt.Message.From != nil {
 		requester = *rt.Message.From
 	}
-	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rulesText(chatTitle, serviceutil.RenderStoredMessage(bundle.Settings.RulesText, requester, telegram.Chat{ID: chatID, Title: chatTitle}, bundle.Settings.RulesText)), rt.ReplyOptions(telegram.SendMessageOptions{
-		ReplyMarkup: rulesPMMarkup(rt.Bot.Username),
-	}))
+	renderedRules, options, err := contentservice.RenderStoredContentForSend(bundle.Settings.RulesText, "", requester, telegram.Chat{ID: chatID, Title: chatTitle}, bundle.Settings.RulesText, rt.Bot.Username, chatID)
+	if err != nil {
+		return err
+	}
+	options.ReplyMarkup = rulesPMMarkup(rt.Bot.Username)
+	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rulesText(chatTitle, renderedRules), rt.ReplyOptions(options))
 	return err
 }
 
@@ -325,6 +373,13 @@ func isPrivateChat(rt *runtime.Context) bool {
 		return rt.CallbackQuery.Message.Chat.Type == "private"
 	}
 	return false
+}
+
+func coalesceUtilityParseMode(primary string, fallback string) string {
+	if strings.TrimSpace(primary) != "" {
+		return primary
+	}
+	return fallback
 }
 
 func (s *Service) ShouldFastPathCommand(command commands.Parsed) bool {

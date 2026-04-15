@@ -74,7 +74,7 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 					return false, err
 				}
 				_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rendered.Text, telegram.SendMessageOptions{
-					ParseMode:             note.ParseMode,
+					ParseMode:             coalesceParseMode(note.ParseMode, rendered.ParseMode),
 					ReplyMarkup:           rendered.ReplyMarkup,
 					DisableWebPagePreview: rendered.DisableWebPagePreview,
 					EnableWebPagePreview:  rendered.EnableWebPagePreview,
@@ -110,7 +110,7 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 			if rendered.MediaFileID != "" && !noFormat {
 				_, err = rt.Client.SendMedia(ctx, rt.ChatID(), rendered.MediaType, rendered.MediaFileID, rt.ReplyMediaOptions(telegram.SendMediaOptions{
 					Caption:               rendered.Text,
-					ParseMode:             filter.ParseMode,
+					ParseMode:             coalesceParseMode(filter.ParseMode, rendered.ParseMode),
 					ReplyMarkup:           rendered.ReplyMarkup,
 					DisableNotification:   rendered.DisableNotification,
 					ProtectContent:        rendered.ProtectContent,
@@ -120,7 +120,7 @@ func (s *Service) HandleMessage(ctx context.Context, rt *runtime.Context) (bool,
 				return true, err
 			}
 			_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rendered.Text, rt.ReplyOptions(telegram.SendMessageOptions{
-				ParseMode:             filter.ParseMode,
+				ParseMode:             coalesceParseMode(filter.ParseMode, rendered.ParseMode),
 				ReplyMarkup:           rendered.ReplyMarkup,
 				DisableNotification:   rendered.DisableNotification,
 				ProtectContent:        rendered.ProtectContent,
@@ -144,6 +144,7 @@ func (s *Service) HandleJoin(ctx context.Context, rt *runtime.Context, user tele
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rendered.Text, telegram.SendMessageOptions{
+		ParseMode:             rendered.ParseMode,
 		ReplyMarkup:           rendered.ReplyMarkup,
 		DisableWebPagePreview: rendered.DisableWebPagePreview,
 		EnableWebPagePreview:  rendered.EnableWebPagePreview,
@@ -163,6 +164,7 @@ func (s *Service) HandleLeave(ctx context.Context, rt *runtime.Context, user tel
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rendered.Text, telegram.SendMessageOptions{
+		ParseMode:             rendered.ParseMode,
 		ReplyMarkup:           rendered.ReplyMarkup,
 		DisableWebPagePreview: rendered.DisableWebPagePreview,
 		EnableWebPagePreview:  rendered.EnableWebPagePreview,
@@ -237,7 +239,7 @@ func (s *Service) get(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rendered.Text, rt.ReplyOptions(telegram.SendMessageOptions{
-		ParseMode:             note.ParseMode,
+		ParseMode:             coalesceParseMode(note.ParseMode, rendered.ParseMode),
 		ReplyMarkup:           rendered.ReplyMarkup,
 		DisableWebPagePreview: rendered.DisableWebPagePreview,
 		EnableWebPagePreview:  rendered.EnableWebPagePreview,
@@ -500,6 +502,7 @@ func (s *Service) rules(ctx context.Context, rt *runtime.Context) error {
 		return err
 	}
 	_, err = rt.Client.SendMessage(ctx, rt.ChatID(), rendered.Text, rt.ReplyOptions(telegram.SendMessageOptions{
+		ParseMode: rendered.ParseMode,
 		ReplyMarkup: serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
 				{Text: "Help", CallbackData: "ux:help:root"},
@@ -581,4 +584,11 @@ func onlyTriggers(definitions []filterDefinition) bool {
 		}
 	}
 	return true
+}
+
+func coalesceParseMode(primary string, fallback string) string {
+	if strings.TrimSpace(primary) != "" {
+		return primary
+	}
+	return fallback
 }

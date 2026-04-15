@@ -3,7 +3,10 @@ package content
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"math/rand"
+	"net/url"
+	"regexp"
 	"strings"
 
 	"sukoon/bot-core/internal/domain"
@@ -12,17 +15,34 @@ import (
 	"sukoon/bot-core/internal/telegram"
 )
 
+const noteButtonURLPrefix = "sukoon-note://"
+
+var (
+	fencedCodePattern = regexp.MustCompile("(?s)```([A-Za-z0-9_-]+)?\\n?(.*?)```")
+	linkPattern       = regexp.MustCompile(`\[([^\]\n]+)\]\(([^\)\n]+)\)`)
+	inlineCodePattern = regexp.MustCompile("`([^`\n]+)`")
+	spoilerPattern    = regexp.MustCompile(`\|\|(.+?)\|\|`)
+	underlinePattern  = regexp.MustCompile(`__([^_\n]+)__`)
+	boldPattern       = regexp.MustCompile(`\*([^*\n]+)\*`)
+	italicPattern     = regexp.MustCompile(`_([^_\n]+)_`)
+	strikePattern     = regexp.MustCompile(`~([^~\n]+)~`)
+)
+
 func parseStoredContent(raw string) (string, string, error) {
 	textLines := make([]string, 0)
 	buttons := make([][]telegram.InlineKeyboardButton, 0)
 
 	for _, line := range strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n") {
-		row, isRow, err := parseButtonRow(line)
+		row, isRow, sameRow, err := parseButtonRow(line)
 		if err != nil {
 			return "", "", err
 		}
 		if isRow {
-			buttons = append(buttons, row)
+			if sameRow && len(buttons) > 0 {
+				buttons[len(buttons)-1] = append(buttons[len(buttons)-1], row...)
+			} else {
+				buttons = append(buttons, row)
+			}
 			continue
 		}
 		textLines = append(textLines, line)
@@ -36,6 +56,10 @@ func parseStoredContent(raw string) (string, string, error) {
 }
 
 func buttonsFromJSON(raw string) (*telegram.InlineKeyboardMarkup, error) {
+	return buttonsFromJSONWithContext(raw, "", 0)
+}
+
+func buttonsFromJSONWithContext(raw string, botUsername string, chatID int64) (*telegram.InlineKeyboardMarkup, error) {
 	if strings.TrimSpace(raw) == "" {
 		return nil, nil
 	}
@@ -45,6 +69,18 @@ func buttonsFromJSON(raw string) (*telegram.InlineKeyboardMarkup, error) {
 	}
 	if len(buttons) == 0 {
 		return nil, nil
+	}
+	for rowIdx := range buttons {
+		for colIdx := range buttons[rowIdx] {
+			if strings.HasPrefix(buttons[rowIdx][colIdx].URL, noteButtonURLPrefix) {
+				noteName := strings.TrimPrefix(buttons[rowIdx][colIdx].URL, noteButtonURLPrefix)
+				if strings.TrimSpace(botUsername) == "" || chatID == 0 || strings.TrimSpace(noteName) == "" {
+					buttons[rowIdx][colIdx].URL = ""
+					continue
+				}
+				buttons[rowIdx][colIdx].URL = serviceutil.BotDeepLink(botUsername, fmt.Sprintf("note_%d_%s", chatID, noteName))
+			}
+		}
 	}
 	return &telegram.InlineKeyboardMarkup{InlineKeyboard: buttons}, nil
 }
@@ -274,6 +310,7 @@ func splitCommaTriggers(raw string) ([]string, error) {
 
 type filterRenderResult struct {
 	Text                  string
+	ParseMode             string
 	ReplyMarkup           *telegram.InlineKeyboardMarkup
 	DisableWebPagePreview bool
 	EnableWebPagePreview  bool
@@ -334,6 +371,7 @@ func renderFilterResponse(filter domain.FilterRule, user telegram.User, chat tel
 	}
 	return filterRenderResult{
 		Text:                  rendered.Text,
+		ParseMode:             rendered.ParseMode,
 		ReplyMarkup:           rendered.ReplyMarkup,
 		DisableWebPagePreview: rendered.DisableWebPagePreview,
 		EnableWebPagePreview:  rendered.EnableWebPagePreview,
@@ -365,6 +403,7 @@ func stripFilterControlTokens(raw string) string {
 
 type storedPayloadResult struct {
 	Text                  string
+	ParseMode             string
 	ReplyMarkup           *telegram.InlineKeyboardMarkup
 	DisableWebPagePreview bool
 	EnableWebPagePreview  bool
@@ -375,7 +414,7 @@ type storedPayloadResult struct {
 }
 
 func renderStoredPayload(raw string, buttonsJSON string, user telegram.User, chat telegram.Chat, rules string, botUsername string, rulesChatID int64) (storedPayloadResult, error) {
-	replyMarkup, err := buttonsFromJSON(buttonsJSON)
+	replyMarkup, err := buttonsFromJSONWithContext(buttonsJSON, botUsername, rulesChatID)
 	if err != nil {
 		return storedPayloadResult{}, err
 	}
@@ -391,7 +430,8 @@ func renderStoredPayload(raw string, buttonsJSON string, user telegram.User, cha
 	}
 
 	return storedPayloadResult{
-		Text:                  renderStoredText(cleaned, user, chat, rules),
+		Text:                  renderRoseMarkdownHTML(renderStoredText(cleaned, user, chat, rules)),
+		ParseMode:             "HTML",
 		ReplyMarkup:           replyMarkup,
 		DisableWebPagePreview: !enablePreview,
 		EnableWebPagePreview:  enablePreview,
@@ -399,6 +439,22 @@ func renderStoredPayload(raw string, buttonsJSON string, user telegram.User, cha
 		DisableNotification:   strings.Contains(raw, "{nonotif}"),
 		ProtectContent:        strings.Contains(raw, "{protect}"),
 		HasMediaSpoiler:       strings.Contains(raw, "{mediaspoiler}"),
+	}, nil
+}
+
+func RenderStoredContentForSend(raw string, buttonsJSON string, user telegram.User, chat telegram.Chat, rules string, botUsername string, rulesChatID int64) (string, telegram.SendMessageOptions, error) {
+	rendered, err := renderStoredPayload(raw, buttonsJSON, user, chat, rules, botUsername, rulesChatID)
+	if err != nil {
+		return "", telegram.SendMessageOptions{}, err
+	}
+	return rendered.Text, telegram.SendMessageOptions{
+		ParseMode:             rendered.ParseMode,
+		ReplyMarkup:           rendered.ReplyMarkup,
+		DisableWebPagePreview: rendered.DisableWebPagePreview,
+		EnableWebPagePreview:  rendered.EnableWebPagePreview,
+		ShowPreviewAboveText:  rendered.ShowPreviewAboveText,
+		DisableNotification:   rendered.DisableNotification,
+		ProtectContent:        rendered.ProtectContent,
 	}, nil
 }
 
@@ -427,6 +483,121 @@ func appendRulesButton(markup *telegram.InlineKeyboardMarkup, botUsername string
 		rows[len(rows)-1] = append(rows[len(rows)-1], button)
 	}
 	return &telegram.InlineKeyboardMarkup{InlineKeyboard: rows}
+}
+
+func renderRoseMarkdownHTML(raw string) string {
+	raw = strings.ReplaceAll(raw, "\r\n", "\n")
+	if raw == "" {
+		return ""
+	}
+
+	var out strings.Builder
+	last := 0
+	for _, match := range fencedCodePattern.FindAllStringSubmatchIndex(raw, -1) {
+		out.WriteString(renderTextMarkdownHTML(raw[last:match[0]]))
+		language := ""
+		if match[2] >= 0 && match[3] >= 0 {
+			language = raw[match[2]:match[3]]
+		}
+		body := ""
+		if match[4] >= 0 && match[5] >= 0 {
+			body = raw[match[4]:match[5]]
+		}
+		out.WriteString(renderCodeBlockHTML(language, body))
+		last = match[1]
+	}
+	out.WriteString(renderTextMarkdownHTML(raw[last:]))
+	return out.String()
+}
+
+func renderCodeBlockHTML(language string, body string) string {
+	body = strings.TrimSuffix(body, "\n")
+	if strings.TrimSpace(language) == "" {
+		return "<pre>" + html.EscapeString(body) + "</pre>"
+	}
+	return `<pre><code class="language-` + html.EscapeString(strings.TrimSpace(language)) + `">` + html.EscapeString(body) + "</code></pre>"
+}
+
+func renderTextMarkdownHTML(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	lines := strings.Split(raw, "\n")
+	rendered := make([]string, 0, len(lines))
+	for idx := 0; idx < len(lines); idx++ {
+		line := lines[idx]
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(trimmed, "**>"):
+			var quoteLines []string
+			first := strings.TrimSpace(strings.TrimPrefix(trimmed, "**>"))
+			quoteLines = append(quoteLines, strings.TrimSuffix(first, "||"))
+			closed := strings.HasSuffix(first, "||")
+			for !closed && idx+1 < len(lines) {
+				idx++
+				next := strings.TrimSpace(lines[idx])
+				next = strings.TrimPrefix(next, ">")
+				next = strings.TrimSpace(next)
+				if strings.HasSuffix(next, "||") {
+					closed = true
+					next = strings.TrimSpace(strings.TrimSuffix(next, "||"))
+				}
+				quoteLines = append(quoteLines, next)
+			}
+			rendered = append(rendered, `<blockquote expandable>`+renderInlineMarkdownHTML(strings.Join(quoteLines, "\n"))+`</blockquote>`)
+		case strings.HasPrefix(trimmed, ">"):
+			rendered = append(rendered, "<blockquote>"+renderInlineMarkdownHTML(strings.TrimSpace(strings.TrimPrefix(trimmed, ">")))+"</blockquote>")
+		default:
+			rendered = append(rendered, renderInlineMarkdownHTML(line))
+		}
+	}
+	return strings.Join(rendered, "\n")
+}
+
+func renderInlineMarkdownHTML(raw string) string {
+	escaped := html.EscapeString(raw)
+	escaped = linkPattern.ReplaceAllStringFunc(escaped, func(match string) string {
+		parts := linkPattern.FindStringSubmatch(match)
+		if len(parts) != 3 {
+			return match
+		}
+		rawURL := html.UnescapeString(parts[2])
+		if strings.HasPrefix(strings.ToLower(rawURL), "buttonurl") {
+			return match
+		}
+		normalized := normalizeHTTPURL(rawURL)
+		if normalized == "" {
+			return match
+		}
+		return `<a href="` + html.EscapeString(normalized) + `">` + parts[1] + `</a>`
+	})
+	escaped = inlineCodePattern.ReplaceAllString(escaped, "<code>$1</code>")
+	escaped = spoilerPattern.ReplaceAllString(escaped, `<span class="tg-spoiler">$1</span>`)
+	escaped = underlinePattern.ReplaceAllString(escaped, "<u>$1</u>")
+	escaped = boldPattern.ReplaceAllString(escaped, "<b>$1</b>")
+	escaped = italicPattern.ReplaceAllString(escaped, "<i>$1</i>")
+	escaped = strikePattern.ReplaceAllString(escaped, "<s>$1</s>")
+	return escaped
+}
+
+func normalizeHTTPURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || strings.HasPrefix(raw, "#") {
+		return ""
+	}
+	if strings.Contains(raw, "://") {
+		parsed, err := url.Parse(raw)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return ""
+		}
+		switch strings.ToLower(parsed.Scheme) {
+		case "http", "https", "tg":
+			return raw
+		default:
+			return ""
+		}
+	}
+	return "https://" + raw
 }
 
 func mediaFromMessage(message *telegram.Message) (string, string, bool) {
@@ -477,50 +648,110 @@ func parseFilterReplyPayload(message *telegram.Message) (string, string, string,
 	return text, buttonsJSON, "", "", nil
 }
 
-func parseButtonRow(line string) ([]telegram.InlineKeyboardButton, bool, error) {
+func parseButtonRow(line string) ([]telegram.InlineKeyboardButton, bool, bool, error) {
 	line = strings.TrimSpace(line)
 	if line == "" || !strings.HasPrefix(line, "[") {
-		return nil, false, nil
+		return nil, false, false, nil
 	}
 
 	rest := line
 	row := make([]telegram.InlineKeyboardButton, 0, 2)
+	appendToPreviousRow := false
 	for strings.TrimSpace(rest) != "" {
 		rest = strings.TrimLeft(rest, " ")
 		if !strings.HasPrefix(rest, "[") {
-			return nil, false, nil
+			return nil, false, false, nil
 		}
 		closeLabel := strings.Index(rest, "]")
 		if closeLabel <= 1 {
-			return nil, false, fmt.Errorf("invalid button label")
+			return nil, false, false, nil
 		}
 		label := rest[1:closeLabel]
 		rest = rest[closeLabel+1:]
 		if !strings.HasPrefix(rest, "(") {
-			return nil, false, nil
+			return nil, false, false, nil
 		}
 		closeAction := strings.Index(rest, ")")
 		if closeAction <= 1 {
-			return nil, false, fmt.Errorf("invalid button action")
+			return nil, false, false, nil
 		}
 		action := rest[1:closeAction]
 		rest = strings.TrimLeft(rest[closeAction+1:], " ")
 
-		parts := strings.SplitN(action, ":", 2)
-		if len(parts) != 2 {
-			return nil, false, fmt.Errorf("button action must include a value")
-		}
-
 		button := telegram.InlineKeyboardButton{Text: label}
-		switch strings.ToLower(parts[0]) {
-		case "buttonurl":
-			button.URL = strings.TrimSpace(parts[1])
-		case "button":
-			button.CallbackData = strings.TrimSpace(parts[1])
-		default:
-			return nil, false, fmt.Errorf("unsupported button type %s", parts[0])
+		sameRow := false
+		ok := false
+		button, sameRow, ok = parseStoredButtonAction(label, action)
+		if !ok {
+			return nil, false, false, nil
+		}
+		if sameRow && len(row) == 0 {
+			appendToPreviousRow = true
 		}
 		row = append(row, button)
 	}
-	return row, len(row) > 0, nil
+	return row, len(row) > 0, appendToPreviousRow, nil
+}
+
+func parseStoredButtonAction(label string, action string) (telegram.InlineKeyboardButton, bool, bool) {
+	action = strings.TrimSpace(action)
+	sameRow := false
+	if strings.HasSuffix(strings.ToLower(action), ":same") {
+		sameRow = true
+		action = strings.TrimSpace(action[:len(action)-len(":same")])
+	}
+
+	lower := strings.ToLower(action)
+	button := telegram.InlineKeyboardButton{Text: label}
+	switch {
+	case strings.HasPrefix(lower, "buttonurl#"):
+		idx := strings.Index(action, "://")
+		if idx < 0 {
+			return telegram.InlineKeyboardButton{}, false, false
+		}
+		target := action[idx+3:]
+		urlValue, ok := normalizeButtonURL(target)
+		if !ok {
+			return telegram.InlineKeyboardButton{}, false, false
+		}
+		button.URL = urlValue
+		return button, sameRow, true
+	case strings.HasPrefix(lower, "buttonurl://"):
+		target := action[len("buttonurl://"):]
+		urlValue, ok := normalizeButtonURL(target)
+		if !ok {
+			return telegram.InlineKeyboardButton{}, false, false
+		}
+		button.URL = urlValue
+		return button, sameRow, true
+	case strings.HasPrefix(lower, "buttonurl:"):
+		target := action[len("buttonurl:"):]
+		urlValue, ok := normalizeButtonURL(target)
+		if !ok {
+			return telegram.InlineKeyboardButton{}, false, false
+		}
+		button.URL = urlValue
+		return button, sameRow, true
+	case strings.HasPrefix(lower, "button:"):
+		button.CallbackData = strings.TrimSpace(action[len("button:"):])
+		return button, sameRow, button.CallbackData != ""
+	default:
+		return telegram.InlineKeyboardButton{}, false, false
+	}
+}
+
+func normalizeButtonURL(raw string) (string, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", false
+	}
+	if strings.HasPrefix(raw, "#") {
+		noteName := strings.TrimSpace(strings.TrimPrefix(raw, "#"))
+		if noteName == "" {
+			return "", false
+		}
+		return noteButtonURLPrefix + strings.ToLower(noteName), true
+	}
+	normalized := normalizeHTTPURL(raw)
+	return normalized, normalized != ""
 }

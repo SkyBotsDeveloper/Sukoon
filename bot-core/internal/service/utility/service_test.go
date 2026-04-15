@@ -578,10 +578,17 @@ func TestHelpNavigationSupportsNestedHelpBatchPages(t *testing.T) {
 	assertButton(t, formattingMarkup, 2, 0, "Back", "ux:help:root", "")
 	assertNoButtonText(t, formattingMarkup, "Website")
 	assertNoButtonText(t, formattingMarkup, "Add to Group")
-	if !strings.Contains(renderedText(h.Client.EditedMessages[7].Text), "full markdown helper set") {
-		t.Fatalf("expected truthful markdown page, got %q", h.Client.EditedMessages[7].Text)
+	markdownMarkup := requireEditedMarkup(t, h.Client.EditedMessages[7])
+	assertButton(t, markdownMarkup, 0, 0, "Buttons", "ux:helpctx:formatting_markdown:formatting_buttons", "")
+	assertButton(t, markdownMarkup, 1, 0, "Back", "ux:help:formatting", "")
+	assertNoButtonText(t, markdownMarkup, "Website")
+	assertNoButtonText(t, markdownMarkup, "Add to Group")
+	if !strings.Contains(renderedText(h.Client.EditedMessages[7].Text), "Supported markdown") || !strings.Contains(renderedText(h.Client.EditedMessages[7].Text), "buttonurl://#notename") {
+		t.Fatalf("expected markdown formatting page, got %q", h.Client.EditedMessages[7].Text)
 	}
-	if !strings.Contains(renderedText(h.Client.EditedMessages[8].Text), "buttonurl:https://misssukoon.vercel.app/") {
+	buttonsMarkup := requireEditedMarkup(t, h.Client.EditedMessages[8])
+	assertButton(t, buttonsMarkup, 0, 0, "Back", "ux:help:formatting", "")
+	if !strings.Contains(renderedText(h.Client.EditedMessages[8].Text), "buttonurl://google.com") || !strings.Contains(renderedText(h.Client.EditedMessages[8].Text), "buttonurl://#my_note") {
 		t.Fatalf("expected buttons page to show live syntax, got %q", h.Client.EditedMessages[8].Text)
 	}
 	if !strings.Contains(renderedText(h.Client.EditedMessages[10].Text), "/disabledel <yes/no/on/off>") || !strings.Contains(renderedText(h.Client.EditedMessages[10].Text), "-> /disable all") {
@@ -1122,6 +1129,41 @@ func TestFilterExamplesHelpAliasesAndFillingsBackNavigation(t *testing.T) {
 	}
 	fillingsMarkup := requireEditedMarkup(t, fillings)
 	assertButton(t, fillingsMarkup, 0, 0, "Back", "ux:help:filters_examples", "")
+}
+
+func TestStartNoteDeepLinkOpensSavedNoteFromButton(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	group := telegram.Chat{ID: -100612, Type: "supergroup", Title: "Notes"}
+	private := telegram.Chat{ID: 612, Type: "private"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 10,
+			From:      &telegram.User{ID: 1, FirstName: "Owner"},
+			Chat:      group,
+			Text:      "/save my_note Read *this*",
+		},
+	}); err != nil {
+		t.Fatalf("save note failed: %v", err)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		Message: &telegram.Message{
+			MessageID: 11,
+			From:      &telegram.User{ID: 612, FirstName: "Reader"},
+			Chat:      private,
+			Text:      "/start note_-100612_my_note",
+		},
+	}); err != nil {
+		t.Fatalf("start note failed: %v", err)
+	}
+
+	got := h.Client.Messages[len(h.Client.Messages)-1]
+	if !strings.Contains(got.Text, "Read <b>this</b>") || got.Options.ParseMode != "HTML" {
+		t.Fatalf("expected formatted note from PM deep link, got %q options %+v", got.Text, got.Options)
+	}
 }
 
 func TestCleanServiceHelpPageUsesBackOnlyLayout(t *testing.T) {

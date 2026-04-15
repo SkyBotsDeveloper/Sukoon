@@ -576,14 +576,25 @@ var helpPages = map[string]helpPage{
 	helpFormattingMarkdown: {
 		Title: "Markdown Formatting",
 		Lines: []string{
-			"Sukoon does not expose the full markdown helper set in stored content yet.",
+			"You can format stored messages using bold, italics, underline, spoilers, code, quotes, links, and buttons.",
 			"",
-			"Guaranteed syntax today:",
-			"- button rows with [Label](buttonurl:https://example.com)",
-			"- contextual fillings such as {first} and {chatname}",
-			"- random choices using %%%",
+			"Supported markdown:",
+			"- `code words`: Backticks are used for monospace fonts.",
+			"- _italic words_: Underscores are used for italic fonts.",
+			"- *bold words*: Asterisks are used for bold fonts.",
+			"- ~strikethrough~: Tildes are used for strikethrough.",
+			"- __underline__: Double underscores are used for underlines.",
+			"- ||spoiler||: Double vertical bars are used for spoilers.",
+			"- ```shell echo \"hi\"```: Triple backticks create code blocks. You can specify a language on the first line.",
+			"- > quote: Prefix a line with > to create a quote.",
+			"- **> first line / > hidden||: Starts an expandable quote block.",
+			"- [hyperlink](misssukoon.vercel.app): Creates a clickable text link.",
+			"- [My button](buttonurl://misssukoon.vercel.app): Creates a URL button.",
+			"- [Button 2](buttonurl://example.com:same): Places this button on the same row as the previous button.",
+			"- [Styled button](buttonurl#primary://misssukoon.vercel.app): Style labels are accepted for compatibility, but Telegram bots cannot force client-side button colours.",
+			"- [note button](buttonurl://#notename): Creates a PM deep-link button to an existing saved note.",
 			"",
-			"Bold, italics, spoiler, code blocks, quotes, note buttons, and styled buttons are still deferred in the current runtime.",
+			"Use the Buttons page for copy-ready button examples.",
 		},
 	},
 	helpFormattingFillings: {
@@ -637,15 +648,31 @@ var helpPages = map[string]helpPage{
 	helpFormattingButtons: {
 		Title: "Buttons",
 		Lines: []string{
-			"Supported button syntax in stored content:",
+			"One of Telegram's popular features is the ability to add buttons to welcome messages, notes, or filters.",
 			"",
-			"[Website](buttonurl:https://misssukoon.vercel.app/)",
-			"[Docs](buttonurl:https://example.com) [Status](buttonurl:https://example.org)",
+			"Simple buttons:",
+			"- The following syntax creates a button called Google, which opens google.com.",
+			"-> [Google](buttonurl://google.com)",
 			"",
-			"Buttons on the same line stay in the same row. Start a new line for a new row.",
-			"Callback-style note buttons and styled button variants are still deferred.",
+			"Buttons on the same line:",
+			"- Add :same to place a button on the previous row.",
+			"-> [Google](buttonurl://google.com)",
+			"-> [Bing](buttonurl://bing.com:same)",
 			"",
-			"Website: https://misssukoon.vercel.app/",
+			"Note buttons:",
+			"- Note buttons open an existing saved note in PM. Save the note first.",
+			"-> [First note](buttonurl://#my_note)",
+			"-> [Second note](buttonurl://#second_note:same)",
+			"",
+			"Advanced example:",
+			"-> [Google](buttonurl://google.com)",
+			"-> [Bing](buttonurl://bing.com:same)",
+			"-> [Other search engines](buttonurl://#search_engines)",
+			"",
+			"Online docs and generator:",
+			"https://misssukoon.vercel.app/",
+			"",
+			"Remember that buttons need to be saved in Sukoon to be used; you can't send them directly from your account.",
 		},
 	},
 	helpGreetings: {
@@ -1427,14 +1454,10 @@ func helpSectionMarkup(page string, username string, parent string) *telegram.In
 	case helpFormattingMarkdown:
 		return serviceutil.Markup(
 			[]telegram.InlineKeyboardButton{
-				{Text: "Buttons", CallbackData: helpCallback(helpFormattingButtons)},
+				{Text: "Buttons", CallbackData: helpContextCallback(helpFormattingMarkdown, helpFormattingButtons)},
 			},
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: helpCallback(helpFormatting)},
-			},
-			[]telegram.InlineKeyboardButton{
-				{Text: "Website", URL: serviceutil.WebsiteURL},
-				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
 			},
 		)
 	case helpFormattingFillings:
@@ -1447,8 +1470,18 @@ func helpSectionMarkup(page string, username string, parent string) *telegram.In
 				{Text: "Back", CallbackData: parentCallback},
 			},
 		)
-	case helpFormattingRandom, helpFormattingButtons:
+	case helpFormattingRandom:
 		return helpSubsectionMarkup(username, helpFormatting)
+	case helpFormattingButtons:
+		parentCallback := helpCallback(helpFormatting)
+		if parent == helpFormattingMarkdown {
+			parentCallback = helpCallback(helpFormattingMarkdown)
+		}
+		return serviceutil.Markup(
+			[]telegram.InlineKeyboardButton{
+				{Text: "Back", CallbackData: parentCallback},
+			},
+		)
 	case helpLockDescriptions, helpLockExamples:
 		lockParentCallback := helpCallback(helpLocks)
 		if parent == helpCleanCommands {
