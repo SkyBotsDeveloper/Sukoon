@@ -185,11 +185,14 @@ func (s *Service) startNote(ctx context.Context, rt *runtime.Context, raw string
 }
 
 func (s *Service) help(ctx context.Context, rt *runtime.Context) error {
+	rawArgs := strings.TrimSpace(rt.Command.RawArgs)
 	if !isPrivateChat(rt) {
 		payload := "help_main"
-		if strings.TrimSpace(rt.Command.RawArgs) != "" {
-			if section := normalizeHelpSection(rt.Command.RawArgs); section != "" {
+		if rawArgs != "" {
+			if section := normalizeHelpSection(rawArgs); section != "" {
 				payload = "help_" + section
+			} else {
+				return s.sendUnknownHelpMessage(ctx, rt, rawArgs)
 			}
 		}
 		return s.sendPMGuidance(ctx, rt,
@@ -198,11 +201,12 @@ func (s *Service) help(ctx context.Context, rt *runtime.Context) error {
 		)
 	}
 
-	if strings.TrimSpace(rt.Command.RawArgs) != "" {
-		section := normalizeHelpSection(rt.Command.RawArgs)
+	if rawArgs != "" {
+		section := normalizeHelpSection(rawArgs)
 		if section != "" {
 			return s.sendHelpMessage(ctx, rt, section)
 		}
+		return s.sendUnknownHelpMessage(ctx, rt, rawArgs)
 	}
 
 	return s.sendHelpMessage(ctx, rt, helpRoot)
@@ -291,6 +295,15 @@ func (s *Service) sendPMGuidance(ctx context.Context, rt *runtime.Context, text 
 	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), text, rt.ReplyOptions(telegram.SendMessageOptions{
 		ReplyMarkup: pmGuidanceMarkup(rt.Bot.Username, payload),
 	}))
+	return err
+}
+
+func (s *Service) sendUnknownHelpMessage(ctx context.Context, rt *runtime.Context, rawTopic string) error {
+	topic := strings.Join(strings.Fields(strings.TrimSpace(rawTopic)), " ")
+	if topic == "" {
+		topic = "that topic"
+	}
+	_, err := rt.Client.SendMessage(ctx, rt.ChatID(), "No help message affiliated with "+topic, rt.ReplyOptions(telegram.SendMessageOptions{}))
 	return err
 }
 

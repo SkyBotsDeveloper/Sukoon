@@ -326,6 +326,56 @@ func TestStartAndHelpCommandsRenderPolishedUX(t *testing.T) {
 	}
 }
 
+func TestUnknownHelpTopicRepliesClearly(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	privateChat := telegram.Chat{ID: 52, Type: "private"}
+	groupChat := telegram.Chat{ID: -10052, Type: "supergroup", Title: "Help"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 21,
+			From:      &telegram.User{ID: 52, FirstName: "User"},
+			Chat:      privateChat,
+			Text:      "/help mardown formatting",
+		},
+	}); err != nil {
+		t.Fatalf("unknown private help failed: %v", err)
+	}
+	privateMessage := h.Client.Messages[len(h.Client.Messages)-1]
+	if privateMessage.Text != "No help message affiliated with mardown formatting" {
+		t.Fatalf("expected unknown help topic response, got %q", privateMessage.Text)
+	}
+	if privateMessage.Options.ReplyToMessageID != 21 {
+		t.Fatalf("expected private unknown help response to reply to command, got %+v", privateMessage.Options)
+	}
+	if privateMessage.Options.ReplyMarkup != nil {
+		t.Fatalf("expected no help markup for unknown topic, got %+v", privateMessage.Options.ReplyMarkup)
+	}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 2,
+		Message: &telegram.Message{
+			MessageID: 22,
+			From:      &telegram.User{ID: 52, FirstName: "User"},
+			Chat:      groupChat,
+			Text:      "/help not built yet",
+		},
+	}); err != nil {
+		t.Fatalf("unknown group help failed: %v", err)
+	}
+	groupMessage := h.Client.Messages[len(h.Client.Messages)-1]
+	if groupMessage.Text != "No help message affiliated with not built yet" {
+		t.Fatalf("expected unknown group help topic response, got %q", groupMessage.Text)
+	}
+	if groupMessage.Options.ReplyToMessageID != 22 {
+		t.Fatalf("expected group unknown help response to reply to command, got %+v", groupMessage.Options)
+	}
+	if groupMessage.Options.ReplyMarkup != nil {
+		t.Fatalf("expected no PM guidance buttons for unknown topic, got %+v", groupMessage.Options.ReplyMarkup)
+	}
+}
+
 func TestStartHelpCallbacksUseFastPathWithoutHeavyRuntimeLoads(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	chat := telegram.Chat{ID: 501, Type: "private"}
