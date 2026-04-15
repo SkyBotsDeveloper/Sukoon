@@ -376,6 +376,52 @@ func TestUnknownHelpTopicRepliesClearly(t *testing.T) {
 	}
 }
 
+func TestRandomContentHelpMatchesRoseStyleCopy(t *testing.T) {
+	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chat := telegram.Chat{ID: 53, Type: "private"}
+
+	if err := h.Router.HandleUpdate(context.Background(), h.Bot, h.Client, telegram.Update{
+		UpdateID: 1,
+		Message: &telegram.Message{
+			MessageID: 23,
+			From:      &telegram.User{ID: 53, FirstName: "User"},
+			Chat:      chat,
+			Text:      "/help random content",
+		},
+	}); err != nil {
+		t.Fatalf("random content help failed: %v", err)
+	}
+
+	msg := h.Client.Messages[len(h.Client.Messages)-1]
+	if msg.Options.ParseMode != "HTML" {
+		t.Fatalf("expected random content help to use HTML parse mode, got %+v", msg.Options)
+	}
+	rendered := renderedText(msg.Text)
+	for _, want := range []string{
+		"Random Content",
+		"Another thing that can be fun, is to randomise the contents of a message.",
+		"How to use random contents:",
+		"hello",
+		"%%%",
+		"how are you",
+		"Example welcome message:",
+		"/setwelcome",
+		"Welcome to the group, {first}!",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected random content help to contain %q, got %q", want, msg.Text)
+		}
+	}
+	for _, notWant := range []string{
+		"Supported in notes, filters, welcome text, goodbye text, and rules text.",
+		"/filter ping",
+	} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("expected random content help to omit old copy %q, got %q", notWant, msg.Text)
+		}
+	}
+}
+
 func TestStartHelpCallbacksUseFastPathWithoutHeavyRuntimeLoads(t *testing.T) {
 	h := testsupport.NewHarness(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	chat := telegram.Chat{ID: 501, Type: "private"}

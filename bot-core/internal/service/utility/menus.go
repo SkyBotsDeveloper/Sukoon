@@ -1098,6 +1098,9 @@ func helpPageText(section string) string {
 	if section == helpFormattingMarkdown {
 		return markdownFormattingHelpText()
 	}
+	if section == helpFormattingRandom {
+		return randomContentHelpText()
+	}
 	page, ok := helpPages[section]
 	if !ok {
 		return helpLandingText()
@@ -1142,6 +1145,31 @@ func markdownFormattingHelpText() string {
 		"Use the Sukoon docs website to help with the button syntax: https://misssukoon.vercel.app/",
 		"- <code>[Styled button](buttonurl#primary://misssukoon.vercel.app)</code>: Styled button syntax is accepted for compatibility. Telegram bots cannot force client-side button colours, so styles are treated as normal URL buttons.",
 		"- <code>[note button](buttonurl://#notename)</code>: This syntax creates a button which links to a note. When clicked, the user is redirected to the bot's PM to see the note.",
+	}, "\n")
+}
+
+func randomContentHelpText() string {
+	return strings.Join([]string{
+		"<b>Random Content</b>",
+		"",
+		"Another thing that can be fun, is to randomise the contents of a message. Make things a little more personal by changing welcome messages, or changing notes!",
+		"",
+		"<b>How to use random contents:</b>",
+		"- <code>%%%</code>: This separator can be used to add \"random\" replies to the bot.",
+		"For example:",
+		"<code>hello</code>",
+		"<code>%%%</code>",
+		"<code>how are you</code>",
+		"This will randomly choose between sending the first message, \"hello\", or the second message, \"how are you\". Use this to make the bot feel a bit more customised! (only works in notes/filters/greetings)",
+		"",
+		"<b>Example welcome message:</b>",
+		"- Every time a new user joins, they'll be presented with one of the three messages shown here.",
+		"-> <code>/setwelcome",
+		"hello there {first}!",
+		"%%%",
+		"Oooh, {first} is in the house!",
+		"%%%",
+		"Welcome to the group, {first}!</code>",
 	}, "\n")
 }
 
@@ -1688,7 +1716,7 @@ func normalizeHelpSection(value string) string {
 		return helpFormattingMarkdown
 	case "formatting_fillings", "fillings", "filling":
 		return helpFormattingFillings
-	case "formatting_random", "randomcontent", "random":
+	case "formatting_random", "randomcontent", "random content", "random contents", "random":
 		return helpFormattingRandom
 	case "formatting_buttons", "buttons", "button":
 		return helpFormattingButtons
