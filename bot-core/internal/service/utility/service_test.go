@@ -570,6 +570,14 @@ func TestHelpNavigationSupportsNestedHelpBatchPages(t *testing.T) {
 	if !strings.Contains(renderedText(h.Client.EditedMessages[4].Text), "/filter (hi, hey, hello, \"hi there\")") || !strings.Contains(renderedText(h.Client.EditedMessages[4].Text), "trigger noformat") {
 		t.Fatalf("expected filter examples page, got %q", h.Client.EditedMessages[4].Text)
 	}
+	formattingMarkup := requireEditedMarkup(t, h.Client.EditedMessages[6])
+	assertButton(t, formattingMarkup, 0, 0, "Markdown Formatting", "ux:help:formatting_markdown", "")
+	assertButton(t, formattingMarkup, 0, 1, "Buttons", "ux:help:formatting_buttons", "")
+	assertButton(t, formattingMarkup, 1, 0, "Fillings", "ux:help:formatting_fillings", "")
+	assertButton(t, formattingMarkup, 1, 1, "Random Content", "ux:help:formatting_random", "")
+	assertButton(t, formattingMarkup, 2, 0, "Back", "ux:help:root", "")
+	assertNoButtonText(t, formattingMarkup, "Website")
+	assertNoButtonText(t, formattingMarkup, "Add to Group")
 	if !strings.Contains(renderedText(h.Client.EditedMessages[7].Text), "full markdown helper set") {
 		t.Fatalf("expected truthful markdown page, got %q", h.Client.EditedMessages[7].Text)
 	}

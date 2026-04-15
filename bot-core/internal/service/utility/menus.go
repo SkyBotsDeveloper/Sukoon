@@ -1364,10 +1364,6 @@ func helpSectionMarkup(page string, username string, parent string) *telegram.In
 			[]telegram.InlineKeyboardButton{
 				{Text: "Back", CallbackData: callbackHelpMain},
 			},
-			[]telegram.InlineKeyboardButton{
-				{Text: "Website", URL: serviceutil.WebsiteURL},
-				{Text: "Add to Group", URL: serviceutil.BotAddGroupLink(username)},
-			},
 		)
 	case helpCleanCommands:
 		return serviceutil.Markup(
